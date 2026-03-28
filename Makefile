@@ -168,8 +168,9 @@ _argocd-install:
 	@echo "==> Installing ArgoCD $(ARGOCD_VERSION)..."
 	kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 	kubectl apply -n argocd --server-side --force-conflicts -f https://raw.githubusercontent.com/argoproj/argo-cd/$(ARGOCD_VERSION)/manifests/install.yaml
-	@echo "==> Waiting for ArgoCD pods to be Ready (timeout 5m)..."
-	kubectl wait --for=condition=Ready pods --all -n argocd --timeout=300s
+	@echo "==> Waiting for ArgoCD to be Ready (timeout 5m)..."
+	kubectl wait --for=condition=Available deployment --all -n argocd --timeout=300s
+	kubectl wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset --all -n argocd --timeout=300s
 
 _argocd-patch-repo-server:
 	@echo "==> Patching argocd-repo-server with hostPath volume for $(MOUNT_TARGET)..."
@@ -177,33 +178,14 @@ _argocd-patch-repo-server:
 		-o jsonpath='{.spec.template.spec.volumes[*].name}' 2>/dev/null | grep -q "jarvis-repo"; then \
 		echo "  Patch already applied, skipping rollout restart."; \
 	else \
-		kubectl apply -f argocd/repo-server-patch.yaml && \
-		kubectl rollout restart deployment/argocd-repo-server -n argocd; \
+		kubectl patch deployment argocd-repo-server -n argocd \
+			--type=strategic --patch-file=argocd/repo-server-patch.yaml; \
 	fi
 	kubectl rollout status deployment/argocd-repo-server -n argocd --timeout=120s
 
 _argocd-add-repo:
 	@echo "==> Configuring ArgoCD repository entry for file:///mnt/jarvis-repo..."
-	@if command -v argocd >/dev/null 2>&1; then \
-		ARGOCD_PASS=$$(kubectl -n argocd get secret argocd-initial-admin-secret \
-			-o jsonpath="{.data.password}" | base64 --decode); \
-		argocd login localhost:8080 --username admin --password $$ARGOCD_PASS --insecure 2>/dev/null && \
-		argocd repo add file:///mnt/jarvis-repo --type git 2>/dev/null || true; \
-	else \
-		kubectl -n argocd apply -f - <<'EOF' \
-apiVersion: v1 \
-kind: Secret \
-metadata: \
-  name: jarvis-repo \
-  namespace: argocd \
-  labels: \
-    argocd.argoproj.io/secret-type: repository \
-type: Opaque \
-stringData: \
-  type: git \
-  url: file:///mnt/jarvis-repo \
-EOF \
-	fi
+	kubectl apply -f argocd/jarvis-repo-secret.yaml
 
 _auto-commit:
 	@echo "==> Auto-committing Helm chart changes to 'local-deploy' branch..."
