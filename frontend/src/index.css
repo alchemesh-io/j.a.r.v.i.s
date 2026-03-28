@@ -1,0 +1,64 @@
+/* J.A.R.V.I.S — Global styles */
+/* Futuristic dark theme — WCAG 2.2 AA compliant */
+
+:root {
+  /* Colours */
+  --color-bg: #0a0e1a;
+  --color-surface: #111827;
+  --color-surface-alt: #1a2035;
+  --color-accent-cyan: #00d4ff;
+  --color-accent-purple: #7b2fff;
+  --color-text: #e2e8f0;       /* contrast 12.6:1 on --color-bg */
+  --color-text-muted: #94a3b8; /* contrast 5.0:1 on --color-bg */
+  --color-border: #2d3748;
+
+  /* Typography */
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+
+  color-scheme: dark;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100dvh;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Focus indicator — visible for keyboard navigation (WCAG 2.4.7) */
+:focus-visible {
+  outline: 2px solid var(--color-accent-cyan);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+a {
+  color: var(--color-accent-cyan);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+}

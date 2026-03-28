@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+  namespace: argocd
+spec:
+  template:
+    spec:
+      volumes:
+        - name: jarvis-repo
+          hostPath:
+            path: /mnt/jarvis-repo
+            type: DirectoryOrCreate
+      containers:
+        - name: argocd-repo-server
+          volumeMounts:
+            - name: jarvis-repo
+              mountPath: /mnt/jarvis-repo

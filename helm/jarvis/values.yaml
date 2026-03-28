@@ -1,0 +1,27 @@
+# Default values for jarvis chart.
+
+backend:
+  image:
+    repository: ghcr.io/alchemesh-io/jarvis-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+    port: 8000
+  resources: {}
+
+frontend:
+  image:
+    repository: ghcr.io/alchemesh-io/jarvis-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+    port: 80
+  resources: {}
+
+persistence:
+  storageClass: standard
+  size: 1Gi
