@@ -5,7 +5,7 @@ The system SHALL provide a `Makefile` at the repository root that manages the fu
 
 #### Scenario: Cluster creation
 - **WHEN** developer runs `make cluster-up`
-- **THEN** a Minikube cluster is created with at least 4 CPUs and 8 GB RAM, ArgoCD `v3.19` is installed into the `argocd` namespace using its official install manifest, all ArgoCD pods reach `Ready` state, a `minikube mount` background process mounts the repo root at `/mnt/jarvis-repo` inside the VM (PID stored in `.minikube-mount.pid`), the `argocd-repo-server` Deployment is patched with a hostPath volume for `/mnt/jarvis-repo`, and an ArgoCD repository entry is configured for `file:///mnt/jarvis-repo`
+- **THEN** a Minikube cluster is created with at least 4 CPUs and 8 GB RAM, ArgoCD `v3.3.6` is installed into the `argocd` namespace using its official install manifest, all ArgoCD pods reach `Ready` state, a `minikube mount` background process mounts the repo root at `/mnt/jarvis-repo` inside the VM (PID stored in `.minikube-mount.pid`), the `argocd-repo-server` Deployment is patched with a hostPath volume for `/mnt/jarvis-repo`, and an ArgoCD repository entry is configured for `file:///mnt/jarvis-repo`
 
 #### Scenario: Cluster teardown
 - **WHEN** developer runs `make cluster-down`

@@ -93,9 +93,25 @@ cluster-status: _check-prereqs
 # Application deployment
 # ---------------------------------------------------------------------------
 
-## Build images, load into Minikube, auto-commit to local-deploy, apply ArgoCD App CR, hard sync
+## Pull latest published images from GHCR, auto-commit to local-deploy, apply ArgoCD App CR, hard sync
 deploy: _check-prereqs
-	@echo "==> Building Docker images..."
+	@echo "==> Pulling latest images from GHCR..."
+	docker pull ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
+	docker pull ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
+	@echo "==> Loading images into Minikube..."
+	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
+	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
+	@$(MAKE) _auto-commit
+	@echo "==> Applying ArgoCD Application CR..."
+	kubectl apply -f argocd/jarvis-app.yaml
+	@$(MAKE) sync
+	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
+	@echo "==> Run 'minikube tunnel' in a separate terminal, then check service IPs with:"
+	@echo "    kubectl get svc -n jarvis"
+
+## Build images locally, load into Minikube, auto-commit to local-deploy, apply ArgoCD App CR, hard sync
+deploy-local: _check-prereqs
+	@echo "==> Building Docker images locally..."
 	docker build -t jarvis-backend:local ./backend
 	docker build -t jarvis-frontend:local ./frontend
 	@echo "==> Loading images into Minikube..."
@@ -108,9 +124,6 @@ deploy: _check-prereqs
 	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
 	@echo "==> Run 'minikube tunnel' in a separate terminal, then check service IPs with:"
 	@echo "    kubectl get svc -n jarvis"
-
-## Same as deploy — alias for local image-based workflow
-deploy-local: deploy
 
 ## Delete the ArgoCD Application CR (cascade deletes all managed resources)
 undeploy: _check-prereqs

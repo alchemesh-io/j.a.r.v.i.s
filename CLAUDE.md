@@ -68,7 +68,8 @@ This will:
 ### Deploying the application
 
 ```bash
-make deploy          # Build images, load into Minikube, auto-commit to local-deploy, sync
+make deploy          # Pull latest GHCR images, load into Minikube, auto-commit to local-deploy, sync
+make deploy-local    # Build images locally, load into Minikube, auto-commit to local-deploy, sync
 make argocd-ui       # Port-forward ArgoCD UI to https://localhost:8080
 make sync            # Trigger a hard sync without rebuilding images
 make undeploy        # Delete Application CR (cascade removes all resources)

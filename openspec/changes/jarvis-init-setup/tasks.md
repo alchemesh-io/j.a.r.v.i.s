@@ -20,7 +20,7 @@
 - [x] 2.2 Create `backend/app/main.py` with FastAPI app, `GET /` and `GET /health` endpoints
 - [x] 2.3 Configure SQLAlchemy to use the `DATABASE_URL` environment variable (SQLite default)
 - [x] 2.4 Create `backend/Dockerfile` (multi-stage, non-root user, port 8000)
-- [ ] 2.5 Verify `docker build` and `docker run` work locally; health check returns `{"status": "ok"}`
+- [x] 2.5 Verify `docker build` and `docker run` work locally; health check returns `{"status": "ok"}`
 
 ## 3. Vite.js Frontend
 
@@ -30,7 +30,7 @@
 - [x] 3.4 Add keyboard navigation support with visible focus indicators on all interactive elements
 - [x] 3.5 Structure page with `<header>`, `<main>`, `<footer>` landmarks; set document title to "J.A.R.V.I.S"
 - [x] 3.6 Create `frontend/Dockerfile` (multi-stage: build → Nginx), configure Nginx for SPA fallback routing
-- [ ] 3.7 Verify `docker build` and `docker run` work locally; frontend accessible on port 80
+- [x] 3.7 Verify `docker build` and `docker run` work locally; frontend accessible on port 80
 
 ## 4. GitHub Actions CI/CD
 
@@ -48,7 +48,7 @@
 - [x] 5.4 Create PersistentVolumeClaim template for SQLite storage; mount into backend pod at `/data`
 - [x] 5.5 Configure backend `DATABASE_URL` env var in Deployment to point to the PVC mount path
 - [x] 5.6 Add Kubernetes liveness and readiness probes to backend Deployment using `GET /health`
-- [ ] 5.7 Verify ArgoCD syncs the Application successfully on Minikube; verify chart modification + `make deploy` triggers re-sync without data loss; verify Application CR deletion removes all resources; confirm data survives pod restart
+- [X] 5.7 Verify ArgoCD syncs the Application successfully on Minikube; verify chart modification + `make deploy` triggers re-sync without data loss; verify Application CR deletion removes all resources; confirm data survives pod restart
 
 ## 6. CLAUDE.md
 

@@ -60,7 +60,7 @@ The long-term architecture calls for microservices, GPU-accelerated inference, a
 
 ### 6. ArgoCD for GitOps-style local deployment
 
-**Decision**: Install ArgoCD on Minikube and use it to deploy and reconcile the J.A.R.V.I.S Helm chart, replacing manual `helm install/upgrade/uninstall`.
+**Decision**: Install ArgoCD `v3.3.6` on Minikube and use it to deploy and reconcile the J.A.R.V.I.S Helm chart, replacing manual `helm install/upgrade/uninstall`.
 
 **Rationale**: ArgoCD provides declarative, GitOps-style deployment that mirrors the intended production architecture. Running ArgoCD locally gives the team familiarity with the tool before production use, and the ArgoCD UI gives instant visibility into sync status and diff. ArgoCD renders Helm charts internally, so developers never run `helm` commands directly.
 
