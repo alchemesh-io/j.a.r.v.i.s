@@ -1,0 +1,46 @@
+## ADDED Requirements
+
+### Requirement: Vite.js frontend application skeleton
+The system SHALL provide a Vite.js (v8.0.2) frontend application in the `frontend/` directory, implemented as a React single-page application.
+
+#### Scenario: Development server starts
+- **WHEN** developer runs `npm run dev` inside `frontend/`
+- **THEN** the Vite development server starts on port 5173 and the application is accessible in a browser
+
+#### Scenario: Production build succeeds
+- **WHEN** `npm run build` is executed inside `frontend/`
+- **THEN** a production bundle is emitted to `frontend/dist/` without errors
+
+### Requirement: Futuristic WCAG 2.2 AA-compliant UI theme
+The frontend SHALL implement a futuristic dark-mode UI theme that meets WCAG 2.2 Level AA accessibility standards.
+
+#### Scenario: Colour contrast for body text
+- **WHEN** the application is rendered
+- **THEN** all body text achieves a contrast ratio of at least 4.5:1 against its background
+
+#### Scenario: Colour contrast for large text and UI components
+- **WHEN** the application is rendered
+- **THEN** large text (≥ 18pt normal or ≥ 14pt bold) and UI component boundaries achieve a contrast ratio of at least 3:1
+
+#### Scenario: Keyboard navigation
+- **WHEN** a user navigates using only the keyboard (Tab / Shift+Tab / Enter / Space)
+- **THEN** all interactive elements receive a visible focus indicator and are reachable in logical order
+
+#### Scenario: Screen reader landmark structure
+- **WHEN** a screen reader traverses the page
+- **THEN** the page contains at minimum a `<header>`, `<main>`, and `<footer>` landmark, and the document `<title>` is set to "J.A.R.V.I.S"
+
+### Requirement: Frontend Docker image
+The frontend SHALL be packaged as a Docker image that serves the production build via Nginx.
+
+#### Scenario: Image builds successfully
+- **WHEN** `docker build -t jarvis-frontend ./frontend` is executed
+- **THEN** the build completes without error and produces a runnable image
+
+#### Scenario: Application served correctly
+- **WHEN** the frontend container starts and port 80 is accessed
+- **THEN** the React application HTML is returned with HTTP 200
+
+#### Scenario: SPA routing supported
+- **WHEN** a request is made to any path other than a static file (e.g., `/dashboard`)
+- **THEN** Nginx returns `index.html` so the React router can handle the route client-side
