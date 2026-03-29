@@ -59,7 +59,10 @@ function savePrefs(prefs: BoardPrefs) {
 // --- Helpers ---
 
 function formatDate(d: Date): string {
-  return d.toISOString().split('T')[0];
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 const TYPE_ORDER: Record<string, number> = { review: 0, implementation: 1, refinement: 2 };
@@ -417,12 +420,6 @@ export default function TaskBoard() {
                 {editingTask ? (
                   <>
                     <Button onClick={handleSaveEdit}>Save</Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => addDate(today)}
-                    >
-                      Add to today
-                    </Button>
                   </>
                 ) : (
                   <Button onClick={handleCreate} disabled={!formTitle}>Create</Button>

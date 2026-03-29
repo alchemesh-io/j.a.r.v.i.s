@@ -147,9 +147,12 @@ export function reorderDailyTasks(
 
 function getWeekStart(date: string): string {
   const d = new Date(date + 'T00:00:00');
-  const day = d.getDay();
-  d.setDate(d.getDate() - day);
-  return d.toISOString().split('T')[0];
+  const dow = d.getDay();
+  d.setDate(d.getDate() - dow);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export async function ensureDaily(date: string): Promise<Daily> {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
   DndContext,
@@ -17,24 +18,35 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Card, Button, Input } from '@jarvis/jads';
+import { Card, Input } from '@jarvis/jads';
 import { listTasks, type Task } from '../../api/client';
 import BrainAnimation from './BrainAnimation';
 import './Dashboard.css';
 
 function formatDate(d: Date): string {
-  return d.toISOString().split('T')[0];
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
+
+const RedirectIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M6 2H2V14H14V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M9 2H14V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M14 2L7 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
 interface MetricBlockProps {
   id: string;
   title: string;
-  icon: string;
   metrics: { label: string; count: number; color: string }[];
   compact: boolean;
+  onNavigate?: () => void;
 }
 
-function MetricBlock({ id, title, icon, metrics, compact }: MetricBlockProps) {
+function MetricBlock({ id, title, metrics, compact, onNavigate }: MetricBlockProps) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id });
 
@@ -45,23 +57,23 @@ function MetricBlock({ id, title, icon, metrics, compact }: MetricBlockProps) {
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <Card title={compact ? undefined : title}>
-        <div className="dashboard__block-header">
-          {compact && <span className="dashboard__block-icon">{icon}</span>}
-        </div>
-        <div className="dashboard__metrics">
-          {metrics.map((m) => (
-            <div key={m.label} className="dashboard__metric">
-              <span
-                className="dashboard__metric-dot"
-                style={{ backgroundColor: m.color }}
-              />
-              {!compact && <span className="dashboard__metric-label">{m.label}</span>}
-              <span className="dashboard__metric-count">{m.count}</span>
-            </div>
-          ))}
-        </div>
-      </Card>
+      <div className="dashboard__card-wrapper">
+        {onNavigate && (
+          <button type="button" className="dashboard__card-redirect" onPointerDown={(e) => e.stopPropagation()} onClick={onNavigate} aria-label={`Go to ${title}`}>
+            <RedirectIcon />
+          </button>
+        )}
+        <Card title={title}>
+          <div className="dashboard__metrics">
+            {metrics.map((m) => (
+              <div key={m.label} className="dashboard__metric">
+                <span className="dashboard__metric-count" style={{ color: m.color }}>{m.count}</span>
+                {!compact && <span className="dashboard__metric-label" style={{ color: m.color }}>{m.label}</span>}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -78,11 +90,24 @@ function getTaskMetrics(tasks: Task[]) {
     { label: 'Refinement', count: refinement, color: '#3b82f6' },
     { label: 'Implementation', count: implementation, color: '#f97316' },
     { label: 'Review', count: review, color: '#ef4444' },
-    { label: 'Remaining', count: remaining, color: '#1a1a2e' },
+    { label: 'Remaining', count: remaining, color: '#94a3b8' },
   ];
 }
 
+const TASKBOARD_STORAGE_KEY = 'jarvis-taskboard';
+
+function navigateToTasks(navigate: ReturnType<typeof useNavigate>, scope: 'daily' | 'weekly') {
+  const today = formatDate(new Date());
+  localStorage.setItem(TASKBOARD_STORAGE_KEY, JSON.stringify({
+    scope,
+    selectedDate: today,
+    doneMode: 'dim',
+  }));
+  navigate('/tasks');
+}
+
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [blockOrder, setBlockOrder] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -130,7 +155,7 @@ export default function Dashboard() {
   );
 
   const mockWorkerMetrics = [
-    { label: 'Idle', count: 2, color: '#1a1a2e' },
+    { label: 'Idle', count: 2, color: '#94a3b8' },
     { label: 'Working', count: 1, color: '#f97316' },
     { label: 'Attention', count: 0, color: '#ef4444' },
     { label: 'Done', count: 3, color: '#22c55e' },
@@ -140,36 +165,39 @@ export default function Dashboard() {
     workers: {
       id: 'workers',
       title: 'Workers',
-      icon: '\u2699',
       metrics: mockWorkerMetrics,
       compact,
     },
     'daily-tasks': {
       id: 'daily-tasks',
       title: 'Daily Tasks',
-      icon: '\ud83d\udcc5',
       metrics: getTaskMetrics(dailyTasks),
       compact,
+      onNavigate: () => navigateToTasks(navigate, 'daily'),
     },
     'weekly-tasks': {
       id: 'weekly-tasks',
       title: 'Weekly Tasks',
-      icon: '\ud83d\udcc6',
       metrics: getTaskMetrics(weeklyTasks),
       compact,
+      onNavigate: () => navigateToTasks(navigate, 'weekly'),
     },
   };
 
   return (
     <div className="dashboard">
       <div className="dashboard__controls">
-        <Button
-          variant="ghost"
+        <button
+          type="button"
+          role="switch"
+          className={`dashboard__compact-toggle ${compact ? '' : 'dashboard__compact-toggle--off'}`}
           onClick={() => setCompact((c) => !c)}
-          aria-label={compact ? 'Expand blocks' : 'Compact blocks'}
+          aria-checked={compact}
+          title={compact ? 'Expand blocks' : 'Compact blocks'}
         >
-          {compact ? 'Expand' : 'Compact'}
-        </Button>
+          <span className="dashboard__compact-toggle-thumb" />
+          <span className="dashboard__compact-toggle-label">Compact</span>
+        </button>
       </div>
 
       <div className="dashboard__grid">
