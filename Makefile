@@ -113,16 +113,17 @@ deploy: _check-prereqs
 
 ## Build images locally, load into Minikube, apply ArgoCD App CR, hard sync
 deploy-local: _check-prereqs
-	@echo "==> Building Docker images locally..."
-	docker build -t jarvis-backend:local ./backend
-	docker build -t jarvis-frontend:local ./frontend
-	docker build -t jarvis-mcp:local ./mcp_server
+	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
+	@echo "==> Building Docker images locally (tag: $(LOCAL_TAG))..."
+	docker build -t jarvis-backend:$(LOCAL_TAG) ./backend
+	docker build -t jarvis-frontend:$(LOCAL_TAG) ./frontend
+	docker build -t jarvis-mcp:$(LOCAL_TAG) ./mcp_server
 	@echo "==> Loading images into Minikube..."
-	minikube image load jarvis-backend:local
-	minikube image load jarvis-frontend:local
-	minikube image load jarvis-mcp:local
-	@echo "==> Applying ArgoCD Application CR (local images)..."
-	kubectl apply -f argocd/jarvis-app-local.yaml
+	minikube image load jarvis-backend:$(LOCAL_TAG)
+	minikube image load jarvis-frontend:$(LOCAL_TAG)
+	minikube image load jarvis-mcp:$(LOCAL_TAG)
+	@echo "==> Applying ArgoCD Application CR (local images, tag: $(LOCAL_TAG))..."
+	@sed 's/tag: local/tag: $(LOCAL_TAG)/g' argocd/jarvis-app-local.yaml | kubectl apply -f -
 	@$(MAKE) sync
 	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
 	@echo "==> Access via Istio ingress gateway:"

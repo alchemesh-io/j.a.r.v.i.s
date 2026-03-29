@@ -14,12 +14,12 @@ RUN npm run build
 # Stage 2: serve static files
 FROM node:22-alpine AS runtime
 
-RUN adduser -D -u 1000 appuser && npm install -g serve
+RUN npm install -g serve
 
 WORKDIR /app
 COPY --from=builder /app/dist ./dist
 
-USER appuser
+USER node
 EXPOSE 80
 
 CMD ["serve", "-s", "dist", "-l", "80"]

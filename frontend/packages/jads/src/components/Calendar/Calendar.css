@@ -32,7 +32,7 @@
 
 .jads-calendar__weekdays {
   display: grid;
-  grid-template-columns: repeat(7, 36px);
+  grid-template-columns: repeat(7, 32px);
   gap: 2px;
 }
 
@@ -40,7 +40,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 28px;
+  height: 24px;
   font-size: var(--jads-font-size-xs);
   font-weight: var(--jads-font-weight-medium);
   color: var(--jads-color-text-muted);
@@ -49,7 +49,7 @@
 
 .jads-calendar__days {
   display: grid;
-  grid-template-columns: repeat(7, 36px);
+  grid-template-columns: repeat(7, 32px);
   gap: 2px;
 }
 
@@ -58,21 +58,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   font-family: var(--jads-font-family);
-  font-size: var(--jads-font-size-sm);
+  font-size: var(--jads-font-size-xs);
   color: var(--jads-color-text);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--jads-radius-md);
+  border: 2px solid transparent;
+  border-radius: 50%;
   cursor: pointer;
   padding: 0;
   transition:
     background-color var(--jads-transition-fast),
     border-color var(--jads-transition-fast),
-    color var(--jads-transition-fast),
-    box-shadow var(--jads-transition-fast);
+    color var(--jads-transition-fast);
 }
 
 .jads-calendar__day:hover {
@@ -93,33 +92,26 @@
   color: var(--jads-color-text-muted);
 }
 
-/* Today indicator */
+/* Today indicator - filled blue circle */
 .jads-calendar__day--today {
-  border-color: var(--jads-color-accent-purple);
-  color: var(--jads-color-accent-purple);
+  background-color: var(--jads-color-accent-cyan);
+  color: var(--jads-color-bg);
   font-weight: var(--jads-font-weight-semibold);
 }
 
 .jads-calendar__day--today:hover {
-  background-color: var(--jads-color-accent-purple-muted);
+  background-color: var(--jads-color-accent-cyan-hover, #00b8d9);
 }
 
-/* Selected date */
+/* Selected date - outlined border */
 .jads-calendar__day--selected {
-  background-color: var(--jads-color-accent-cyan);
-  color: var(--jads-color-bg);
+  border-color: var(--jads-color-text);
   font-weight: var(--jads-font-weight-semibold);
-  border-color: var(--jads-color-accent-cyan);
 }
 
-.jads-calendar__day--selected:hover {
-  background-color: var(--jads-color-accent-cyan-hover);
-}
-
-/* Selected + Today: selected wins visually */
+/* Selected + Today: filled blue with border */
 .jads-calendar__day--selected.jads-calendar__day--today {
   background-color: var(--jads-color-accent-cyan);
   color: var(--jads-color-bg);
-  border-color: var(--jads-color-accent-cyan);
-  box-shadow: var(--jads-glow-cyan);
+  border-color: var(--jads-color-text);
 }

@@ -12,7 +12,7 @@ import {
 import {
   SortableContext,
   sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
+  rectSortingStrategy,
   useSortable,
   arrayMove,
 } from '@dnd-kit/sortable';
@@ -66,12 +66,10 @@ function SortableTaskCard({
 }
 
 const SCOPE_OPTIONS = [
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
+  { value: 'daily', label: 'Day' },
+  { value: 'weekly', label: 'Week' },
   { value: 'all', label: 'All' },
 ];
-
-const TYPE_ORDER: TaskType[] = ['refinement', 'implementation', 'review'];
 
 export default function TaskBoard() {
   const queryClient = useQueryClient();
@@ -80,7 +78,6 @@ export default function TaskBoard() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  // Form state
   const [formTitle, setFormTitle] = useState('');
   const [formType, setFormType] = useState<TaskType>('implementation');
   const [formJira, setFormJira] = useState('');
@@ -182,59 +179,44 @@ export default function TaskBoard() {
       const { active, over } = event;
       if (!over || active.id === over.id || !daily) return;
 
-      const groupedTasks = groupTasksByType(tasks);
-      for (const type of TYPE_ORDER) {
-        const group = groupedTasks[type];
-        const oldIndex = group.findIndex((t) => t.id === active.id);
-        const newIndex = group.findIndex((t) => t.id === over.id);
-        if (oldIndex !== -1 && newIndex !== -1) {
-          const reordered = arrayMove(group, oldIndex, newIndex);
-          reorderMutation.mutate({
-            dailyId: daily.id,
-            items: reordered.map((t, i) => ({ task_id: t.id, priority: i + 1 })),
-          });
-          break;
-        }
+      const oldIndex = tasks.findIndex((t) => t.id === active.id);
+      const newIndex = tasks.findIndex((t) => t.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const reordered = arrayMove(tasks, oldIndex, newIndex);
+        reorderMutation.mutate({
+          dailyId: daily.id,
+          items: reordered.map((t, i) => ({ task_id: t.id, priority: i + 1 })),
+        });
       }
     },
     [tasks, daily, reorderMutation],
   );
 
-  function groupTasksByType(
-    taskList: Task[],
-  ): Record<TaskType, Task[]> {
-    const groups: Record<TaskType, Task[]> = {
-      refinement: [],
-      implementation: [],
-      review: [],
-    };
-    for (const task of taskList) {
-      groups[task.type].push(task);
-    }
-    return groups;
-  }
-
-  const groupedTasks = groupTasksByType(tasks);
-
   return (
     <div className="task-board">
-      <aside className="task-board__calendar">
+      {/* Left sidebar: create button + calendar */}
+      <aside className="task-board__sidebar">
+        <Button
+          className="task-board__create-btn"
+          onClick={() => { setShowCreateForm(true); setEditingTask(null); resetForm(); }}
+        >
+          + Create
+        </Button>
         <Calendar selectedDate={selectedDate} onDateSelect={setSelectedDate} />
       </aside>
 
-      <section className="task-board__content">
-        <div className="task-board__toolbar">
-          <Select
-            label="Scope"
-            value={scope}
-            options={SCOPE_OPTIONS}
-            onChange={(e) => setScope(e.target.value as 'daily' | 'weekly' | 'all')}
-          />
-          <Button onClick={() => { setShowCreateForm(true); setEditingTask(null); resetForm(); }}>
-            + New Task
-          </Button>
-        </div>
+      {/* Top-right: scope dropdown */}
+      <div className="task-board__toolbar">
+        <Select
+          label=""
+          value={scope}
+          options={SCOPE_OPTIONS}
+          onChange={(e) => setScope(e.target.value as 'daily' | 'weekly' | 'all')}
+        />
+      </div>
 
+      {/* Main content area */}
+      <section className="task-board__content">
         {(showCreateForm || editingTask) && (
           <div className="task-board__form">
             <Input
@@ -280,35 +262,25 @@ export default function TaskBoard() {
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          {TYPE_ORDER.map((type) => {
-            const group = groupedTasks[type];
-            if (group.length === 0) return null;
-            return (
-              <div key={type} className="task-board__group">
-                <h3 className={`task-board__group-title task-board__group-title--${type}`}>
-                  {type.charAt(0).toUpperCase() + type.slice(1)}
-                </h3>
-                <SortableContext
-                  items={group.map((t) => t.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {group.map((task) => (
-                    <SortableTaskCard
-                      key={task.id}
-                      task={task}
-                      onEdit={() => startEdit(task)}
-                      onDelete={() => deleteMutation.mutate(task.id)}
-                    />
-                  ))}
-                </SortableContext>
-              </div>
-            );
-          })}
+          <SortableContext
+            items={tasks.map((t) => t.id)}
+            strategy={rectSortingStrategy}
+          >
+            <div className="task-board__grid">
+              {tasks.map((task) => (
+                <SortableTaskCard
+                  key={task.id}
+                  task={task}
+                  onEdit={() => startEdit(task)}
+                  onDelete={() => deleteMutation.mutate(task.id)}
+                />
+              ))}
+              {tasks.length === 0 && (
+                <p className="task-board__empty">No tasks for this selection.</p>
+              )}
+            </div>
+          </SortableContext>
         </DndContext>
-
-        {tasks.length === 0 && (
-          <p className="task-board__empty">No tasks for this selection.</p>
-        )}
       </section>
     </div>
   );

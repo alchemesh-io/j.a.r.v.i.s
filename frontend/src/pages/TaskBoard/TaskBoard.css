@@ -1,29 +1,40 @@
 .task-board {
   display: grid;
   grid-template-columns: 280px 1fr;
+  grid-template-rows: auto 1fr;
   gap: var(--jads-space-6, 24px);
   padding: var(--jads-space-6, 24px);
   min-height: 0;
 }
 
-.task-board__calendar {
-  position: sticky;
-  top: var(--jads-space-6, 24px);
-  align-self: start;
-}
-
-.task-board__content {
+/* Left column */
+.task-board__sidebar {
   display: flex;
   flex-direction: column;
   gap: var(--jads-space-4, 16px);
+  grid-row: 1 / -1;
 }
 
+.task-board__create-btn {
+  align-self: flex-start;
+}
+
+/* Right column - toolbar row */
 .task-board__toolbar {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: flex-end;
   gap: var(--jads-space-4, 16px);
 }
 
+/* Right column - task area */
+.task-board__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jads-space-6, 24px);
+}
+
+/* Create/edit form overlay */
 .task-board__form {
   display: flex;
   flex-direction: column;
@@ -39,47 +50,27 @@
   gap: var(--jads-space-2, 8px);
 }
 
-.task-board__group {
-  margin-bottom: var(--jads-space-4, 16px);
-}
-
-.task-board__group-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: var(--jads-space-2, 8px);
-  padding-bottom: var(--jads-space-1, 4px);
-  border-bottom: 2px solid;
-}
-
-.task-board__group-title--refinement {
-  color: var(--jads-color-refinement, #3b82f6);
-  border-color: var(--jads-color-refinement, #3b82f6);
-}
-
-.task-board__group-title--implementation {
-  color: var(--jads-color-implementation, #f97316);
-  border-color: var(--jads-color-implementation, #f97316);
-}
-
-.task-board__group-title--review {
-  color: var(--jads-color-review, #ef4444);
-  border-color: var(--jads-color-review, #ef4444);
+/* Task grid - cards layout */
+.task-board__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--jads-space-4, 16px);
 }
 
 .task-board__empty {
   text-align: center;
   color: var(--color-text-muted, #94a3b8);
   padding: var(--jads-space-8, 32px);
+  grid-column: 1 / -1;
 }
 
 @media (max-width: 768px) {
   .task-board {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
   }
 
-  .task-board__calendar {
-    position: static;
+  .task-board__sidebar {
+    grid-row: auto;
   }
 }

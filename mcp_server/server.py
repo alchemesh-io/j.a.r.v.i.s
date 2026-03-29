@@ -100,4 +100,4 @@ async def list_weekly_tasks(date: str) -> list[dict]:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport="sse")

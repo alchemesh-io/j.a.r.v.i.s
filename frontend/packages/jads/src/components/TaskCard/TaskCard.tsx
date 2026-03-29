@@ -5,7 +5,7 @@ import './TaskCard.css';
 export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   /** Task title */
   title: string;
-  /** Task type determines the left border color */
+  /** Task type determines the accent color */
   type: 'refinement' | 'implementation' | 'review';
   /** Task status - done tasks appear dimmed */
   status: 'created' | 'done';
@@ -40,6 +40,7 @@ export function TaskCard({
   ...props
 }: TaskCardProps) {
   const isDone = status === 'done';
+  const displayTitle = jiraTicketId ? `[${jiraTicketId}] - ${title}` : title;
 
   return (
     <article
@@ -47,39 +48,35 @@ export function TaskCard({
       {...props}
     >
       <div className="jads-task-card__content">
-        <div className="jads-task-card__header">
-          <h4 className="jads-task-card__title">{title}</h4>
-          {jiraTicketId && (
-            <span className="jads-task-card__badge">
-              {jiraTicketId}
-            </span>
-          )}
-        </div>
+        <h4 className="jads-task-card__title">{displayTitle}</h4>
       </div>
-      {(onEdit || onDelete) && (
-        <div className="jads-task-card__actions">
-          {onEdit && (
-            <IconButton
-              aria-label={`Edit task: ${title}`}
-              variant="ghost"
-              size="sm"
-              onClick={onEdit}
-            >
-              <EditIcon />
-            </IconButton>
-          )}
-          {onDelete && (
-            <IconButton
-              aria-label={`Delete task: ${title}`}
-              variant="ghost"
-              size="sm"
-              onClick={onDelete}
-            >
-              <DeleteIcon />
-            </IconButton>
-          )}
-        </div>
-      )}
+      <div className="jads-task-card__footer">
+        <span className="jads-task-card__type">{type}</span>
+        {(onEdit || onDelete) && (
+          <div className="jads-task-card__actions">
+            {onEdit && (
+              <IconButton
+                aria-label={`Edit task: ${title}`}
+                variant="ghost"
+                size="sm"
+                onClick={onEdit}
+              >
+                <EditIcon />
+              </IconButton>
+            )}
+            {onDelete && (
+              <IconButton
+                aria-label={`Delete task: ${title}`}
+                variant="ghost"
+                size="sm"
+                onClick={onDelete}
+              >
+                <DeleteIcon />
+              </IconButton>
+            )}
+          </div>
+        )}
+      </div>
     </article>
   );
 }
