@@ -182,7 +182,7 @@ _mount-start:
 	@sleep 2
 
 _istio-install:
-	@echo "==> Deploying Istio via ArgoCD..."
+	@echo "==> Deploying Istio + Gateway API CRDs via ArgoCD..."
 	kubectl apply -f argocd/istio-app.yaml
 	@echo "==> Waiting for Istio to sync and become healthy (timeout 5m)..."
 	@kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/istio -n argocd --timeout=300s 2>/dev/null || \

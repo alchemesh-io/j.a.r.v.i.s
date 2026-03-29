@@ -7,12 +7,15 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  source:
-    repoURL: file:///mnt/jarvis-repo
-    path: helm/istio
-    targetRevision: HEAD
-    helm:
-      releaseName: istio
+  sources:
+    - repoURL: https://github.com/kubernetes-sigs/gateway-api
+      path: config/crd/standard
+      targetRevision: v1.5.1
+    - repoURL: file:///mnt/jarvis-repo
+      path: helm/istio
+      targetRevision: HEAD
+      helm:
+        releaseName: istio
   destination:
     server: https://kubernetes.default.svc
     namespace: istio-system
