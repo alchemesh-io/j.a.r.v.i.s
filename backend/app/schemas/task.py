@@ -1,3 +1,5 @@
+import datetime
+
 from pydantic import BaseModel
 
 from app.models.enums import TaskStatus, TaskType
@@ -25,3 +27,4 @@ class TaskResponse(BaseModel):
     title: str
     type: TaskType
     status: TaskStatus
+    dates: list[datetime.date] = []

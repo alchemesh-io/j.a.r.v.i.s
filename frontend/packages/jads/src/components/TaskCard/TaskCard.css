@@ -1,40 +1,76 @@
 /* TaskCard component styles */
 .jads-task-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--jads-space-3);
-  padding: var(--jads-space-4);
-  background-color: var(--jads-color-surface);
-  border: 1px solid var(--jads-color-border);
+  gap: var(--jads-space-4);
+  padding: 20px 20px 16px;
+  border: 1px solid var(--jads-color-border, #2d3748);
   border-radius: var(--jads-radius-lg);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition:
     border-color var(--jads-transition-fast),
     opacity var(--jads-transition-fast),
-    box-shadow var(--jads-transition-fast);
-  min-height: 100px;
+    box-shadow var(--jads-transition-fast),
+    transform var(--jads-transition-fast);
+  min-height: 120px;
 }
 
 .jads-task-card:hover {
-  border-color: var(--jads-color-border-hover);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
 }
 
-/* Type-based top border accent */
+/* Type-based gradient backgrounds */
 .jads-task-card--refinement {
-  border-top: 3px solid var(--jads-color-task-refinement);
+  background: linear-gradient(
+    180deg,
+    rgba(59, 130, 246, 0.3) 0%,
+    rgba(59, 130, 246, 0.15) 50%,
+    rgba(59, 130, 246, 0.05) 100%
+  );
+  border-top: 2px solid var(--jads-color-task-refinement);
+}
+
+.jads-task-card--refinement:hover {
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 .jads-task-card--implementation {
-  border-top: 3px solid var(--jads-color-task-implementation);
+  background: linear-gradient(
+    180deg,
+    rgba(249, 115, 22, 0.3) 0%,
+    rgba(249, 115, 22, 0.15) 50%,
+    rgba(249, 115, 22, 0.05) 100%
+  );
+  border-top: 2px solid var(--jads-color-task-implementation);
+}
+
+.jads-task-card--implementation:hover {
+  border-color: rgba(249, 115, 22, 0.4);
 }
 
 .jads-task-card--review {
-  border-top: 3px solid var(--jads-color-task-review);
+  background: linear-gradient(
+    150deg,
+    rgba(239, 68, 68, 0.3) 0%,
+    rgba(239, 68, 68, 0.15) 50%,
+    rgba(239, 68, 68, 0.05) 100%
+  );
+  border-top: 2px solid var(--jads-color-task-review);
+}
+
+.jads-task-card--review:hover {
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
 /* Done state - dimmed appearance */
 .jads-task-card--done {
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .jads-task-card--done .jads-task-card__title {
@@ -50,11 +86,31 @@
 
 .jads-task-card__title {
   font-family: var(--jads-font-family);
-  font-size: var(--jads-font-size-sm);
+  font-size: var(--jads-font-size-md);
   font-weight: var(--jads-font-weight-semibold);
   color: var(--jads-color-text);
   line-height: var(--jads-line-height-normal);
   margin: 0;
+}
+
+/* Dates row */
+.jads-task-card__dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.jads-task-card__date {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  font-family: var(--jads-font-family);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--jads-color-text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  letter-spacing: 0.02em;
 }
 
 /* JIRA badge */
@@ -73,32 +129,41 @@
   flex-shrink: 0;
 }
 
-/* Type label */
+/* Type badge */
 .jads-task-card__type {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
   font-family: var(--jads-font-family);
-  font-size: var(--jads-font-size-xs);
-  font-weight: var(--jads-font-weight-medium);
+  font-size: 10px;
+  font-weight: var(--jads-font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  border-radius: var(--jads-radius-sm);
+  margin-left: auto;
 }
 
 .jads-task-card--refinement .jads-task-card__type {
   color: var(--jads-color-task-refinement);
+  background-color: rgba(59, 130, 246, 0.15);
 }
 
 .jads-task-card--implementation .jads-task-card__type {
   color: var(--jads-color-task-implementation);
+  background-color: rgba(249, 115, 22, 0.15);
 }
 
 .jads-task-card--review .jads-task-card__type {
   color: var(--jads-color-task-review);
+  background-color: rgba(239, 68, 68, 0.15);
 }
 
-/* Footer with type + actions */
+/* Footer with actions + type badge */
 .jads-task-card__footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--jads-space-2);
+  margin-top: var(--jads-space-2);
 }
 
 /* Actions area */
@@ -107,6 +172,31 @@
   align-items: center;
   gap: var(--jads-space-1);
   flex-shrink: 0;
+}
+
+/* Status button — top right */
+.jads-task-card__status-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0.4;
+  transition: opacity var(--jads-transition-fast);
+}
+
+.jads-task-card:hover .jads-task-card__status-btn {
+  opacity: 0.7;
+}
+
+.jads-task-card__status-btn:hover {
+  opacity: 1 !important;
+}
+
+.jads-task-card__status-btn--done {
+  color: var(--jads-color-text-muted);
+}
+
+/* Edit/delete hidden until hover */
+.jads-task-card__actions {
   opacity: 0;
   transition: opacity var(--jads-transition-fast);
 }

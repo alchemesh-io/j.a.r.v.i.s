@@ -23,6 +23,7 @@ export interface Task {
   title: string;
   type: TaskType;
   status: TaskStatus;
+  dates?: string[];
 }
 
 export interface DailyTask {
@@ -140,4 +141,48 @@ export function reorderDailyTasks(
     method: 'PUT',
     body: JSON.stringify({ items }),
   });
+}
+
+// --- Helpers ---
+
+function getWeekStart(date: string): string {
+  const d = new Date(date + 'T00:00:00');
+  const day = d.getDay();
+  d.setDate(d.getDate() - day);
+  return d.toISOString().split('T')[0];
+}
+
+export async function ensureDaily(date: string): Promise<Daily> {
+  try {
+    return await getDailyByDate(date);
+  } catch {
+    // Daily doesn't exist — create weekly first if needed
+    const weekStart = getWeekStart(date);
+    let weekly: Weekly;
+    try {
+      const weeklies = await listWeeklies();
+      weekly = weeklies.find((w) => w.week_start === weekStart)!;
+      if (!weekly) throw new Error('not found');
+    } catch {
+      weekly = await createWeekly({ week_start: weekStart });
+    }
+    return await createDaily({ date, weekly_id: weekly.id });
+  }
+}
+
+export async function assignTaskToDates(
+  taskId: number,
+  dates: string[],
+): Promise<void> {
+  for (const date of dates) {
+    const daily = await ensureDaily(date);
+    const maxPriority = daily.tasks.reduce(
+      (max, dt) => Math.max(max, dt.priority),
+      0,
+    );
+    await addTaskToDaily(daily.id, {
+      task_id: taskId,
+      priority: maxPriority + 1,
+    });
+  }
 }

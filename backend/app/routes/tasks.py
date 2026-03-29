@@ -2,7 +2,7 @@ import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.models import Daily, DailyTask, Task
@@ -19,13 +19,37 @@ def _get_week_bounds(date: datetime.date) -> tuple[datetime.date, datetime.date]
     return sunday, saturday
 
 
+def _task_to_response(task: Task) -> TaskResponse:
+    dates = sorted(entry.daily.date for entry in task.daily_entries)
+    return TaskResponse(
+        id=task.id,
+        jira_ticket_id=task.jira_ticket_id,
+        title=task.title,
+        type=task.type,
+        status=task.status,
+        dates=dates,
+    )
+
+
+def _load_task(db: Session, task_id: int) -> Task:
+    stmt = (
+        select(Task)
+        .where(Task.id == task_id)
+        .options(selectinload(Task.daily_entries).selectinload(DailyTask.daily))
+    )
+    task = db.scalars(stmt).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
 @router.post("", response_model=TaskResponse, status_code=201)
 def create_task(body: TaskCreate, db: Session = Depends(get_db)):
     task = Task(**body.model_dump())
     db.add(task)
     db.flush()
     db.refresh(task)
-    return task
+    return _task_to_response(task)
 
 
 @router.get("", response_model=list[TaskResponse])
@@ -35,46 +59,45 @@ def list_tasks(
     db: Session = Depends(get_db),
 ):
     if scope == "all" or date is None:
-        return db.scalars(select(Task)).all()
-
-    if scope == "daily":
-        start, end = date, date
+        stmt = select(Task).options(
+            selectinload(Task.daily_entries).selectinload(DailyTask.daily)
+        )
+        tasks = db.scalars(stmt).all()
     else:
-        start, end = _get_week_bounds(date)
+        if scope == "daily":
+            start, end = date, date
+        else:
+            start, end = _get_week_bounds(date)
 
-    stmt = (
-        select(Task)
-        .join(DailyTask, DailyTask.task_id == Task.id)
-        .join(Daily, Daily.id == DailyTask.daily_id)
-        .where(Daily.date >= start, Daily.date <= end)
-        .distinct()
-    )
-    return db.scalars(stmt).all()
+        stmt = (
+            select(Task)
+            .join(DailyTask, DailyTask.task_id == Task.id)
+            .join(Daily, Daily.id == DailyTask.daily_id)
+            .where(Daily.date >= start, Daily.date <= end)
+            .distinct()
+            .options(selectinload(Task.daily_entries).selectinload(DailyTask.daily))
+        )
+        tasks = db.scalars(stmt).unique().all()
+
+    return [_task_to_response(t) for t in tasks]
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
 def get_task(task_id: int, db: Session = Depends(get_db)):
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    return _task_to_response(_load_task(db, task_id))
 
 
 @router.patch("/{task_id}", response_model=TaskResponse)
 def update_task(task_id: int, body: TaskUpdate, db: Session = Depends(get_db)):
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+    task = _load_task(db, task_id)
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(task, field, value)
     db.flush()
     db.refresh(task)
-    return task
+    return _task_to_response(task)
 
 
 @router.delete("/{task_id}", status_code=204)
 def delete_task(task_id: int, db: Session = Depends(get_db)):
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+    task = _load_task(db, task_id)
     db.delete(task)

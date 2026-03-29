@@ -123,7 +123,7 @@ deploy-local: _check-prereqs
 	minikube image load jarvis-frontend:$(LOCAL_TAG)
 	minikube image load jarvis-mcp:$(LOCAL_TAG)
 	@echo "==> Applying ArgoCD Application CR (local images, tag: $(LOCAL_TAG))..."
-	@sed 's/tag: local/tag: $(LOCAL_TAG)/g' argocd/jarvis-app-local.yaml | kubectl apply -f -
+	@sed 's/tag: local/tag: "$(LOCAL_TAG)"/g' argocd/jarvis-app-local.yaml | kubectl apply -f -
 	@$(MAKE) sync
 	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
 	@echo "==> Access via Istio ingress gateway:"
@@ -215,6 +215,22 @@ _argocd-add-repo:
 	@echo "==> Configuring ArgoCD repository entry for file:///mnt/jarvis-repo..."
 	kubectl apply -f argocd/jarvis-repo-secret.yaml
 
+
+# ---------------------------------------------------------------------------
+# Local dev (no Docker)
+# ---------------------------------------------------------------------------
+## Run frontend dev server proxying to local backend (make dev-backend)
+dev-frontend:
+	cd frontend && npm run dev
+
+## Run frontend dev server proxying to Minikube backend (requires minikube tunnel)
+dev-frontend-minikube:
+	$(eval INGRESS_IP := $(shell kubectl get svc -n istio-system istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "localhost"))
+	cd frontend && API_URL=http://$(INGRESS_IP) npm run dev
+
+## Run backend locally with SQLite
+dev-backend:
+	cd backend && DATABASE_URL=sqlite:///./jarvis-dev.db uv run uvicorn app.main:app --reload --port 8000
 
 # ---------------------------------------------------------------------------
 # Tests
