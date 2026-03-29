@@ -126,9 +126,9 @@ frontend/
 
 **Rationale**: Task data is server-owned. TanStack Query provides caching, background refetch, optimistic updates for drag-and-drop reorder, and mutation invalidation — all critical for the task board UX.
 
-### D10: Dashboard layout persistence — localStorage
+### D10: UI state persistence — localStorage
 
-**Choice**: Store the user's block layout order in `localStorage`.
+**Choice**: Store all user preferences in `localStorage`: dashboard block layout order, task board filters (scope, selected date, done-task visibility mode).
 
 **Alternatives considered**:
 - Backend user preferences table — requires auth, overkill for single-user
@@ -152,6 +152,36 @@ frontend/
 **Choice**: Build a month-view calendar component as part of J.A.D.S rather than using a third-party library.
 
 **Rationale**: The calendar is a core navigation element inspired by Google Calendar's mini-calendar. It needs to integrate tightly with the design system's theming (dark futuristic look). Third-party calendar components bring heavy styling baggage. A month-view grid is straightforward to implement and fully testable.
+
+### D13: Traffic management — Istio with Kubernetes Gateway API
+
+**Choice**: Deploy Istio service mesh via ArgoCD. Use Kubernetes Gateway API (`gateway.networking.k8s.io/v1`) with `gatewayClassName: istio` for ingress. Gateway API CRDs installed from the official GitHub repository as a second source in the Istio ArgoCD Application. HTTPRoute in the jarvis chart handles path-based routing (`/api/*` → backend, `/*` → frontend).
+
+**Alternatives considered**:
+- nginx Ingress Controller — less native to Kubernetes, requires separate controller installation
+- Istio VirtualService — proprietary CRD, Gateway API is the Kubernetes standard
+- nginx reverse proxy in frontend container — tight coupling, hard to configure per environment
+
+**Rationale**: Gateway API is the Kubernetes-native standard for ingress routing, supported natively by Istio. Separating the Gateway (infra concern, deployed with Istio) from HTTPRoute (app concern, deployed with jarvis) follows good separation of concerns. Istio auto-provisions the ingress gateway pod when it sees the Gateway resource — no separate gateway chart needed. The frontend serves only static files; all routing is at the mesh level.
+
+### D14: Frontend static file serving — `serve` (no nginx)
+
+**Choice**: Use `serve` (npm package) in a `node:22-alpine` image for frontend static file serving. No nginx anywhere in the stack.
+
+**Alternatives considered**:
+- nginx — adds a separate base image and config management (ConfigMap for nginx.conf)
+- Caddy — lighter than nginx but still an extra binary
+
+**Rationale**: With Istio handling all routing, the frontend only needs to serve static files with SPA fallback. `serve -s` provides exactly this. Using the same `node` base image as the build stage keeps the image simple. No nginx config to manage.
+
+### D15: ArgoCD syncs from HEAD — no local-deploy branch
+
+**Choice**: ArgoCD Application CR targets `HEAD` via `minikube mount`. No `local-deploy` branch, no auto-commit workflow.
+
+**Alternatives considered**:
+- Auto-commit to `local-deploy` branch — complex, error-prone branch switching, stale state issues
+
+**Rationale**: Since `minikube mount` exposes the working directory as a filesystem, ArgoCD can read the chart directly from HEAD. This eliminates the need for auto-commit and branch management. `make sync` forces a re-read.
 
 ## Risks / Trade-offs
 

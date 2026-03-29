@@ -36,6 +36,13 @@ Pydantic 2.12.5 SHALL be added to `pyproject.toml` as a core dependency. All str
 - **WHEN** `uv run python -c "import pydantic"` is executed
 - **THEN** `pydantic` version 2.12.5 is available
 
+### Requirement: Auto-migration on startup
+The backend SHALL run `alembic upgrade head` automatically during the FastAPI lifespan startup, ensuring all database tables exist before handling requests.
+
+#### Scenario: Tables created on first start
+- **WHEN** the backend starts against an empty database
+- **THEN** Alembic migrations run and all tables are created before the first request is served
+
 ## MODIFIED Requirements
 
 ### Requirement: Python backend application skeleton
