@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Minikube / local cluster
+.minikube-mount.pid
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# Helm
+*.tgz
+
+# Terraform / infra
+.terraform/
+*.tfstate
+*.tfstate.backup
