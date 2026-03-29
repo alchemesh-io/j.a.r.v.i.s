@@ -1,0 +1,72 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jads-space-6, 24px);
+  padding: var(--jads-space-6, 24px);
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.dashboard__controls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dashboard__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jads-space-4, 16px);
+}
+
+.dashboard__block-header {
+  display: flex;
+  align-items: center;
+  gap: var(--jads-space-2, 8px);
+}
+
+.dashboard__block-icon {
+  font-size: 1.25rem;
+}
+
+.dashboard__metrics {
+  display: flex;
+  gap: var(--jads-space-4, 16px);
+  flex-wrap: wrap;
+}
+
+.dashboard__metric {
+  display: flex;
+  align-items: center;
+  gap: var(--jads-space-2, 8px);
+}
+
+.dashboard__metric-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dashboard__metric-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.dashboard__metric-count {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text, #e2e8f0);
+}
+
+.dashboard__brain {
+  width: 100%;
+}
+
+.dashboard__chat {
+  width: 100%;
+}
+
+.dashboard__chat input {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

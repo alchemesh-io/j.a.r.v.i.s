@@ -1,13 +1,13 @@
-import os
-
 from fastapi import FastAPI
-from sqlalchemy import create_engine
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////data/jarvis.db")
-
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+from app.routes import dailies, daily_tasks, tasks, weeklies
 
 app = FastAPI(title="J.A.R.V.I.S", description="Just A Rather Very Intelligent System")
+
+app.include_router(tasks.router, prefix="/api/v1")
+app.include_router(weeklies.router, prefix="/api/v1")
+app.include_router(dailies.router, prefix="/api/v1")
+app.include_router(daily_tasks.router, prefix="/api/v1")
 
 
 @app.get("/")

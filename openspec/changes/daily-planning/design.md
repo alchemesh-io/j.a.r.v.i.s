@@ -4,7 +4,7 @@ J.A.R.V.I.S is a FastAPI + React/Vite application deployed via Helm/ArgoCD on Mi
 
 Key constraints:
 - SQLite as the database (single-writer, acceptable for local dev)
-- Python 3.12+, Pydantic 2.12.5 as the universal data layer
+- Python 3.12+, `uv` as package manager, Pydantic 2.12.5 as the universal data layer
 - Vite 8.x (pinned), React 19, TypeScript 5.9
 - All config via environment variables (12-factor)
 - ArgoCD manages deployments — no direct `helm install`
@@ -66,6 +66,16 @@ Key constraints:
 **Choice**: `TaskType` and `TaskStatus` are Python `(str, Enum)` classes. Stored as strings in SQLite via SQLAlchemy's `Enum` type (which stores the value as text). Not backed by a database lookup table.
 
 **Rationale**: Task spec explicitly states "not in database". String enums serialize cleanly to JSON and are easy to validate via Pydantic.
+
+### D5b: Backend package manager — uv
+
+**Choice**: Use `uv` as the Python package manager. `pyproject.toml` with no `[build-system]` section (uv-native), `uv.lock` for reproducible installs, `[dependency-groups].dev` for dev dependencies. Dockerfile uses `COPY --from=ghcr.io/astral-sh/uv:latest` and `uv sync --frozen`.
+
+**Alternatives considered**:
+- pip + hatchling — slower installs, no lockfile by default, requires `[build-system]` boilerplate
+- poetry — heavier tooling, separate `poetry.lock` format, less Docker-friendly
+
+**Rationale**: `uv` is significantly faster than pip, produces a deterministic lockfile, handles virtual environment creation automatically, and has first-class Docker support via the official `ghcr.io/astral-sh/uv` image. The `uv run` command makes running scripts in the project venv seamless. All commands: `uv sync` (install), `uv run pytest` (run tests), `uv lock` (update lockfile).
 
 ### D6: Frontend architecture — monorepo with workspace packages
 
@@ -159,7 +169,7 @@ frontend/
 
 No production data exists — this is greenfield. Deployment steps:
 
-1. Backend: Add Alembic, run initial migration to create all tables. Update `pyproject.toml` with new deps. Update Dockerfile if needed.
+1. Backend: Add deps to `pyproject.toml`, run `uv lock` to generate lockfile. Run Alembic initial migration to create all tables. Update Dockerfile to use `uv sync --frozen`.
 2. Frontend: Set up npm workspaces, add J.A.D.S package, install new deps. Update Dockerfile for workspace build.
 3. Helm: Add ConfigMap for `DATABASE_URL` and any new env vars. No schema changes to existing templates needed — just new env entries on the backend deployment.
 4. MCP: New Dockerfile + Helm template for the MCP server as a standalone pod. Only needs `BACKEND_URL` env var — no PVC mount required.

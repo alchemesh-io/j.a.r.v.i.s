@@ -1,0 +1,125 @@
+/* Calendar component styles */
+.jads-calendar {
+  background-color: var(--jads-color-surface);
+  border: 1px solid var(--jads-color-border);
+  border-radius: var(--jads-radius-lg);
+  padding: var(--jads-space-4);
+  font-family: var(--jads-font-family);
+  width: fit-content;
+}
+
+/* Header with month/year and navigation */
+.jads-calendar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--jads-space-4);
+}
+
+.jads-calendar__month-year {
+  font-size: var(--jads-font-size-md);
+  font-weight: var(--jads-font-weight-semibold);
+  color: var(--jads-color-text);
+  user-select: none;
+}
+
+/* Grid layout */
+.jads-calendar__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jads-space-1);
+}
+
+.jads-calendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 36px);
+  gap: 2px;
+}
+
+.jads-calendar__weekday {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  font-size: var(--jads-font-size-xs);
+  font-weight: var(--jads-font-weight-medium);
+  color: var(--jads-color-text-muted);
+  user-select: none;
+}
+
+.jads-calendar__days {
+  display: grid;
+  grid-template-columns: repeat(7, 36px);
+  gap: 2px;
+}
+
+/* Day cells */
+.jads-calendar__day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  font-family: var(--jads-font-family);
+  font-size: var(--jads-font-size-sm);
+  color: var(--jads-color-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--jads-radius-md);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    background-color var(--jads-transition-fast),
+    border-color var(--jads-transition-fast),
+    color var(--jads-transition-fast),
+    box-shadow var(--jads-transition-fast);
+}
+
+.jads-calendar__day:hover {
+  background-color: var(--jads-color-surface-hover);
+}
+
+.jads-calendar__day:focus-visible {
+  outline: 2px solid var(--jads-color-accent-cyan);
+  outline-offset: 1px;
+}
+
+/* Other month days - dimmed */
+.jads-calendar__day--other-month {
+  color: var(--jads-color-text-disabled);
+}
+
+.jads-calendar__day--other-month:hover {
+  color: var(--jads-color-text-muted);
+}
+
+/* Today indicator */
+.jads-calendar__day--today {
+  border-color: var(--jads-color-accent-purple);
+  color: var(--jads-color-accent-purple);
+  font-weight: var(--jads-font-weight-semibold);
+}
+
+.jads-calendar__day--today:hover {
+  background-color: var(--jads-color-accent-purple-muted);
+}
+
+/* Selected date */
+.jads-calendar__day--selected {
+  background-color: var(--jads-color-accent-cyan);
+  color: var(--jads-color-bg);
+  font-weight: var(--jads-font-weight-semibold);
+  border-color: var(--jads-color-accent-cyan);
+}
+
+.jads-calendar__day--selected:hover {
+  background-color: var(--jads-color-accent-cyan-hover);
+}
+
+/* Selected + Today: selected wins visually */
+.jads-calendar__day--selected.jads-calendar__day--today {
+  background-color: var(--jads-color-accent-cyan);
+  color: var(--jads-color-bg);
+  border-color: var(--jads-color-accent-cyan);
+  box-shadow: var(--jads-glow-cyan);
+}

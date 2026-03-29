@@ -1,0 +1,67 @@
+/* IconButton component styles */
+.jads-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: var(--jads-font-family);
+  border-radius: var(--jads-radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--jads-color-text-muted);
+  background: transparent;
+  transition:
+    background-color var(--jads-transition-fast),
+    border-color var(--jads-transition-fast),
+    color var(--jads-transition-fast),
+    box-shadow var(--jads-transition-fast);
+  flex-shrink: 0;
+}
+
+/* Sizes */
+.jads-icon-button--sm {
+  width: 28px;
+  height: 28px;
+}
+
+.jads-icon-button--md {
+  width: 36px;
+  height: 36px;
+}
+
+/* Focus */
+.jads-icon-button:focus-visible {
+  outline: 2px solid var(--jads-color-accent-cyan);
+  outline-offset: 2px;
+}
+
+/* Ghost variant */
+.jads-icon-button--ghost:hover:not(:disabled) {
+  background-color: var(--jads-color-surface-hover);
+  color: var(--jads-color-text);
+}
+
+.jads-icon-button--ghost:active:not(:disabled) {
+  background-color: var(--jads-color-surface-alt);
+}
+
+/* Outline variant */
+.jads-icon-button--outline {
+  border-color: var(--jads-color-border);
+}
+
+.jads-icon-button--outline:hover:not(:disabled) {
+  border-color: var(--jads-color-border-hover);
+  background-color: var(--jads-color-surface-hover);
+  color: var(--jads-color-text);
+}
+
+.jads-icon-button--outline:active:not(:disabled) {
+  background-color: var(--jads-color-surface-alt);
+}
+
+/* Disabled state */
+.jads-icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -1,0 +1,89 @@
+/* Select component styles */
+.jads-select-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jads-space-1);
+  font-family: var(--jads-font-family);
+}
+
+.jads-select__label {
+  font-size: var(--jads-font-size-sm);
+  font-weight: var(--jads-font-weight-medium);
+  color: var(--jads-color-text);
+  line-height: var(--jads-line-height-normal);
+}
+
+.jads-select__container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.jads-select {
+  width: 100%;
+  padding: var(--jads-space-2) var(--jads-space-8) var(--jads-space-2) var(--jads-space-3);
+  min-height: 40px;
+  font-family: var(--jads-font-family);
+  font-size: var(--jads-font-size-sm);
+  color: var(--jads-color-text);
+  background-color: var(--jads-color-surface);
+  border: 1px solid var(--jads-color-border);
+  border-radius: var(--jads-radius-md);
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition:
+    border-color var(--jads-transition-fast),
+    box-shadow var(--jads-transition-fast);
+}
+
+.jads-select option {
+  background-color: var(--jads-color-surface);
+  color: var(--jads-color-text);
+}
+
+.jads-select option:disabled {
+  color: var(--jads-color-text-muted);
+}
+
+.jads-select:hover:not(:disabled) {
+  border-color: var(--jads-color-border-hover);
+}
+
+.jads-select:focus-visible {
+  border-color: var(--jads-color-accent-cyan);
+  box-shadow: 0 0 0 2px var(--jads-color-accent-cyan-muted);
+  outline: none;
+}
+
+.jads-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jads-select__chevron {
+  position: absolute;
+  right: var(--jads-space-3);
+  color: var(--jads-color-text-muted);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+/* Error state */
+.jads-select-wrapper--error .jads-select {
+  border-color: var(--jads-color-error);
+}
+
+.jads-select-wrapper--error .jads-select:focus-visible {
+  border-color: var(--jads-color-error);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.jads-select__error {
+  font-size: var(--jads-font-size-xs);
+  color: var(--jads-color-error);
+  line-height: var(--jads-line-height-normal);
+  margin: 0;
+}

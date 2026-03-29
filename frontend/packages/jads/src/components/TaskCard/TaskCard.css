@@ -1,0 +1,97 @@
+/* TaskCard component styles */
+.jads-task-card {
+  display: flex;
+  align-items: center;
+  gap: var(--jads-space-3);
+  padding: var(--jads-space-3) var(--jads-space-4);
+  background-color: var(--jads-color-surface);
+  border: 1px solid var(--jads-color-border);
+  border-left: 3px solid transparent;
+  border-radius: var(--jads-radius-md);
+  transition:
+    border-color var(--jads-transition-fast),
+    opacity var(--jads-transition-fast);
+}
+
+.jads-task-card:hover {
+  border-color: var(--jads-color-border-hover);
+}
+
+/* Type-based left border colors */
+.jads-task-card--refinement {
+  border-left-color: var(--jads-color-task-refinement);
+}
+
+.jads-task-card--implementation {
+  border-left-color: var(--jads-color-task-implementation);
+}
+
+.jads-task-card--review {
+  border-left-color: var(--jads-color-task-review);
+}
+
+/* Done state - dimmed appearance */
+.jads-task-card--done {
+  opacity: 0.5;
+}
+
+.jads-task-card--done .jads-task-card__title {
+  text-decoration: line-through;
+  color: var(--jads-color-text-muted);
+}
+
+/* Content area */
+.jads-task-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.jads-task-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--jads-space-2);
+  flex-wrap: wrap;
+}
+
+.jads-task-card__title {
+  font-family: var(--jads-font-family);
+  font-size: var(--jads-font-size-sm);
+  font-weight: var(--jads-font-weight-medium);
+  color: var(--jads-color-text);
+  line-height: var(--jads-line-height-tight);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* JIRA badge */
+.jads-task-card__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--jads-space-2);
+  font-family: var(--jads-font-family);
+  font-size: var(--jads-font-size-xs);
+  font-weight: var(--jads-font-weight-medium);
+  color: var(--jads-color-accent-cyan);
+  background-color: var(--jads-color-accent-cyan-muted);
+  border-radius: var(--jads-radius-sm);
+  line-height: var(--jads-line-height-normal);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Actions area */
+.jads-task-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--jads-space-1);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--jads-transition-fast);
+}
+
+.jads-task-card:hover .jads-task-card__actions,
+.jads-task-card:focus-within .jads-task-card__actions {
+  opacity: 1;
+}

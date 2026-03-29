@@ -32,8 +32,8 @@ J.A.R.V.I.S needs its first core feature: task management with daily/weekly plan
 
 ## Impact
 
-- **Backend**: New Python dependencies (Pydantic 2.12.5, SQLAlchemy 2, Alembic). New packages for models, schemas, routes, and database config. All endpoints auto-documented via FastAPI/OpenAPI.
+- **Backend**: `uv` as package manager (replaces pip+hatchling). New Python dependencies (Pydantic 2.12.5, SQLAlchemy 2, Alembic) managed via `pyproject.toml` + `uv.lock`. New packages for models, schemas, routes, and database config. All endpoints auto-documented via FastAPI/OpenAPI.
 - **Frontend**: New dependencies (Storybook 10.3, Vitest 4.1.2, Playwright, drag-and-drop library). J.A.D.S packaged as internal library. New pages/components for task board and dashboard.
-- **Infrastructure**: Helm values updated with new ConfigMaps/Secrets. SQLite PVC already exists. Backend Dockerfile may need build adjustments for new deps.
+- **Infrastructure**: Helm values updated with new ConfigMaps/Secrets. SQLite PVC already exists. Backend Dockerfile uses `uv sync` for dependency installation.
 - **APIs**: New REST endpoints under `/api/v1/tasks`, `/api/v1/dailies`, `/api/v1/weeklies`. MCP server consumes these endpoints as an API client — no direct database access.
 - **Testing**: Full test pyramid — Vitest for J.A.D.S components, Playwright for E2E flows.

@@ -4,7 +4,7 @@ backend:
   image:
     repository: ghcr.io/alchemesh-io/jarvis-backend
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   replicaCount: 1
   service:
     type: LoadBalancer
@@ -20,7 +20,7 @@ frontend:
   image:
     repository: ghcr.io/alchemesh-io/jarvis-frontend
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   replicaCount: 1
   service:
     type: LoadBalancer
@@ -31,7 +31,7 @@ mcp:
   image:
     repository: ghcr.io/alchemesh-io/jarvis-mcp
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   replicaCount: 1
   service:
     type: ClusterIP

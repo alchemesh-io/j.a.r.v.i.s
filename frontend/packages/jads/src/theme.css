@@ -1,0 +1,80 @@
+/* J.A.D.S (Just A Design System) - Theme Custom Properties */
+/* Dark futuristic theme for J.A.R.V.I.S */
+
+:root {
+  /* Background colors */
+  --jads-color-bg: #0a0e1a;
+  --jads-color-surface: #111827;
+  --jads-color-surface-alt: #1a2035;
+  --jads-color-surface-hover: #1e2740;
+
+  /* Accent colors */
+  --jads-color-accent-cyan: #00d4ff;
+  --jads-color-accent-cyan-hover: #33ddff;
+  --jads-color-accent-cyan-muted: rgba(0, 212, 255, 0.15);
+  --jads-color-accent-purple: #7b2fff;
+  --jads-color-accent-purple-hover: #9558ff;
+  --jads-color-accent-purple-muted: rgba(123, 47, 255, 0.15);
+
+  /* Text colors */
+  --jads-color-text: #e2e8f0;
+  --jads-color-text-muted: #94a3b8;
+  --jads-color-text-disabled: #4a5568;
+
+  /* Border colors */
+  --jads-color-border: #2d3748;
+  --jads-color-border-hover: #4a5568;
+  --jads-color-border-focus: var(--jads-color-accent-cyan);
+
+  /* Task type colors */
+  --jads-color-task-refinement: #3b82f6;
+  --jads-color-task-implementation: #f97316;
+  --jads-color-task-review: #ef4444;
+
+  /* Status colors */
+  --jads-color-success: #22c55e;
+  --jads-color-error: #ef4444;
+  --jads-color-warning: #f59e0b;
+
+  /* Spacing scale */
+  --jads-space-1: 4px;
+  --jads-space-2: 8px;
+  --jads-space-3: 12px;
+  --jads-space-4: 16px;
+  --jads-space-6: 24px;
+  --jads-space-8: 32px;
+  --jads-space-12: 48px;
+
+  /* Border radius */
+  --jads-radius-sm: 4px;
+  --jads-radius-md: 8px;
+  --jads-radius-lg: 12px;
+
+  /* Glow effects */
+  --jads-glow-cyan: 0 0 12px rgba(0, 212, 255, 0.4);
+  --jads-glow-cyan-strong: 0 0 20px rgba(0, 212, 255, 0.6);
+  --jads-glow-purple: 0 0 12px rgba(123, 47, 255, 0.4);
+  --jads-glow-purple-strong: 0 0 20px rgba(123, 47, 255, 0.6);
+
+  /* Typography */
+  --jads-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --jads-font-size-xs: 12px;
+  --jads-font-size-sm: 14px;
+  --jads-font-size-md: 16px;
+  --jads-font-size-lg: 18px;
+  --jads-font-size-xl: 20px;
+  --jads-font-size-2xl: 24px;
+
+  --jads-font-weight-normal: 400;
+  --jads-font-weight-medium: 500;
+  --jads-font-weight-semibold: 600;
+  --jads-font-weight-bold: 700;
+
+  --jads-line-height-tight: 1.25;
+  --jads-line-height-normal: 1.5;
+  --jads-line-height-relaxed: 1.625;
+
+  /* Transitions */
+  --jads-transition-fast: 150ms ease;
+  --jads-transition-normal: 250ms ease;
+}

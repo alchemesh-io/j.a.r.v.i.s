@@ -35,8 +35,15 @@ The backend SHALL use SQLite as its database, with the database file path config
 - **WHEN** the `DATABASE_URL` environment variable is set to `sqlite:////data/jarvis.db`
 - **THEN** the backend stores all data at `/data/jarvis.db`
 
+### Requirement: uv as package manager
+The backend SHALL use `uv` as its Python package manager with a `uv.lock` lockfile for reproducible installs.
+
+#### Scenario: Dependencies installed via uv
+- **WHEN** `uv sync` is executed in the `backend/` directory
+- **THEN** all dependencies are installed into a `.venv` virtual environment
+
 ### Requirement: Backend Docker image
-The backend SHALL be packaged as a Docker image built from `backend/Dockerfile`.
+The backend SHALL be packaged as a Docker image built from `backend/Dockerfile`, using `uv sync --frozen` for dependency installation.
 
 #### Scenario: Image builds successfully
 - **WHEN** `docker build -t jarvis-backend ./backend` is executed

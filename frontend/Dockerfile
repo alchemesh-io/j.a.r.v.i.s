@@ -3,7 +3,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# Copy workspace root + package configs for all packages
 COPY package.json package-lock.json* ./
+COPY packages/jads/package.json packages/jads/package.json
 RUN npm ci
 
 COPY . .

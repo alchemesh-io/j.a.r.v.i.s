@@ -15,7 +15,7 @@ MOUNT_TARGET    := /mnt/jarvis-repo
 ORIGINAL_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
 GHCR_ORG        := alchemesh-io
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui sync _check-prereqs _mount-start _argocd-install _argocd-patch-repo-server _argocd-add-repo
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _argocd-install _argocd-patch-repo-server _argocd-add-repo
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -112,11 +112,13 @@ deploy: _check-prereqs
 ## Build images locally, load into Minikube, auto-commit to local-deploy, apply ArgoCD App CR, hard sync
 deploy-local: _check-prereqs
 	@echo "==> Building Docker images locally..."
-	docker build -t jarvis-backend:local ./backend
-	docker build -t jarvis-frontend:local ./frontend
+	docker build -t ghcr.io/$(GHCR_ORG)/jarvis-backend:latest ./backend
+	docker build -t ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest ./frontend
+	docker build -t ghcr.io/$(GHCR_ORG)/jarvis-mcp:latest ./mcp_server
 	@echo "==> Loading images into Minikube..."
-	minikube image load jarvis-backend:local
-	minikube image load jarvis-frontend:local
+	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
+	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
+	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-mcp:latest
 	@$(MAKE) _auto-commit
 	@echo "==> Applying ArgoCD Application CR..."
 	kubectl apply -f argocd/jarvis-app.yaml
@@ -216,3 +218,18 @@ _auto-commit:
 		echo "  Committed chart changes to local-deploy."; \
 	fi; \
 	git checkout $$CURRENT_BRANCH
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+test-backend:
+	cd backend && uv run pytest tests/ -v
+
+test-frontend:
+	cd frontend/packages/jads && npm test
+
+test-e2e:
+	cd frontend && npx playwright test --config e2e/playwright.config.ts
+
+test-mcp:
+	cd mcp_server && uv run pytest tests/ -v
