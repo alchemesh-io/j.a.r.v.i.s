@@ -10,6 +10,11 @@ backend:
     type: LoadBalancer
     port: 8000
   resources: {}
+  config:
+    databaseUrl: "sqlite:////data/jarvis.db"
+    appTitle: "J.A.R.V.I.S"
+    debug: "false"
+  secrets: {}
 
 frontend:
   image:
@@ -20,6 +25,18 @@ frontend:
   service:
     type: LoadBalancer
     port: 80
+  resources: {}
+
+mcp:
+  image:
+    repository: ghcr.io/alchemesh-io/jarvis-mcp
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8080
+  backendUrl: ""
   resources: {}
 
 persistence:

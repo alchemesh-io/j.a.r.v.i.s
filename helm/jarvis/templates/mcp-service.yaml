@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-mcp
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-mcp
+spec:
+  type: {{ .Values.mcp.service.type }}
+  ports:
+    - port: {{ .Values.mcp.service.port }}
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: {{ .Release.Name }}-mcp

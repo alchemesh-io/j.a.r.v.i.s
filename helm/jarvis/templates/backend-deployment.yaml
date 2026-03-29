@@ -21,9 +21,11 @@ spec:
           imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
           ports:
             - containerPort: 8000
-          env:
-            - name: DATABASE_URL
-              value: sqlite:////data/jarvis.db
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-backend-config
+            - secretRef:
+                name: {{ .Release.Name }}-backend-secret
           volumeMounts:
             - name: sqlite-data
               mountPath: /data
