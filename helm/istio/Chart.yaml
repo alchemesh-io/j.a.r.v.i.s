@@ -1,14 +1,11 @@
 apiVersion: v2
 name: istio
-description: Istio service mesh — base, istiod, and ingress gateway
+description: Istio service mesh — base and istiod (gateway provisioned via Gateway API)
 version: 0.1.0
 dependencies:
   - name: base
     version: 1.26.1
     repository: https://istio-release.storage.googleapis.com/charts
   - name: istiod
-    version: 1.26.1
-    repository: https://istio-release.storage.googleapis.com/charts
-  - name: gateway
     version: 1.26.1
     repository: https://istio-release.storage.googleapis.com/charts
