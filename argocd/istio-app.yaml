@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: jarvis
+  name: istio
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -9,16 +9,17 @@ spec:
   project: default
   source:
     repoURL: file:///mnt/jarvis-repo
-    path: helm/jarvis
+    path: helm/istio
     targetRevision: HEAD
     helm:
-      releaseName: jarvis
+      releaseName: istio
   destination:
     server: https://kubernetes.default.svc
-    namespace: jarvis
+    namespace: istio-system
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true

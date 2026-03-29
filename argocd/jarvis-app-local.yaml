@@ -13,6 +13,22 @@ spec:
     targetRevision: HEAD
     helm:
       releaseName: jarvis
+      valuesObject:
+        backend:
+          image:
+            repository: jarvis-backend
+            tag: local
+            pullPolicy: Never
+        frontend:
+          image:
+            repository: jarvis-frontend
+            tag: local
+            pullPolicy: Never
+        mcp:
+          image:
+            repository: jarvis-mcp
+            tag: local
+            pullPolicy: Never
   destination:
     server: https://kubernetes.default.svc
     namespace: jarvis

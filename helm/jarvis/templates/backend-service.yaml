@@ -6,7 +6,7 @@ metadata:
   labels:
     app: {{ .Release.Name }}-backend
 spec:
-  type: {{ .Values.backend.service.type }}
+  type: ClusterIP
   selector:
     app: {{ .Release.Name }}-backend
   ports:

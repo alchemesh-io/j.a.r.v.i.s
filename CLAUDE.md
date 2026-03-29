@@ -11,7 +11,9 @@ j.a.r.v.i.s/
 ├── Makefile                  # Local cluster and deploy lifecycle
 ├── CLAUDE.md                 # This file
 ├── argocd/
-│   ├── jarvis-app.yaml       # ArgoCD Application CR
+│   ├── istio-app.yaml        # ArgoCD Application CR for Istio service mesh
+│   ├── jarvis-app.yaml       # ArgoCD Application CR (GHCR images)
+│   ├── jarvis-app-local.yaml # ArgoCD Application CR (local images)
 │   └── repo-server-patch.yaml # hostPath volume patch for argocd-repo-server
 ├── backend/
 │   ├── app/
@@ -63,7 +65,7 @@ j.a.r.v.i.s/
 │   ├── e2e/                  # Playwright E2E tests
 │   │   └── playwright.config.ts
 │   ├── index.html            # Document title: "J.A.R.V.I.S"
-│   ├── Dockerfile            # Multi-stage: npm workspaces build → Nginx SPA
+│   ├── Dockerfile            # Multi-stage: npm workspaces build → serve (static)
 │   └── package.json          # Workspace root
 ├── mcp_server/
 │   ├── server.py             # MCP tools for task/daily/weekly management
@@ -72,6 +74,9 @@ j.a.r.v.i.s/
 │   ├── Dockerfile            # Python 3.12 image
 │   └── pyproject.toml        # Deps: mcp SDK, httpx
 ├── helm/
+│   ├── istio/                # Istio service mesh (deployed via ArgoCD)
+│   │   ├── Chart.yaml        # Sub-chart deps: base, istiod, gateway
+│   │   └── values.yaml
 │   └── jarvis/
 │       ├── Chart.yaml
 │       ├── values.yaml       # Backend, frontend, MCP image configs + settings
@@ -82,6 +87,7 @@ j.a.r.v.i.s/
 │           ├── backend-secret.yaml     # Sensitive config placeholder
 │           ├── frontend-deployment.yaml
 │           ├── frontend-service.yaml
+│           ├── httproute.yaml          # Gateway API HTTPRoute (API → backend, / → frontend)
 │           ├── mcp-deployment.yaml     # Standalone MCP pod with BACKEND_URL
 │           ├── mcp-service.yaml
 │           └── sqlite-pvc.yaml
@@ -115,15 +121,17 @@ make cluster-up MINIKUBE_CPUS=6 MINIKUBE_MEMORY=12288   # Override resources
 This will:
 1. Start a Minikube cluster
 2. Launch `minikube mount` in the background (PID in `.minikube-mount.pid`)
-3. Install ArgoCD v3.3.6 into the `argocd` namespace
-4. Patch `argocd-repo-server` with a hostPath volume for `/mnt/jarvis-repo`
-5. Register `file:///mnt/jarvis-repo` as an ArgoCD repository
+3. Deploy Istio service mesh via ArgoCD Application CR (`argocd/istio-app.yaml`)
+4. Label `jarvis` namespace for Istio sidecar injection
+5. Install ArgoCD v3.3.6 into the `argocd` namespace
+6. Patch `argocd-repo-server` with a hostPath volume for `/mnt/jarvis-repo`
+7. Register `file:///mnt/jarvis-repo` as an ArgoCD repository
 
 ### Deploying the application
 
 ```bash
-make deploy          # Pull latest GHCR images, load into Minikube, auto-commit to local-deploy, sync
-make deploy-local    # Build images locally, load into Minikube, auto-commit to local-deploy, sync
+make deploy          # Pull latest GHCR images, load into Minikube, sync
+make deploy-local    # Build images locally, load into Minikube, sync
 make argocd-ui       # Port-forward ArgoCD UI to https://localhost:8080
 make sync            # Trigger a hard sync without rebuilding images
 make undeploy        # Delete Application CR (cascade removes all resources)
@@ -134,8 +142,12 @@ make undeploy        # Delete Application CR (cascade removes all resources)
 After `make deploy`, run `minikube tunnel` in a separate terminal, then:
 
 ```bash
-kubectl get svc -n jarvis    # Shows EXTERNAL-IP for frontend (port 80) and backend (port 8000)
+kubectl get svc istio-ingressgateway -n istio-system   # Shows EXTERNAL-IP for the Istio ingress
 ```
+
+All traffic enters through the Istio ingress gateway. Routing is handled by the VirtualService:
+- `/api/*`, `/docs`, `/health` → backend service
+- `/*` → frontend SPA
 
 ### Teardown
 
@@ -196,9 +208,11 @@ cd mcp_server && uv run pytest tests/ -v
 ### Infrastructure
 
 - ArgoCD renders Helm charts internally — never run `helm install/upgrade` directly
-- `make deploy` auto-commits to `local-deploy` branch; do not commit to it manually
+- ArgoCD syncs from `HEAD` of the current branch via `minikube mount`
 - Helm values for image tags use `latest` by default locally; CI tags with short git SHA
+- Kubernetes Gateway API (Gateway + HTTPRoute) with Istio for ingress routing (`/api/*` → backend, `/*` → frontend)
 - Backend config via ConfigMap (`backend-configmap.yaml`), secrets via Secret (`backend-secret.yaml`)
+- Frontend uses `serve` for static files — no nginx (Istio handles routing)
 - MCP server gets `BACKEND_URL` from its deployment env vars
 
 ## Known Limitations
@@ -207,6 +221,6 @@ cd mcp_server && uv run pytest tests/ -v
 |------------|--------|-----------|
 | **SQLite is single-writer** | No horizontal scaling for backend | Acceptable for local dev; migration to PostgreSQL planned (change `DATABASE_URL` + Helm chart) |
 | **`minikube mount` must stay running** | ArgoCD loses access to chart if process dies | `make cluster-status` shows mount health; `make cluster-up` is idempotent and restarts it |
-| **ArgoCD syncs from git, not filesystem** | Uncommitted changes are not deployed | Always use `make deploy` — it auto-commits before syncing |
-| **ArgoCD adds ~500 MB RAM overhead** | May strain developer laptops | Tune with `MINIKUBE_MEMORY` override |
+| **ArgoCD syncs from HEAD via minikube mount** | Uncommitted Helm changes are visible immediately via the filesystem mount | Use `make sync` to force ArgoCD to re-read |
+| **ArgoCD + Istio add ~1 GB RAM overhead** | May strain developer laptops | Tune with `MINIKUBE_MEMORY` override |
 | **MCP server depends on backend** | MCP tools fail if backend is down | httpx with retry logic; K8s readiness probes check backend connectivity |

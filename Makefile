@@ -12,10 +12,9 @@ ARGOCD_VERSION  := v3.3.6
 MOUNT_PID_FILE  := .minikube-mount.pid
 REPO_ROOT       := $(shell pwd)
 MOUNT_TARGET    := /mnt/jarvis-repo
-ORIGINAL_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
 GHCR_ORG        := alchemesh-io
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _argocd-install _argocd-patch-repo-server _argocd-add-repo
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -45,6 +44,7 @@ cluster-up: _check-prereqs
 	@echo "==> Starting Minikube cluster (CPUs=$(MINIKUBE_CPUS), Memory=$(MINIKUBE_MEMORY)MB)..."
 	minikube start --cpus=$(MINIKUBE_CPUS) --memory=$(MINIKUBE_MEMORY) --driver=docker
 	@$(MAKE) _mount-start
+	@$(MAKE) _istio-install
 	@$(MAKE) _argocd-install
 	@$(MAKE) _argocd-patch-repo-server
 	@$(MAKE) _argocd-add-repo
@@ -93,7 +93,7 @@ cluster-status: _check-prereqs
 # Application deployment
 # ---------------------------------------------------------------------------
 
-## Pull latest published images from GHCR, auto-commit to local-deploy, apply ArgoCD App CR, hard sync
+## Pull latest published images from GHCR, load into Minikube, apply ArgoCD App CR, hard sync
 deploy: _check-prereqs
 	@echo "==> Pulling latest images from GHCR..."
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
@@ -103,31 +103,31 @@ deploy: _check-prereqs
 	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
 	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-mcp:latest
-	@$(MAKE) _auto-commit
-	@echo "==> Applying ArgoCD Application CR..."
+	@echo "==> Applying ArgoCD Application CR (GHCR images)..."
 	kubectl apply -f argocd/jarvis-app.yaml
 	@$(MAKE) sync
 	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
-	@echo "==> Run 'minikube tunnel' in a separate terminal, then check service IPs with:"
-	@echo "    kubectl get svc -n jarvis"
+	@echo "==> Access via Istio ingress gateway:"
+	@echo "    minikube tunnel  (in a separate terminal)"
+	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
-## Build images locally, load into Minikube, auto-commit to local-deploy, apply ArgoCD App CR, hard sync
+## Build images locally, load into Minikube, apply ArgoCD App CR, hard sync
 deploy-local: _check-prereqs
 	@echo "==> Building Docker images locally..."
-	docker build -t ghcr.io/$(GHCR_ORG)/jarvis-backend:latest ./backend
-	docker build -t ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest ./frontend
-	docker build -t ghcr.io/$(GHCR_ORG)/jarvis-mcp:latest ./mcp_server
+	docker build -t jarvis-backend:local ./backend
+	docker build -t jarvis-frontend:local ./frontend
+	docker build -t jarvis-mcp:local ./mcp_server
 	@echo "==> Loading images into Minikube..."
-	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
-	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
-	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-mcp:latest
-	@$(MAKE) _auto-commit
-	@echo "==> Applying ArgoCD Application CR..."
-	kubectl apply -f argocd/jarvis-app.yaml
+	minikube image load jarvis-backend:local
+	minikube image load jarvis-frontend:local
+	minikube image load jarvis-mcp:local
+	@echo "==> Applying ArgoCD Application CR (local images)..."
+	kubectl apply -f argocd/jarvis-app-local.yaml
 	@$(MAKE) sync
 	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
-	@echo "==> Run 'minikube tunnel' in a separate terminal, then check service IPs with:"
-	@echo "    kubectl get svc -n jarvis"
+	@echo "==> Access via Istio ingress gateway:"
+	@echo "    minikube tunnel  (in a separate terminal)"
+	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
 ## Delete the ArgoCD Application CR (cascade deletes all managed resources)
 undeploy: _check-prereqs
@@ -181,6 +181,16 @@ _mount-start:
 	@echo "  Mount started (PID $$(cat $(MOUNT_PID_FILE)))"
 	@sleep 2
 
+_istio-install:
+	@echo "==> Deploying Istio via ArgoCD..."
+	kubectl apply -f argocd/istio-app.yaml
+	@echo "==> Waiting for Istio to sync and become healthy (timeout 5m)..."
+	@kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/istio -n argocd --timeout=300s 2>/dev/null || \
+		echo "  (Waiting for Istio sync — may take a moment on first deploy)"
+	@echo "==> Labeling jarvis namespace for Istio sidecar injection..."
+	kubectl create namespace jarvis --dry-run=client -o yaml | kubectl apply -f -
+	kubectl label namespace jarvis istio-injection=enabled --overwrite
+
 _argocd-install:
 	@echo "==> Installing ArgoCD $(ARGOCD_VERSION)..."
 	kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
@@ -204,22 +214,6 @@ _argocd-add-repo:
 	@echo "==> Configuring ArgoCD repository entry for file:///mnt/jarvis-repo..."
 	kubectl apply -f argocd/jarvis-repo-secret.yaml
 
-_auto-commit:
-	@echo "==> Auto-committing Helm chart changes to 'local-deploy' branch..."
-	@CURRENT_BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
-	if git show-ref --verify --quiet refs/heads/local-deploy; then \
-		git checkout local-deploy; \
-	else \
-		git checkout -b local-deploy; \
-	fi; \
-	git add helm/ argocd/ 2>/dev/null || true; \
-	if git diff --cached --quiet; then \
-		echo "  No chart changes to commit."; \
-	else \
-		git commit -m "chore(deploy): auto-commit local deploy state [skip ci]"; \
-		echo "  Committed chart changes to local-deploy."; \
-	fi; \
-	git checkout $$CURRENT_BRANCH
 
 # ---------------------------------------------------------------------------
 # Tests

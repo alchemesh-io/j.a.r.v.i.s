@@ -4,10 +4,9 @@ backend:
   image:
     repository: ghcr.io/alchemesh-io/jarvis-backend
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicaCount: 1
   service:
-    type: LoadBalancer
     port: 8000
   resources: {}
   config:
@@ -20,10 +19,9 @@ frontend:
   image:
     repository: ghcr.io/alchemesh-io/jarvis-frontend
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicaCount: 1
   service:
-    type: LoadBalancer
     port: 80
   resources: {}
 
@@ -31,13 +29,17 @@ mcp:
   image:
     repository: ghcr.io/alchemesh-io/jarvis-mcp
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicaCount: 1
   service:
     type: ClusterIP
     port: 8080
   backendUrl: ""
   resources: {}
+
+gateway:
+  name: jarvis-gateway
+  namespace: istio-system
 
 persistence:
   storageClass: standard
