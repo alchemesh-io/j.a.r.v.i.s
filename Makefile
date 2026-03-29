@@ -98,9 +98,11 @@ deploy: _check-prereqs
 	@echo "==> Pulling latest images from GHCR..."
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
+	docker pull ghcr.io/$(GHCR_ORG)/jarvis-mcp:latest
 	@echo "==> Loading images into Minikube..."
 	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
+	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-mcp:latest
 	@$(MAKE) _auto-commit
 	@echo "==> Applying ArgoCD Application CR..."
 	kubectl apply -f argocd/jarvis-app.yaml
