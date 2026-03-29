@@ -10,7 +10,4 @@ istiod:
         cpu: 100m
         memory: 128Mi
 
-gateway:
-  name: istio-ingressgateway
-  service:
-    type: LoadBalancer
+gateway: {}
