@@ -232,3 +232,62 @@ def test_filter_tasks_daily_scope(client):
     titles = [t["title"] for t in r.json()]
     assert "In daily" in titles
     assert "Not in daily" not in titles
+
+
+# --- Dates in response ---
+
+def test_task_dates_empty_on_create(client):
+    r = client.post("/api/v1/tasks", json={"title": "No dates", "type": "review"})
+    assert r.status_code == 201
+    assert r.json()["dates"] == []
+
+
+def test_task_dates_after_association(client):
+    wr = client.post("/api/v1/weeklies", json={"week_start": "2026-03-29"})
+    d1 = client.post("/api/v1/dailies", json={
+        "date": "2026-03-29",
+        "weekly_id": wr.json()["id"],
+    })
+    d2 = client.post("/api/v1/dailies", json={
+        "date": "2026-03-30",
+        "weekly_id": wr.json()["id"],
+    })
+    tr = client.post("/api/v1/tasks", json={"title": "Multi-day", "type": "implementation"})
+    task_id = tr.json()["id"]
+    client.post(f"/api/v1/dailies/{d1.json()['id']}/tasks", json={"task_id": task_id, "priority": 1})
+    client.post(f"/api/v1/dailies/{d2.json()['id']}/tasks", json={"task_id": task_id, "priority": 1})
+
+    # Check via get by id
+    r = client.get(f"/api/v1/tasks/{task_id}")
+    assert r.json()["dates"] == ["2026-03-29", "2026-03-30"]
+
+    # Check via list all
+    r = client.get("/api/v1/tasks")
+    task = next(t for t in r.json() if t["id"] == task_id)
+    assert task["dates"] == ["2026-03-29", "2026-03-30"]
+
+    # Check via daily scope filter
+    r = client.get("/api/v1/tasks?date=2026-03-29&scope=daily")
+    task = next(t for t in r.json() if t["id"] == task_id)
+    assert task["dates"] == ["2026-03-29", "2026-03-30"]
+
+
+def test_task_dates_after_removal(client):
+    wr = client.post("/api/v1/weeklies", json={"week_start": "2026-03-29"})
+    dr = client.post("/api/v1/dailies", json={
+        "date": "2026-03-29",
+        "weekly_id": wr.json()["id"],
+    })
+    tr = client.post("/api/v1/tasks", json={"title": "Remove me", "type": "review"})
+    task_id = tr.json()["id"]
+    daily_id = dr.json()["id"]
+    client.post(f"/api/v1/dailies/{daily_id}/tasks", json={"task_id": task_id, "priority": 1})
+
+    # Verify date present
+    r = client.get(f"/api/v1/tasks/{task_id}")
+    assert r.json()["dates"] == ["2026-03-29"]
+
+    # Remove and verify gone
+    client.delete(f"/api/v1/dailies/{daily_id}/tasks/{task_id}")
+    r = client.get(f"/api/v1/tasks/{task_id}")
+    assert r.json()["dates"] == []
