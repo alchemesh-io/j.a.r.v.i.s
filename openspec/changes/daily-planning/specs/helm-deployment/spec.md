@@ -29,6 +29,24 @@ The Helm chart SHALL include a Deployment and Service for the MCP server as a st
 - **WHEN** the MCP server pod starts
 - **THEN** it has a `BACKEND_URL` environment variable pointing to the backend Kubernetes service
 
+### Requirement: HTTPRoute for path-based routing
+The jarvis Helm chart SHALL include a `gateway.networking.k8s.io/v1` HTTPRoute that routes traffic from the Istio ingress gateway. The gateway name and namespace SHALL be configurable via `values.yaml`.
+
+#### Scenario: API traffic routed to backend
+- **WHEN** a request to `/api/`, `/docs`, `/openapi.json`, or `/health` arrives
+- **THEN** the HTTPRoute directs it to the backend service
+
+#### Scenario: Frontend catch-all route
+- **WHEN** a request to any other path arrives
+- **THEN** the HTTPRoute directs it to the frontend service
+
+### Requirement: Separate ArgoCD Application CRs for local and remote deployment
+The system SHALL provide `argocd/jarvis-app.yaml` (uses default `values.yaml` with GHCR images) and `argocd/jarvis-app-local.yaml` (overrides image repositories to `jarvis-*:local` with `pullPolicy: Never`).
+
+#### Scenario: Local deployment uses local images
+- **WHEN** `make deploy-local` is executed
+- **THEN** the local Application CR is applied with image overrides and a git-SHA-based tag
+
 ## MODIFIED Requirements
 
 ### Requirement: SQLite data persisted via PersistentVolumeClaim
@@ -38,6 +56,9 @@ The Helm chart SHALL create a PersistentVolumeClaim for SQLite storage and mount
 - **WHEN** ArgoCD syncs the chart on a cluster with a default StorageClass
 - **THEN** a PVC is created and bound, and the backend pod mounts it at `/data`
 
-#### Scenario: Data survives pod restart
-- **WHEN** the backend pod is deleted and rescheduled
-- **THEN** the SQLite database file at `/data/jarvis.db` is intact and no data is lost
+### Requirement: Services use ClusterIP
+Backend and frontend services SHALL use `ClusterIP` type. External access is handled by the Istio ingress gateway.
+
+#### Scenario: No direct LoadBalancer on app services
+- **WHEN** the chart is synced
+- **THEN** backend and frontend services are `ClusterIP`

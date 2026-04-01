@@ -1,0 +1,117 @@
+/* Calendar component styles */
+.jads-calendar {
+  background-color: var(--jads-color-surface);
+  border: 1px solid var(--jads-color-border);
+  border-radius: var(--jads-radius-lg);
+  padding: var(--jads-space-4);
+  font-family: var(--jads-font-family);
+  width: fit-content;
+}
+
+/* Header with month/year and navigation */
+.jads-calendar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--jads-space-4);
+}
+
+.jads-calendar__month-year {
+  font-size: var(--jads-font-size-md);
+  font-weight: var(--jads-font-weight-semibold);
+  color: var(--jads-color-text);
+  user-select: none;
+}
+
+/* Grid layout */
+.jads-calendar__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jads-space-1);
+}
+
+.jads-calendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 32px);
+  gap: 2px;
+}
+
+.jads-calendar__weekday {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  font-size: var(--jads-font-size-xs);
+  font-weight: var(--jads-font-weight-medium);
+  color: var(--jads-color-text-muted);
+  user-select: none;
+}
+
+.jads-calendar__days {
+  display: grid;
+  grid-template-columns: repeat(7, 32px);
+  gap: 2px;
+}
+
+/* Day cells */
+.jads-calendar__day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-family: var(--jads-font-family);
+  font-size: var(--jads-font-size-xs);
+  color: var(--jads-color-text);
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    background-color var(--jads-transition-fast),
+    border-color var(--jads-transition-fast),
+    color var(--jads-transition-fast);
+}
+
+.jads-calendar__day:hover {
+  background-color: var(--jads-color-surface-hover);
+}
+
+.jads-calendar__day:focus-visible {
+  outline: 2px solid var(--jads-color-accent-cyan);
+  outline-offset: 1px;
+}
+
+/* Other month days - dimmed */
+.jads-calendar__day--other-month {
+  color: var(--jads-color-text-disabled);
+}
+
+.jads-calendar__day--other-month:hover {
+  color: var(--jads-color-text-muted);
+}
+
+/* Today indicator - filled blue circle */
+.jads-calendar__day--today {
+  background-color: var(--jads-color-accent-cyan);
+  color: var(--jads-color-bg);
+  font-weight: var(--jads-font-weight-semibold);
+}
+
+.jads-calendar__day--today:hover {
+  background-color: var(--jads-color-accent-cyan-hover, #00b8d9);
+}
+
+/* Selected date - outlined border */
+.jads-calendar__day--selected {
+  border-color: var(--jads-color-text);
+  font-weight: var(--jads-font-weight-semibold);
+}
+
+/* Selected + Today: filled blue with border */
+.jads-calendar__day--selected.jads-calendar__day--today {
+  background-color: var(--jads-color-accent-cyan);
+  color: var(--jads-color-bg);
+  border-color: var(--jads-color-text);
+}

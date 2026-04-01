@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-J.A.R.V.I.S (Just A Rather Very Intelligent System) is a multi-agent personal assistant platform targeting a production Kubernetes deployment. This repository contains the initial skeleton: a Python/FastAPI backend, a React/Vite frontend, a Helm chart, and a Makefile-driven local dev cluster.
+J.A.R.V.I.S (Just A Rather Very Intelligent System) is a multi-agent personal assistant platform targeting a production Kubernetes deployment. This repository contains a Python/FastAPI backend with task management API, a React/Vite frontend with dashboard and task board UIs, a J.A.D.S design system, an MCP server for agent integration, a Helm chart, and a Makefile-driven local dev cluster.
 
 ## Repository Structure
 
@@ -11,34 +11,94 @@ j.a.r.v.i.s/
 ├── Makefile                  # Local cluster and deploy lifecycle
 ├── CLAUDE.md                 # This file
 ├── argocd/
-│   ├── jarvis-app.yaml       # ArgoCD Application CR
+│   ├── istio-app.yaml        # ArgoCD Application CR for Istio service mesh
+│   ├── jarvis-app.yaml       # ArgoCD Application CR (GHCR images)
+│   ├── jarvis-app-local.yaml # ArgoCD Application CR (local images)
 │   └── repo-server-patch.yaml # hostPath volume patch for argocd-repo-server
 ├── backend/
 │   ├── app/
-│   │   └── main.py           # FastAPI application (GET /, GET /health)
+│   │   ├── main.py           # FastAPI application — routes mounted under /api/v1
+│   │   ├── config.py         # Pydantic BaseSettings for env-based configuration
+│   │   ├── db/
+│   │   │   ├── engine.py     # SQLAlchemy 2 engine factory with WAL mode
+│   │   │   ├── session.py    # SessionLocal + get_db() FastAPI dependency
+│   │   │   └── base.py       # Declarative Base class
+│   │   ├── models/
+│   │   │   ├── enums.py      # TaskType, TaskStatus (str, Enum)
+│   │   │   ├── weekly.py     # Weekly ORM model
+│   │   │   ├── daily.py      # Daily ORM model
+│   │   │   ├── task.py       # Task ORM model
+│   │   │   └── daily_task.py # DailyTask association model
+│   │   ├── schemas/
+│   │   │   ├── task.py       # Task Pydantic schemas (Create, Update, Response)
+│   │   │   ├── daily.py      # Daily Pydantic schemas
+│   │   │   ├── weekly.py     # Weekly Pydantic schemas
+│   │   │   └── daily_task.py # DailyTask schemas + reorder batch
+│   │   └── routes/
+│   │       ├── tasks.py      # /api/v1/tasks — CRUD + date/scope filtering
+│   │       ├── weeklies.py   # /api/v1/weeklies — CRUD with nested dailies
+│   │       ├── dailies.py    # /api/v1/dailies — CRUD + date query
+│   │       └── daily_tasks.py # /api/v1/dailies/{id}/tasks — add/remove/reorder
+│   ├── alembic/              # Alembic migrations
+│   │   ├── env.py
+│   │   └── versions/
+│   ├── tests/                # pytest test suite
 │   ├── Dockerfile            # Multi-stage image; non-root user on port 8000
-│   └── pyproject.toml        # Python 3.12+ deps (FastAPI, SQLAlchemy, uvicorn)
+│   └── pyproject.toml        # Python 3.12+ deps
 ├── frontend/
+│   ├── packages/
+│   │   └── jads/             # J.A.D.S (Just A Design System) — @jarvis/jads
+│   │       ├── src/
+│   │       │   ├── components/ # Button, Card, Input, Select, IconButton, TaskCard, Calendar
+│   │       │   ├── theme.css   # CSS custom properties (dark futuristic theme)
+│   │       │   └── index.ts    # Barrel exports
+│   │       ├── .storybook/     # Storybook 10.x config
+│   │       └── package.json
 │   ├── src/
-│   │   ├── App.tsx           # Root component with header/main/footer landmarks
-│   │   ├── App.css           # J.A.R.V.I.S futuristic dark theme
-│   │   └── index.css         # Global styles, CSS variables, focus indicators
+│   │   ├── App.tsx           # Root with React Router, TanStack Query provider
+│   │   ├── api/client.ts     # Typed fetch functions for /api/v1/ endpoints
+│   │   ├── pages/
+│   │   │   ├── Dashboard/    # Dashboard with metric blocks, brain animation, chat
+│   │   │   └── TaskBoard/    # Task board with calendar, DnD, CRUD
+│   │   ├── App.css           # App shell styles
+│   │   └── index.css         # Global styles, CSS variables
+│   ├── e2e/                  # Playwright E2E tests
+│   │   └── playwright.config.ts
 │   ├── index.html            # Document title: "J.A.R.V.I.S"
-│   └── Dockerfile            # Multi-stage: Vite build → Nginx SPA server
+│   ├── Dockerfile            # Multi-stage: npm workspaces build → serve (static)
+│   └── package.json          # Workspace root
+├── mcp_server/
+│   ├── server.py             # MCP tools for task/daily/weekly management
+│   ├── api_client.py         # httpx client for backend /api/v1/ endpoints
+│   ├── tests/                # pytest + respx test suite
+│   ├── Dockerfile            # Python 3.12 image
+│   └── pyproject.toml        # Deps: mcp SDK, httpx
 ├── helm/
+│   ├── istio/                # Istio service mesh (deployed via ArgoCD)
+│   │   ├── Chart.yaml        # Sub-chart deps: base, istiod, gateway
+│   │   └── values.yaml
 │   └── jarvis/
 │       ├── Chart.yaml
-│       ├── values.yaml       # Configurable image refs, replicas, service types
+│       ├── values.yaml       # Backend, frontend, MCP image configs + settings
 │       └── templates/
 │           ├── backend-deployment.yaml
 │           ├── backend-service.yaml
+│           ├── backend-configmap.yaml  # DATABASE_URL, APP_TITLE, DEBUG
+│           ├── backend-secret.yaml     # Sensitive config placeholder
 │           ├── frontend-deployment.yaml
 │           ├── frontend-service.yaml
+│           ├── httproute.yaml          # Gateway API HTTPRoute (API → backend, / → frontend)
+│           ├── mcp-deployment.yaml     # Standalone MCP pod with BACKEND_URL
+│           ├── mcp-service.yaml
 │           └── sqlite-pvc.yaml
 └── .github/
     └── workflows/
         └── docker-publish.yml  # Build + push to GHCR on push to main
 ```
+
+## API Versioning
+
+All task management endpoints are under `/api/v1/`. The root (`/`) and health (`/health`) endpoints remain unversioned. OpenAPI docs auto-generated at `/docs`.
 
 ## Local Development Workflow
 
@@ -61,15 +121,17 @@ make cluster-up MINIKUBE_CPUS=6 MINIKUBE_MEMORY=12288   # Override resources
 This will:
 1. Start a Minikube cluster
 2. Launch `minikube mount` in the background (PID in `.minikube-mount.pid`)
-3. Install ArgoCD v3.3.6 into the `argocd` namespace
-4. Patch `argocd-repo-server` with a hostPath volume for `/mnt/jarvis-repo`
-5. Register `file:///mnt/jarvis-repo` as an ArgoCD repository
+3. Deploy Istio service mesh via ArgoCD Application CR (`argocd/istio-app.yaml`)
+4. Label `jarvis` namespace for Istio sidecar injection
+5. Install ArgoCD v3.3.6 into the `argocd` namespace
+6. Patch `argocd-repo-server` with a hostPath volume for `/mnt/jarvis-repo`
+7. Register `file:///mnt/jarvis-repo` as an ArgoCD repository
 
 ### Deploying the application
 
 ```bash
-make deploy          # Pull latest GHCR images, load into Minikube, auto-commit to local-deploy, sync
-make deploy-local    # Build images locally, load into Minikube, auto-commit to local-deploy, sync
+make deploy          # Pull latest GHCR images, load into Minikube, sync
+make deploy-local    # Build images locally, load into Minikube, sync
 make argocd-ui       # Port-forward ArgoCD UI to https://localhost:8080
 make sync            # Trigger a hard sync without rebuilding images
 make undeploy        # Delete Application CR (cascade removes all resources)
@@ -80,8 +142,12 @@ make undeploy        # Delete Application CR (cascade removes all resources)
 After `make deploy`, run `minikube tunnel` in a separate terminal, then:
 
 ```bash
-kubectl get svc -n jarvis    # Shows EXTERNAL-IP for frontend (port 80) and backend (port 8000)
+kubectl get svc istio-ingressgateway -n istio-system   # Shows EXTERNAL-IP for the Istio ingress
 ```
+
+All traffic enters through the Istio ingress gateway. Routing is handled by the VirtualService:
+- `/api/*`, `/docs`, `/health` → backend service
+- `/*` → frontend SPA
 
 ### Teardown
 
@@ -89,37 +155,72 @@ kubectl get svc -n jarvis    # Shows EXTERNAL-IP for frontend (port 80) and back
 make cluster-down    # Kill minikube mount, delete cluster
 ```
 
+### Running tests
+
+```bash
+# Backend
+cd backend && uv run pytest tests/ -v
+
+# Frontend (J.A.D.S component tests)
+cd frontend/packages/jads && npm test
+
+# Frontend (E2E — requires running frontend + backend)
+cd frontend && npx playwright test --config e2e/playwright.config.ts
+
+# MCP server
+cd mcp_server && uv run pytest tests/ -v
+```
+
 ## Coding Conventions
 
 ### Backend (Python)
 
-- Python 3.12+; type hints encouraged but not enforced at this stage
-- FastAPI with synchronous SQLAlchemy (`check_same_thread=False` for SQLite)
+- Python 3.12+; `uv` as package manager (`uv sync`, `uv run`); type hints encouraged
+- FastAPI with synchronous SQLAlchemy 2 (`check_same_thread=False` for SQLite)
+- Pydantic 2.12.5 as the universal data modeling layer — all request/response bodies and config use Pydantic BaseModel classes, no raw dicts
 - Database path always via `DATABASE_URL` env var — do not hardcode paths
+- Alembic for migrations — auto-generate from model changes, never modify tables by hand
+- Session management via `Depends(get_db)` — yield-based with auto-commit/rollback
 - Non-root Docker user (UID 1000); app runs on port 8000
 - All new endpoints must have a corresponding entry in the OpenAPI docs (auto-generated by FastAPI)
 
 ### Frontend (TypeScript/React)
 
-- Vite v8.0.2 (pinned — do not upgrade without updating `CLAUDE.md`)
-- React 18+ with functional components and hooks
-- CSS variables defined in `src/index.css` — extend there, not inline
+- Vite v7.x, React 19, TypeScript 5.9
+- npm workspaces: `packages/jads/` is the `@jarvis/jads` design system
+- J.A.D.S components documented with Storybook 10.x, tested with Vitest + React Testing Library
+- Playwright for E2E tests (config at `e2e/playwright.config.ts`)
+- React Router v7 for client-side routing
+- TanStack Query for server state management
+- @dnd-kit for drag-and-drop (task board + dashboard)
+- CSS variables defined in `src/index.css` and `packages/jads/src/theme.css` — extend there, not inline
 - All interactive elements must be keyboard-accessible with visible `:focus-visible` indicators
 - Page landmarks: `<header>`, `<main>`, `<footer>` must remain in `App.tsx`
 - Document title must remain `"J.A.R.V.I.S"`
 
+### MCP Server
+
+- Standalone Python process using the `mcp` SDK
+- Communicates with backend exclusively via REST API (`/api/v1/`) — no direct database access
+- Backend URL configured via `BACKEND_URL` env var
+- Uses `httpx` for async HTTP client with timeout and retry
+
 ### Infrastructure
 
 - ArgoCD renders Helm charts internally — never run `helm install/upgrade` directly
-- `make deploy` auto-commits to `local-deploy` branch; do not commit to it manually
+- ArgoCD syncs from `HEAD` of the current branch via `minikube mount`
 - Helm values for image tags use `latest` by default locally; CI tags with short git SHA
+- Kubernetes Gateway API (Gateway + HTTPRoute) with Istio for ingress routing (`/api/*` → backend, `/*` → frontend)
+- Backend config via ConfigMap (`backend-configmap.yaml`), secrets via Secret (`backend-secret.yaml`)
+- Frontend uses `serve` for static files — no nginx (Istio handles routing)
+- MCP server gets `BACKEND_URL` from its deployment env vars
 
 ## Known Limitations
 
 | Limitation | Impact | Mitigation |
 |------------|--------|-----------|
 | **SQLite is single-writer** | No horizontal scaling for backend | Acceptable for local dev; migration to PostgreSQL planned (change `DATABASE_URL` + Helm chart) |
-| **Vite pinned at v8.0.2** | May lag security patches | Dependabot will flag CVEs; version is intentionally pinned per spec |
 | **`minikube mount` must stay running** | ArgoCD loses access to chart if process dies | `make cluster-status` shows mount health; `make cluster-up` is idempotent and restarts it |
-| **ArgoCD syncs from git, not filesystem** | Uncommitted changes are not deployed | Always use `make deploy` — it auto-commits before syncing |
-| **ArgoCD adds ~500 MB RAM overhead** | May strain developer laptops | Tune with `MINIKUBE_MEMORY` override |
+| **ArgoCD syncs from HEAD via minikube mount** | Uncommitted Helm changes are visible immediately via the filesystem mount | Use `make sync` to force ArgoCD to re-read |
+| **ArgoCD + Istio add ~1 GB RAM overhead** | May strain developer laptops | Tune with `MINIKUBE_MEMORY` override |
+| **MCP server depends on backend** | MCP tools fail if backend is down | httpx with retry logic; K8s readiness probes check backend connectivity |

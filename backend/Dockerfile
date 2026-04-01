@@ -1,12 +1,16 @@
 # Stage 1: build dependencies
 FROM python:3.12-slim AS builder
 
-WORKDIR /build
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir hatchling && \
-    pip install --no-cache-dir fastapi "uvicorn[standard]" sqlalchemy
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./
 
 # Stage 2: runtime
 FROM python:3.12-slim AS runtime
@@ -16,17 +20,18 @@ RUN useradd --uid 1000 --no-create-home --shell /bin/false appuser
 
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin/uvicorn /usr/local/bin/uvicorn
-
-COPY app/ ./app/
+# Copy virtual environment from builder
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/app/ ./app/
+COPY --from=builder /app/alembic/ ./alembic/
+COPY --from=builder /app/alembic.ini ./
 
 # Data directory for SQLite (must be writable by appuser)
 RUN mkdir -p /data && chown appuser:appuser /data
 
 USER appuser
 
+ENV PATH="/app/.venv/bin:$PATH"
 ENV DATABASE_URL=sqlite:////data/jarvis.db
 
 EXPOSE 8000

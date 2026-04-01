@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-backend-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-backend
+data:
+  DATABASE_URL: {{ .Values.backend.config.databaseUrl | default "sqlite:////data/jarvis.db" | quote }}
+  APP_TITLE: {{ .Values.backend.config.appTitle | default "J.A.R.V.I.S" | quote }}
+  DEBUG: {{ .Values.backend.config.debug | default "false" | quote }}

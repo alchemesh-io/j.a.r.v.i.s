@@ -1,0 +1,107 @@
+/* Button component styles */
+.jads-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--jads-space-2);
+  padding: var(--jads-space-2) var(--jads-space-4);
+  min-height: 40px;
+  font-family: var(--jads-font-family);
+  font-size: var(--jads-font-size-sm);
+  font-weight: var(--jads-font-weight-medium);
+  line-height: var(--jads-line-height-tight);
+  border-radius: var(--jads-radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color var(--jads-transition-fast),
+    border-color var(--jads-transition-fast),
+    box-shadow var(--jads-transition-fast),
+    opacity var(--jads-transition-fast);
+  position: relative;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.jads-button:focus-visible {
+  outline: 2px solid var(--jads-color-accent-cyan);
+  outline-offset: 2px;
+}
+
+/* Primary variant */
+.jads-button--primary {
+  background-color: var(--jads-color-accent-cyan);
+  color: var(--jads-color-bg);
+  border-color: var(--jads-color-accent-cyan);
+}
+
+.jads-button--primary:hover:not(:disabled) {
+  background-color: var(--jads-color-accent-cyan-hover);
+  box-shadow: var(--jads-glow-cyan);
+}
+
+.jads-button--primary:active:not(:disabled) {
+  box-shadow: var(--jads-glow-cyan-strong);
+}
+
+/* Secondary variant */
+.jads-button--secondary {
+  background-color: transparent;
+  color: var(--jads-color-accent-cyan);
+  border-color: var(--jads-color-accent-cyan);
+}
+
+.jads-button--secondary:hover:not(:disabled) {
+  background-color: var(--jads-color-accent-cyan-muted);
+  box-shadow: var(--jads-glow-cyan);
+}
+
+.jads-button--secondary:active:not(:disabled) {
+  background-color: rgba(0, 212, 255, 0.25);
+}
+
+/* Ghost variant */
+.jads-button--ghost {
+  background-color: transparent;
+  color: var(--jads-color-text);
+  border-color: transparent;
+}
+
+.jads-button--ghost:hover:not(:disabled) {
+  background-color: var(--jads-color-surface-hover);
+}
+
+.jads-button--ghost:active:not(:disabled) {
+  background-color: var(--jads-color-surface-alt);
+}
+
+/* Disabled state */
+.jads-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Loading state */
+.jads-button--loading {
+  cursor: wait;
+}
+
+.jads-button__spinner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: jads-spin 0.6s linear infinite;
+}
+
+.jads-button__content--hidden {
+  visibility: hidden;
+}
+
+@keyframes jads-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

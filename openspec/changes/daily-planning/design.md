@@ -4,7 +4,7 @@ J.A.R.V.I.S is a FastAPI + React/Vite application deployed via Helm/ArgoCD on Mi
 
 Key constraints:
 - SQLite as the database (single-writer, acceptable for local dev)
-- Python 3.12+, Pydantic 2.12.5 as the universal data layer
+- Python 3.12+, `uv` as package manager, Pydantic 2.12.5 as the universal data layer
 - Vite 8.x (pinned), React 19, TypeScript 5.9
 - All config via environment variables (12-factor)
 - ArgoCD manages deployments — no direct `helm install`
@@ -67,6 +67,16 @@ Key constraints:
 
 **Rationale**: Task spec explicitly states "not in database". String enums serialize cleanly to JSON and are easy to validate via Pydantic.
 
+### D5b: Backend package manager — uv
+
+**Choice**: Use `uv` as the Python package manager. `pyproject.toml` with no `[build-system]` section (uv-native), `uv.lock` for reproducible installs, `[dependency-groups].dev` for dev dependencies. Dockerfile uses `COPY --from=ghcr.io/astral-sh/uv:latest` and `uv sync --frozen`.
+
+**Alternatives considered**:
+- pip + hatchling — slower installs, no lockfile by default, requires `[build-system]` boilerplate
+- poetry — heavier tooling, separate `poetry.lock` format, less Docker-friendly
+
+**Rationale**: `uv` is significantly faster than pip, produces a deterministic lockfile, handles virtual environment creation automatically, and has first-class Docker support via the official `ghcr.io/astral-sh/uv` image. The `uv run` command makes running scripts in the project venv seamless. All commands: `uv sync` (install), `uv run pytest` (run tests), `uv lock` (update lockfile).
+
 ### D6: Frontend architecture — monorepo with workspace packages
 
 **Choice**: Use npm workspaces. Structure:
@@ -116,9 +126,9 @@ frontend/
 
 **Rationale**: Task data is server-owned. TanStack Query provides caching, background refetch, optimistic updates for drag-and-drop reorder, and mutation invalidation — all critical for the task board UX.
 
-### D10: Dashboard layout persistence — localStorage
+### D10: UI state persistence — localStorage
 
-**Choice**: Store the user's block layout order in `localStorage`.
+**Choice**: Store all user preferences in `localStorage`: dashboard block layout order, task board filters (scope, selected date, done-task visibility mode).
 
 **Alternatives considered**:
 - Backend user preferences table — requires auth, overkill for single-user
@@ -143,6 +153,36 @@ frontend/
 
 **Rationale**: The calendar is a core navigation element inspired by Google Calendar's mini-calendar. It needs to integrate tightly with the design system's theming (dark futuristic look). Third-party calendar components bring heavy styling baggage. A month-view grid is straightforward to implement and fully testable.
 
+### D13: Traffic management — Istio with Kubernetes Gateway API
+
+**Choice**: Deploy Istio service mesh via ArgoCD. Use Kubernetes Gateway API (`gateway.networking.k8s.io/v1`) with `gatewayClassName: istio` for ingress. Gateway API CRDs installed from the official GitHub repository as a second source in the Istio ArgoCD Application. HTTPRoute in the jarvis chart handles path-based routing (`/api/*` → backend, `/*` → frontend).
+
+**Alternatives considered**:
+- nginx Ingress Controller — less native to Kubernetes, requires separate controller installation
+- Istio VirtualService — proprietary CRD, Gateway API is the Kubernetes standard
+- nginx reverse proxy in frontend container — tight coupling, hard to configure per environment
+
+**Rationale**: Gateway API is the Kubernetes-native standard for ingress routing, supported natively by Istio. Separating the Gateway (infra concern, deployed with Istio) from HTTPRoute (app concern, deployed with jarvis) follows good separation of concerns. Istio auto-provisions the ingress gateway pod when it sees the Gateway resource — no separate gateway chart needed. The frontend serves only static files; all routing is at the mesh level.
+
+### D14: Frontend static file serving — `serve` (no nginx)
+
+**Choice**: Use `serve` (npm package) in a `node:22-alpine` image for frontend static file serving. No nginx anywhere in the stack.
+
+**Alternatives considered**:
+- nginx — adds a separate base image and config management (ConfigMap for nginx.conf)
+- Caddy — lighter than nginx but still an extra binary
+
+**Rationale**: With Istio handling all routing, the frontend only needs to serve static files with SPA fallback. `serve -s` provides exactly this. Using the same `node` base image as the build stage keeps the image simple. No nginx config to manage.
+
+### D15: ArgoCD syncs from HEAD — no local-deploy branch
+
+**Choice**: ArgoCD Application CR targets `HEAD` via `minikube mount`. No `local-deploy` branch, no auto-commit workflow.
+
+**Alternatives considered**:
+- Auto-commit to `local-deploy` branch — complex, error-prone branch switching, stale state issues
+
+**Rationale**: Since `minikube mount` exposes the working directory as a filesystem, ArgoCD can read the chart directly from HEAD. This eliminates the need for auto-commit and branch management. `make sync` forces a re-read.
+
 ## Risks / Trade-offs
 
 **[MCP server depends on backend availability]** → The MCP server calls the backend REST API, so it cannot function if the backend is down. → *Mitigation*: Use `httpx` with retry logic and timeout configuration. Kubernetes readiness probes on the MCP server can check backend connectivity. This is an acceptable trade-off: the MCP server is a thin API client, and backend availability is already required for the frontend.
@@ -159,7 +199,7 @@ frontend/
 
 No production data exists — this is greenfield. Deployment steps:
 
-1. Backend: Add Alembic, run initial migration to create all tables. Update `pyproject.toml` with new deps. Update Dockerfile if needed.
+1. Backend: Add deps to `pyproject.toml`, run `uv lock` to generate lockfile. Run Alembic initial migration to create all tables. Update Dockerfile to use `uv sync --frozen`.
 2. Frontend: Set up npm workspaces, add J.A.D.S package, install new deps. Update Dockerfile for workspace build.
 3. Helm: Add ConfigMap for `DATABASE_URL` and any new env vars. No schema changes to existing templates needed — just new env entries on the backend deployment.
 4. MCP: New Dockerfile + Helm template for the MCP server as a standalone pod. Only needs `BACKEND_URL` env var — no PVC mount required.

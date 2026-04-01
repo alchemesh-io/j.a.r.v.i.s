@@ -111,16 +111,27 @@ The system SHALL define a `DailyTask` SQLAlchemy model as an association table w
 - **WHEN** a task is associated with daily A at priority 1 and daily B at priority 2
 - **THEN** both `DailyTask` rows exist and the task appears in both dailies
 
+### Requirement: Task response includes associated dates
+The `TaskResponse` schema SHALL include a `dates` field containing a sorted list of dates the task is associated with, derived from the `daily_entries` relationship.
+
+#### Scenario: Task with daily associations
+- **WHEN** a task associated with 2026-03-28 and 2026-03-29 is retrieved
+- **THEN** the response includes `"dates": ["2026-03-28", "2026-03-29"]`
+
+#### Scenario: Task with no associations
+- **WHEN** a task with no daily associations is retrieved
+- **THEN** the response includes `"dates": []`
+
 ### Requirement: CRUD endpoints for Tasks
-The API SHALL expose RESTful endpoints for task management under `/api/v1/tasks`.
+The API SHALL expose RESTful endpoints for task management under `/api/v1/tasks`. All task responses SHALL include the `dates` field.
 
 #### Scenario: Create a task
 - **WHEN** `POST /api/v1/tasks` is called with a valid task body
-- **THEN** the task is created and returned with HTTP 201
+- **THEN** the task is created and returned with HTTP 201 (dates will be empty)
 
 #### Scenario: List all tasks
 - **WHEN** `GET /api/v1/tasks` is called
-- **THEN** all tasks are returned as a JSON array with HTTP 200
+- **THEN** all tasks are returned with their associated dates as a JSON array with HTTP 200
 
 #### Scenario: Get a task by ID
 - **WHEN** `GET /api/v1/tasks/{id}` is called with a valid task ID

@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: file:///mnt/jarvis-repo
     path: helm/jarvis
-    targetRevision: local-deploy
+    targetRevision: HEAD
     helm:
       releaseName: jarvis
   destination:

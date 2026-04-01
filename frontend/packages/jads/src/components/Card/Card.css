@@ -1,0 +1,30 @@
+/* Card component styles */
+.jads-card {
+  background-color: var(--jads-color-surface);
+  border: 1px solid var(--jads-color-border);
+  border-radius: var(--jads-radius-lg);
+  overflow: hidden;
+  transition: border-color var(--jads-transition-normal);
+}
+
+.jads-card:hover {
+  border-color: var(--jads-color-border-hover);
+}
+
+.jads-card__header {
+  padding: var(--jads-space-4) var(--jads-space-6);
+  border-bottom: 1px solid var(--jads-color-border);
+}
+
+.jads-card__title {
+  font-family: var(--jads-font-family);
+  font-size: var(--jads-font-size-lg);
+  font-weight: var(--jads-font-weight-semibold);
+  color: var(--jads-color-text);
+  line-height: var(--jads-line-height-tight);
+  margin: 0;
+}
+
+.jads-card__body {
+  padding: var(--jads-space-6);
+}

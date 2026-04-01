@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jarvis
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: file:///mnt/jarvis-repo
+    path: helm/jarvis
+    targetRevision: HEAD
+    helm:
+      releaseName: jarvis
+      valuesObject:
+        backend:
+          image:
+            repository: jarvis-backend
+            tag: local
+            pullPolicy: Never
+        frontend:
+          image:
+            repository: jarvis-frontend
+            tag: local
+            pullPolicy: Never
+        mcp:
+          image:
+            repository: jarvis-mcp
+            tag: local
+            pullPolicy: Never
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: jarvis
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

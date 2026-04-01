@@ -1,0 +1,11 @@
+# Istio sub-chart values
+
+base:
+  defaultRevision: default
+
+istiod:
+  pilot:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi

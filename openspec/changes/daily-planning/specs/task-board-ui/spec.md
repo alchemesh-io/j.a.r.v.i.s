@@ -1,29 +1,58 @@
 ## ADDED Requirements
 
 ### Requirement: Task rendering with JIRA integration
-Each task card SHALL display `[<JIRA ticket id>] - <task name>`. A clickable JIRA icon (sourced from `https://cdn.worldvectorlogo.com/logos/jira-1.svg`) SHALL link to the JIRA ticket. Tasks without a JIRA ticket SHALL display only the task name.
+Each task card SHALL display `[<JIRA ticket id>] - <task name>`. Tasks without a JIRA ticket SHALL display only the task name.
 
 #### Scenario: Task with JIRA ticket displayed
 - **WHEN** a task with `jira_ticket_id = "JAR-123"` and `title = "Implement login"` is rendered
-- **THEN** the card shows `[JAR-123] - Implement login` with a clickable JIRA icon
+- **THEN** the card shows `[JAR-123] - Implement login`
 
 #### Scenario: Task without JIRA ticket displayed
 - **WHEN** a task with `jira_ticket_id = null` is rendered
-- **THEN** the card shows only the task title with no JIRA icon
+- **THEN** the card shows only the task title
 
 ### Requirement: Task type color differentiation
-Each task card SHALL use a distinct color based on task type: one color for `refinement`, a different color for `implementation`, and a third for `review`.
+Each task card SHALL use a distinct gradient background and type badge based on task type: blue for `refinement`, orange for `implementation`, red for `review`.
 
 #### Scenario: Tasks visually distinguishable by type
 - **WHEN** tasks of all three types are displayed on the board
-- **THEN** each type has a visually distinct color that is identifiable at a glance
+- **THEN** each type has a visually distinct gradient and colored type badge at the bottom-right of the card
+
+### Requirement: Task dates displayed on cards
+Each task card SHALL display the dates it is associated with as small date chips, positioned above the type badge.
+
+#### Scenario: Task with multiple dates
+- **WHEN** a task associated with March 28 and March 29 is rendered
+- **THEN** the card shows "Mar 28" and "Mar 29" chips above the type badge
 
 ### Requirement: Done tasks are visually dimmed
-Tasks with `status = "done"` SHALL be visually dimmed compared to active tasks.
+Tasks with `status = "done"` SHALL be visually dimmed with strikethrough title.
 
 #### Scenario: Completed task appears dimmed
 - **WHEN** a task with `status = "done"` is rendered
-- **THEN** the task card has reduced opacity or a muted color treatment
+- **THEN** the task card has reduced opacity and the title has a strikethrough
+
+### Requirement: Toggle task status from card
+Each task card SHALL have a check/undo button (top-right) to toggle between `created` and `done` status directly.
+
+#### Scenario: Mark task as done
+- **WHEN** the user clicks the check button on an active task
+- **THEN** the task status is updated to `done` via the API
+
+#### Scenario: Reopen a done task
+- **WHEN** the user clicks the undo button on a done task
+- **THEN** the task status is updated to `created` via the API
+
+### Requirement: Done task visibility toggle
+The task board toolbar SHALL include an animated toggle button to switch between "dim" (default) and "hide" modes for done tasks. The setting SHALL persist to localStorage.
+
+#### Scenario: Dim mode (default)
+- **WHEN** the toggle is in the "on" position
+- **THEN** done tasks are displayed with reduced opacity
+
+#### Scenario: Hide mode
+- **WHEN** the toggle is in the "off" position
+- **THEN** done tasks are filtered out of the grid entirely
 
 ### Requirement: Task deletion
 Users SHALL be able to delete a task from the board.
@@ -33,75 +62,65 @@ Users SHALL be able to delete a task from the board.
 - **THEN** the task is removed from the backend and disappears from the board
 
 ### Requirement: Drag-and-drop task reordering
-Tasks within a group SHALL be reorderable via drag-and-drop. During drag, a placeholder SHALL animate into the target position before the drop. Dropping SHALL update the priority of all affected tasks via the batch reorder API.
+Tasks SHALL be reorderable via drag-and-drop in a card grid layout. The drag handle is the card content area; action buttons are outside the drag zone.
 
 #### Scenario: Task dragged to new position
-- **WHEN** the user drags a task from priority 3 to priority 1 within the same group
-- **THEN** a placeholder appears at position 1, and on drop, all task priorities are updated
+- **WHEN** the user drags a task card to a new position
+- **THEN** all task priorities are updated via the batch reorder API
 
-#### Scenario: Drag-and-drop is keyboard accessible
-- **WHEN** the user navigates to a task using keyboard and activates drag mode
-- **THEN** they can reorder the task using arrow keys and confirm with Enter
+### Requirement: Task creation with date support
+Users SHALL be able to create a task with title, JIRA ticket ID, type, and one or multiple dates. A "+ Today" button SHALL add today's date to the selection.
 
-### Requirement: Task creation
-Users SHALL be able to create a task by providing a JIRA ticket link (only the ticket ID is stored), a title, a task type, and one or multiple dates.
+#### Scenario: Task created with dates
+- **WHEN** the user fills in the creation form with title, type, and selected dates
+- **THEN** the task is created and associated with dailies for all selected dates
 
-#### Scenario: Task created with single date
-- **WHEN** the user fills in the creation form with title, type, and one date
-- **THEN** the task is created and associated with the daily for that date
-
-#### Scenario: Task created with multiple dates
-- **WHEN** the user fills in the creation form with title, type, and three dates
-- **THEN** the task is created and associated with dailies for all three dates
-
-#### Scenario: Task created with JIRA ticket link
-- **WHEN** the user provides a JIRA ticket URL or ID in the creation form
+#### Scenario: JIRA ticket ID extraction
+- **WHEN** the user provides a JIRA ticket URL or ID
 - **THEN** only the ticket ID (e.g., `JAR-123`) is extracted and stored
 
-### Requirement: Task editing
-Users SHALL be able to edit a task's details. The edit form SHALL include a shortcut to add the current date to the task's planning ("Add to today's planning").
+### Requirement: Task editing with date management
+Users SHALL be able to edit a task's details including adding/removing date associations. Changes are saved on "Save" click (not immediately).
 
-#### Scenario: Task title edited
-- **WHEN** the user edits a task's title and saves
-- **THEN** the updated title is persisted and reflected on the board
+#### Scenario: Add date during edit
+- **WHEN** the user adds a new date in the edit form and clicks Save
+- **THEN** the task is associated with the new daily
 
-#### Scenario: Add to today's planning shortcut
-- **WHEN** the user clicks "Add to today's planning" while editing a task
-- **THEN** today's date is added to the task's daily associations
+#### Scenario: Remove date during edit
+- **WHEN** the user removes a date in the edit form and clicks Save
+- **THEN** the task is disassociated from that daily
+
+### Requirement: Task creation/edit form as overlay
+The form SHALL appear as a modal overlay on top of the task grid with a blurred backdrop. When editing, the form SHALL have a colored top border matching the task type.
+
+#### Scenario: Edit form shows task type color
+- **WHEN** the user edits an implementation task
+- **THEN** the form has an orange top border and gradient
 
 ### Requirement: Calendar navigation
-A month-view calendar component (inspired by Google Calendar's mini-calendar) SHALL be displayed on the left side of the task board. Users SHALL navigate between months and years. The currently selected date defaults to today.
+A month-view calendar component SHALL be displayed in the left sidebar below the create button. Today is shown with a filled cyan circle; the selected date with a border outline.
 
 #### Scenario: Default date is today
 - **WHEN** the task board loads
-- **THEN** the calendar highlights today's date and the board shows tasks for today
-
-#### Scenario: Navigate to a different month
-- **WHEN** the user clicks the next-month arrow
-- **THEN** the calendar displays the following month
-
-#### Scenario: Select a specific date
-- **WHEN** the user clicks on April 5 in the calendar
-- **THEN** the selected date changes to April 5 and the task list updates accordingly
+- **THEN** the calendar highlights today and shows tasks for the date stored in localStorage (or today)
 
 ### Requirement: Time scope filter
-A dropdown above the task list SHALL allow selecting the time scope: `daily`, `weekly`, or `all`. The combination of the selected calendar date and the time scope determines which tasks are displayed.
+A dropdown in the toolbar SHALL allow selecting the time scope: `daily`, `weekly`, or `all`. The setting SHALL persist to localStorage.
 
-#### Scenario: Daily scope with selected date
-- **WHEN** the scope is `daily` and the selected date is 2026-04-02
-- **THEN** only tasks associated with 2026-04-02 are shown
+#### Scenario: Scope persisted across sessions
+- **WHEN** the user selects "Week" scope and reloads the page
+- **THEN** the scope dropdown shows "Week"
 
-#### Scenario: Weekly scope with selected date
-- **WHEN** the scope is `weekly` and the selected date is Thursday 2026-04-02
-- **THEN** tasks from Sunday 2026-03-29 through Saturday 2026-04-04 are shown
+### Requirement: Task ordering by type
+Tasks SHALL be sorted by type: review first, then implementation, then refinement.
 
-#### Scenario: All scope ignores date
-- **WHEN** the scope is `all`
-- **THEN** all tasks are shown regardless of daily association
-
-### Requirement: Task grouping by type
-Tasks on the board SHALL be grouped by type: `refinement`, `implementation`, `review`. Within each group, tasks SHALL be ordered by priority.
-
-#### Scenario: Tasks grouped and ordered
+#### Scenario: Tasks ordered on the board
 - **WHEN** the board displays tasks
-- **THEN** tasks are visually separated into three groups by type, and within each group ordered by ascending priority
+- **THEN** review tasks appear first, followed by implementation, then refinement
+
+### Requirement: All filters persisted to localStorage
+Selected date, scope, and done-task visibility mode SHALL be saved to localStorage and restored on page load.
+
+#### Scenario: Filters restored on reload
+- **WHEN** the user reloads the task board
+- **THEN** the previously selected date, scope, and done toggle state are restored

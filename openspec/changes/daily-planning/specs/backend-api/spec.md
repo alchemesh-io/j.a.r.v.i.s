@@ -18,17 +18,35 @@ The backend SHALL provide a `get_db` FastAPI dependency that yields a SQLAlchemy
 - **WHEN** a route handler with `Depends(get_db)` is invoked
 - **THEN** a valid SQLAlchemy session is provided
 
+### Requirement: uv as package manager
+The backend SHALL use `uv` as its Python package manager. Dependencies SHALL be declared in `pyproject.toml` (no `[build-system]` section). A `uv.lock` lockfile SHALL ensure reproducible installs. Dev dependencies SHALL use `[dependency-groups].dev`.
+
+#### Scenario: Dependencies installed via uv
+- **WHEN** `uv sync` is executed in the `backend/` directory
+- **THEN** all dependencies are installed into a `.venv` virtual environment
+
+#### Scenario: Lockfile ensures reproducibility
+- **WHEN** `uv sync --frozen` is executed
+- **THEN** the exact versions from `uv.lock` are installed without resolving
+
 ### Requirement: Pydantic as core dependency
 Pydantic 2.12.5 SHALL be added to `pyproject.toml` as a core dependency. All structured data in the backend SHALL use Pydantic `BaseModel` classes.
 
 #### Scenario: Pydantic available in backend
-- **WHEN** the backend dependencies are installed
+- **WHEN** `uv run python -c "import pydantic"` is executed
 - **THEN** `pydantic` version 2.12.5 is available
+
+### Requirement: Auto-migration on startup
+The backend SHALL run `alembic upgrade head` automatically during the FastAPI lifespan startup, ensuring all database tables exist before handling requests.
+
+#### Scenario: Tables created on first start
+- **WHEN** the backend starts against an empty database
+- **THEN** Alembic migrations run and all tables are created before the first request is served
 
 ## MODIFIED Requirements
 
 ### Requirement: Python backend application skeleton
-The system SHALL provide a Python backend application in the `backend/` directory, using FastAPI as the web framework, Pydantic 2 as the data modeling layer, and SQLAlchemy 2 with SQLite as the data layer. The application SHALL mount task management routers under the `/api/v1/` prefix.
+The system SHALL provide a Python backend application in the `backend/` directory, using FastAPI as the web framework, Pydantic 2 as the data modeling layer, SQLAlchemy 2 with SQLite as the data layer, and `uv` as the package manager. The application SHALL mount task management routers under the `/api/v1/` prefix.
 
 #### Scenario: Application starts successfully
 - **WHEN** the backend container starts

@@ -6,7 +6,7 @@ metadata:
   labels:
     app: {{ .Release.Name }}-frontend
 spec:
-  type: {{ .Values.frontend.service.type }}
+  type: ClusterIP
   selector:
     app: {{ .Release.Name }}-frontend
   ports:

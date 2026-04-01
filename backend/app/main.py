@@ -1,13 +1,29 @@
-import os
+from contextlib import asynccontextmanager
 
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI
-from sqlalchemy import create_engine
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////data/jarvis.db")
+from app.routes import dailies, daily_tasks, tasks, weeklies
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
-app = FastAPI(title="J.A.R.V.I.S", description="Just A Rather Very Intelligent System")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+    yield
+
+
+app = FastAPI(
+    title="J.A.R.V.I.S",
+    description="Just A Rather Very Intelligent System",
+    lifespan=lifespan,
+)
+
+app.include_router(tasks.router, prefix="/api/v1")
+app.include_router(weeklies.router, prefix="/api/v1")
+app.include_router(dailies.router, prefix="/api/v1")
+app.include_router(daily_tasks.router, prefix="/api/v1")
 
 
 @app.get("/")

@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/kubernetes-sigs/gateway-api
+      path: config/crd/standard
+      targetRevision: v1.5.1
+    - repoURL: file:///mnt/jarvis-repo
+      path: helm/istio
+      targetRevision: HEAD
+      helm:
+        releaseName: istio
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
