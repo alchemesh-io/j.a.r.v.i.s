@@ -54,20 +54,35 @@ The jarvis Helm chart SHALL include an `HTTPRoute` resource that routes traffic 
 - **WHEN** the jarvis Helm chart is rendered
 - **THEN** the HTTPRoute's `parentRefs` gateway name and namespace are configurable via `values.yaml`
 
-### Requirement: Services use ClusterIP
-Backend and frontend services SHALL use `ClusterIP` type. External access is handled exclusively through the Istio ingress gateway.
+### Requirement: Services use ClusterIP instead of LoadBalancer
+Backend and frontend services SHALL be `ClusterIP`. External access is through the Istio ingress gateway only.
 
 #### Scenario: No LoadBalancer on application services
 - **WHEN** the jarvis Helm chart is synced
 - **THEN** backend and frontend services are of type `ClusterIP`
 
+#### Scenario: Access via Istio ingress
+- **WHEN** `minikube tunnel` is running
+- **THEN** the Istio ingress gateway LoadBalancer service provides the single external entry point
+
 #### Scenario: External access via ingress gateway
 - **WHEN** `minikube tunnel` is running
 - **THEN** the Istio ingress gateway service receives an `EXTERNAL-IP` and all application routes are accessible through it
 
-### Requirement: Frontend serves static files only
-The frontend container SHALL serve static files using `serve` (no nginx, no reverse proxy). All API routing is handled by Istio at the mesh level.
+### Requirement: Frontend static-only serving
+The frontend container SHALL use `serve` for static file serving. No nginx, no reverse proxy. Istio handles all API routing at the mesh level.
+
+#### Scenario: No nginx in the stack
+- **WHEN** the frontend Docker image is built
+- **THEN** it uses `node:22-alpine` with `serve` — no nginx image or configuration
 
 #### Scenario: Frontend has no proxy configuration
 - **WHEN** the frontend container starts
 - **THEN** it serves the built SPA files on port 80 with SPA fallback routing, with no backend proxy configuration
+
+### Requirement: Local dev cluster includes Istio
+The `make cluster-up` target SHALL install Istio before ArgoCD setup, label the `jarvis` namespace for sidecar injection, and wait for Istio to become healthy.
+
+#### Scenario: Cluster setup order
+- **WHEN** `make cluster-up` completes
+- **THEN** Istio is installed, `jarvis` namespace is labeled with `istio-injection=enabled`, ArgoCD is installed, and the repo is configured
