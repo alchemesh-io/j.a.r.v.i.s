@@ -29,7 +29,6 @@ class TaskResponse(BaseModel):
     id: int
     source_type: SourceType | None
     source_id: str | None
-    source_url: str | None
     title: str
     type: TaskType
     status: TaskStatus
