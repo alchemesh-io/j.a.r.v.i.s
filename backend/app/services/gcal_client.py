@@ -5,7 +5,7 @@ from google.oauth2 import service_account
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 
 from app.config import GoogleCalendarConfig
 
@@ -37,7 +37,7 @@ class CalendarGroup(BaseModel):
 
 class GCalClient(BaseModel):
     config: GoogleCalendarConfig
-    _credentials: Credentials | None = None
+    _credentials: Credentials | None = PrivateAttr(default=None)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -63,7 +63,15 @@ class GCalClient(BaseModel):
     def is_authenticated(self) -> bool:
         if self.config.auth_mode == "service_account":
             return True
-        return self._credentials is not None and self._credentials.valid
+        if self._credentials is None:
+            return False
+        # Valid token or has a refresh token to obtain a new one
+        if self._credentials.valid:
+            return True
+        if self._credentials.expired and self._credentials.refresh_token:
+            self._credentials.refresh(Request())
+            return self._credentials.valid
+        return False
 
     # --- Service account flow ---
 
