@@ -14,7 +14,7 @@ REPO_ROOT       := $(shell pwd)
 MOUNT_TARGET    := /mnt/jarvis-repo
 GHCR_ORG        := alchemesh-io
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -94,7 +94,7 @@ cluster-status: _check-prereqs
 # ---------------------------------------------------------------------------
 
 ## Pull latest published images from GHCR, load into Minikube, apply ArgoCD App CR, hard sync
-deploy: _check-prereqs
+deploy: _check-prereqs _deploy-secrets
 	@echo "==> Pulling latest images from GHCR..."
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
@@ -112,7 +112,7 @@ deploy: _check-prereqs
 	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
 ## Build images locally, load into Minikube, apply ArgoCD App CR, hard sync
-deploy-local: _check-prereqs
+deploy-local: _check-prereqs _deploy-secrets
 	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
 	@echo "==> Building Docker images locally (tag: $(LOCAL_TAG))..."
 	docker build -t jarvis-backend:$(LOCAL_TAG) ./backend
@@ -167,6 +167,19 @@ sync: _check-prereqs
 # ---------------------------------------------------------------------------
 # Internal helpers (not intended for direct use)
 # ---------------------------------------------------------------------------
+
+SECRETS_FILE := secrets/backend-secret.yaml
+SECRETS_APP  := argocd/jarvis-secrets-app.yaml
+
+## Deploy the secrets ArgoCD Application CR
+_deploy-secrets:
+	@if [ -f $(SECRETS_FILE) ]; then \
+		echo "==> Deploying secrets ArgoCD Application CR..."; \
+		kubectl apply -f $(SECRETS_APP); \
+	else \
+		echo "==> No $(SECRETS_FILE) found — skipping secrets deployment."; \
+		echo "    Copy secrets/backend-secret.example.yaml to $(SECRETS_FILE) and fill in values."; \
+	fi
 
 _mount-start:
 	@echo "==> Starting minikube mount $(REPO_ROOT) -> $(MOUNT_TARGET)..."

@@ -7,6 +7,7 @@ export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   type: 'refinement' | 'implementation' | 'review';
   status: 'created' | 'done';
   jiraTicketId?: string;
+  jiraProjectUrl?: string;
   dates?: string[];
   onEdit?: () => void;
   onDelete?: () => void;
@@ -32,6 +33,12 @@ const CheckIcon = () => (
   </svg>
 );
 
+const JiraIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M12.005 2C6.48 2 2 6.48 2 12.005C2 17.52 6.48 22 12.005 22C17.52 22 22 17.52 22 12.005C22 6.48 17.52 2 12.005 2ZM15.38 8.62L11.38 12.62C11.19 12.81 10.93 12.92 10.67 12.92C10.41 12.92 10.15 12.81 9.96 12.62L7.96 10.62C7.57 10.23 7.57 9.6 7.96 9.21C8.35 8.82 8.98 8.82 9.37 9.21L10.67 10.51L13.96 7.21C14.35 6.82 14.98 6.82 15.37 7.21C15.77 7.6 15.77 8.23 15.38 8.62Z" fill="#2684FF"/>
+  </svg>
+);
+
 const UndoIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M4 6L2 8L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -49,6 +56,7 @@ export function TaskCard({
   type,
   status,
   jiraTicketId,
+  jiraProjectUrl,
   dates,
   onEdit,
   onDelete,
@@ -77,7 +85,21 @@ export function TaskCard({
         </IconButton>
       )}
       <div className="jads-task-card__content" {...dragListeners}>
-        <h4 className="jads-task-card__title">{displayTitle}</h4>
+        <h4 className="jads-task-card__title">
+          {displayTitle}
+          {jiraTicketId && jiraProjectUrl && (
+            <a
+              href={`${jiraProjectUrl}/browse/${jiraTicketId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="jads-task-card__jira-link"
+              aria-label={`Open JIRA ticket ${jiraTicketId}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <JiraIcon />
+            </a>
+          )}
+        </h4>
       </div>
       {dates && dates.length > 0 && (
         <div className="jads-task-card__dates">

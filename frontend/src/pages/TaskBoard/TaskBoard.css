@@ -136,6 +136,176 @@
   background: linear-gradient(180deg, rgba(239, 68, 68, 0.1) 0%, var(--color-surface, #111827) 40%);
 }
 
+/* Source selector tabs */
+.task-board__source-selector {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.task-board__source-tab {
+  flex: 1;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.task-board__source-tab:not(:last-child) {
+  border-right: 1px solid var(--color-border, #2d3748);
+}
+
+.task-board__source-tab--active {
+  background-color: rgba(0, 212, 255, 0.1);
+  color: var(--jads-color-accent-cyan, #00d4ff);
+}
+
+.task-board__source-tab:hover:not(.task-board__source-tab--active) {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.task-board__source-tab:focus-visible {
+  outline: 2px solid var(--jads-color-accent-cyan, #00d4ff);
+  outline-offset: -2px;
+}
+
+/* Import list */
+.task-board__import-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.task-board__import-loading,
+.task-board__import-empty {
+  text-align: center;
+  color: var(--color-text-muted, #94a3b8);
+  padding: 16px;
+  font-size: 0.85rem;
+}
+
+.task-board__import-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--color-text, #e2e8f0);
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 0.15s;
+}
+
+.task-board__import-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.task-board__import-item:focus-visible {
+  outline: 2px solid var(--jads-color-accent-cyan, #00d4ff);
+  outline-offset: -2px;
+}
+
+.task-board__import-item-key {
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--jads-color-accent-cyan, #00d4ff);
+  white-space: nowrap;
+}
+
+.task-board__import-item-summary {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-board__import-item-status,
+.task-board__import-item-time {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #94a3b8);
+  white-space: nowrap;
+}
+
+.task-board__import-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Google Calendar import */
+.task-board__import-gcal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jads-space-3, 12px);
+}
+
+.task-board__gcal-nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.task-board__gcal-view-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted, #94a3b8);
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.task-board__gcal-view-btn--active {
+  background-color: rgba(0, 212, 255, 0.1);
+  color: var(--jads-color-accent-cyan, #00d4ff);
+  border-color: var(--jads-color-accent-cyan, #00d4ff);
+}
+
+.task-board__gcal-view-btn:focus-visible {
+  outline: 2px solid var(--jads-color-accent-cyan, #00d4ff);
+  outline-offset: 1px;
+}
+
+.task-board__gcal-login-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  background-color: #4285f4;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background-color 0.15s;
+}
+
+.task-board__gcal-login-btn:hover {
+  background-color: #3367d6;
+}
+
+.task-board__gcal-login-btn:focus-visible {
+  outline: 2px solid var(--jads-color-accent-cyan, #00d4ff);
+  outline-offset: 2px;
+}
+
 /* Date fields in form */
 .task-board__form-dates {
   display: flex;

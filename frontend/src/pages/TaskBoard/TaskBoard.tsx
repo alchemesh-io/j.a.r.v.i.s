@@ -27,8 +27,15 @@ import {
   getDailyByDate,
   assignTaskToDates,
   removeTaskFromDaily,
+  getJiraConfig,
+  listJiraTickets,
+  getGcalAuthStatus,
+  getGcalAuthLoginUrl,
+  listGcalEvents,
   type Task,
   type TaskType,
+  type JiraTicket,
+  type CalendarEvent,
 } from '../../api/client';
 import './TaskBoard.css';
 
@@ -73,15 +80,19 @@ const SCOPE_OPTIONS = [
   { value: 'all', label: 'All' },
 ];
 
+type ImportSource = 'manual' | 'jira' | 'gcal';
+
 // --- SortableTaskCard ---
 
 function SortableTaskCard({
   task,
+  jiraProjectUrl,
   onEdit,
   onDelete,
   onToggleStatus,
 }: {
   task: Task;
+  jiraProjectUrl?: string;
   onEdit: () => void;
   onDelete: () => void;
   onToggleStatus: () => void;
@@ -101,6 +112,7 @@ function SortableTaskCard({
         type={task.type}
         status={task.status}
         jiraTicketId={task.jira_ticket_id ?? undefined}
+        jiraProjectUrl={jiraProjectUrl}
         dates={task.dates}
         onEdit={onEdit}
         onDelete={onDelete}
@@ -130,6 +142,10 @@ export default function TaskBoard() {
   const [formDates, setFormDates] = useState<string[]>([]);
   const [formDateInput, setFormDateInput] = useState('');
 
+  const [importSource, setImportSource] = useState<ImportSource>('manual');
+  const [gcalDate, setGcalDate] = useState(() => formatDate(new Date()));
+  const [gcalView, setGcalView] = useState<'daily' | 'weekly'>('daily');
+
   const today = formatDate(new Date());
   const dateStr = formatDate(selectedDate);
 
@@ -138,6 +154,30 @@ export default function TaskBoard() {
     const newPrefs: BoardPrefs = { scope, selectedDate: dateStr, doneMode };
     savePrefs(newPrefs);
   }, [scope, dateStr, doneMode]);
+
+  const { data: jiraConfig } = useQuery({
+    queryKey: ['jira-config'],
+    queryFn: getJiraConfig,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: gcalAuthStatus } = useQuery({
+    queryKey: ['gcal-auth-status'],
+    queryFn: getGcalAuthStatus,
+    staleTime: 30 * 1000,
+  });
+
+  const { data: jiraTickets = [], isFetching: jiraLoading } = useQuery({
+    queryKey: ['jira-tickets'],
+    queryFn: listJiraTickets,
+    enabled: showCreateForm && importSource === 'jira' && !!jiraConfig?.configured,
+  });
+
+  const { data: gcalGroups = [], isFetching: gcalLoading } = useQuery({
+    queryKey: ['gcal-events', gcalDate, gcalView],
+    queryFn: () => listGcalEvents(gcalDate, gcalView),
+    enabled: showCreateForm && importSource === 'gcal' && !!gcalAuthStatus?.authenticated,
+  });
 
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks', dateStr, scope],
@@ -213,6 +253,23 @@ export default function TaskBoard() {
     setFormJira('');
     setFormDates([]);
     setFormDateInput('');
+    setImportSource('manual');
+  }
+
+  function selectJiraTicket(ticket: JiraTicket) {
+    setFormTitle(ticket.summary);
+    setFormJira(ticket.key);
+    setImportSource('manual');
+  }
+
+  function selectGcalEvent(event: CalendarEvent) {
+    setFormTitle(event.summary);
+    setFormType('refinement');
+    const eventDate = event.start.slice(0, 10);
+    if (eventDate && !formDates.includes(eventDate)) {
+      setFormDates((prev) => [...prev, eventDate].sort());
+    }
+    setImportSource('manual');
   }
 
   function extractJiraId(input: string): string | undefined {
@@ -350,84 +407,202 @@ export default function TaskBoard() {
               className={`task-board__form${editingTask ? ` task-board__form--${editingTask.type}` : ''}`}
               onClick={(e) => e.stopPropagation()}
             >
-              <Input
-                label="Title"
-                value={formTitle}
-                onChange={(e) => setFormTitle(e.target.value)}
-                placeholder="Task title"
-              />
-              <Input
-                label="JIRA Ticket"
-                value={formJira}
-                onChange={(e) => setFormJira(e.target.value)}
-                placeholder="JAR-123 or full URL"
-              />
-              <Select
-                label="Type"
-                value={formType}
-                options={[
-                  { value: 'refinement', label: 'Refinement' },
-                  { value: 'implementation', label: 'Implementation' },
-                  { value: 'review', label: 'Review' },
-                ]}
-                onChange={(e) => setFormType(e.target.value as TaskType)}
-              />
-
-              <div className="task-board__form-dates">
-                <label className="task-board__form-label">Dates</label>
-                <div className="task-board__form-date-row">
-                  <input
-                    type="date"
-                    className="task-board__form-date-input"
-                    value={formDateInput}
-                    onChange={(e) => setFormDateInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDate(formDateInput); } }}
-                  />
-                  <Button
-                    variant="secondary"
-                    onClick={() => addDate(formDateInput)}
-                    disabled={!formDateInput}
+              {!editingTask && (
+                <div className="task-board__source-selector">
+                  <button
+                    type="button"
+                    className={`task-board__source-tab ${importSource === 'manual' ? 'task-board__source-tab--active' : ''}`}
+                    onClick={() => setImportSource('manual')}
                   >
-                    Add
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => addDate(today)}
-                  >
-                    + Today
-                  </Button>
+                    Manual
+                  </button>
+                  {jiraConfig?.configured && (
+                    <button
+                      type="button"
+                      className={`task-board__source-tab ${importSource === 'jira' ? 'task-board__source-tab--active' : ''}`}
+                      onClick={() => setImportSource('jira')}
+                    >
+                      JIRA
+                    </button>
+                  )}
+                  {gcalAuthStatus?.configured && (
+                    <button
+                      type="button"
+                      className={`task-board__source-tab ${importSource === 'gcal' ? 'task-board__source-tab--active' : ''}`}
+                      onClick={() => setImportSource('gcal')}
+                    >
+                      Google Calendar
+                    </button>
+                  )}
                 </div>
-                {formDates.length > 0 && (
-                  <div className="task-board__form-date-tags">
-                    {formDates.map((d) => (
-                      <span key={d} className="task-board__form-date-tag">
-                        {d}
+              )}
+
+              {importSource === 'jira' && !editingTask && (
+                <div className="task-board__import-list">
+                  {jiraLoading && <p className="task-board__import-loading">Loading tickets...</p>}
+                  {!jiraLoading && jiraTickets.length === 0 && (
+                    <p className="task-board__import-empty">No tickets available</p>
+                  )}
+                  {jiraTickets.map((ticket) => (
+                    <button
+                      key={ticket.key}
+                      type="button"
+                      className="task-board__import-item"
+                      onClick={() => selectJiraTicket(ticket)}
+                    >
+                      <span className="task-board__import-item-key">{ticket.key}</span>
+                      <span className="task-board__import-item-summary">{ticket.summary}</span>
+                      <span className="task-board__import-item-status">{ticket.status}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {importSource === 'gcal' && !editingTask && (
+                <div className="task-board__import-gcal">
+                  {!gcalAuthStatus?.authenticated && gcalAuthStatus?.mode === 'oauth2' ? (
+                    <a
+                      href={getGcalAuthLoginUrl()}
+                      className="task-board__gcal-login-btn"
+                    >
+                      Login with Google
+                    </a>
+                  ) : (
+                    <>
+                      <div className="task-board__gcal-nav">
+                        <input
+                          type="date"
+                          className="task-board__form-date-input"
+                          value={gcalDate}
+                          onChange={(e) => setGcalDate(e.target.value)}
+                        />
                         <button
                           type="button"
-                          className="task-board__form-date-tag-remove"
-                          onClick={() => removeDate(d)}
-                          aria-label={`Remove date ${d}`}
+                          className={`task-board__gcal-view-btn ${gcalView === 'daily' ? 'task-board__gcal-view-btn--active' : ''}`}
+                          onClick={() => setGcalView('daily')}
                         >
-                          x
+                          Day
                         </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+                        <button
+                          type="button"
+                          className={`task-board__gcal-view-btn ${gcalView === 'weekly' ? 'task-board__gcal-view-btn--active' : ''}`}
+                          onClick={() => setGcalView('weekly')}
+                        >
+                          Week
+                        </button>
+                      </div>
+                      <div className="task-board__import-list">
+                        {gcalLoading && <p className="task-board__import-loading">Loading events...</p>}
+                        {!gcalLoading && gcalGroups.length === 0 && (
+                          <p className="task-board__import-empty">No events found</p>
+                        )}
+                        {gcalGroups.map((group) =>
+                          group.events.map((event) => (
+                            <button
+                              key={event.id}
+                              type="button"
+                              className="task-board__import-item"
+                              onClick={() => selectGcalEvent(event)}
+                            >
+                              <span
+                                className="task-board__import-item-dot"
+                                style={{ backgroundColor: group.calendar_color }}
+                              />
+                              <span className="task-board__import-item-summary">{event.summary}</span>
+                              <span className="task-board__import-item-time">
+                                {event.start.slice(11, 16) || 'All day'}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
-              <div className="task-board__form-actions">
-                {editingTask ? (
-                  <>
-                    <Button onClick={handleSaveEdit}>Save</Button>
-                  </>
-                ) : (
-                  <Button onClick={handleCreate} disabled={!formTitle}>Create</Button>
-                )}
-                <Button variant="ghost" onClick={closeForm}>
-                  Cancel
-                </Button>
-              </div>
+              {(importSource === 'manual' || editingTask) && (
+                <>
+                  <Input
+                    label="Title"
+                    value={formTitle}
+                    onChange={(e) => setFormTitle(e.target.value)}
+                    placeholder="Task title"
+                  />
+                  <Input
+                    label="JIRA Ticket"
+                    value={formJira}
+                    onChange={(e) => setFormJira(e.target.value)}
+                    placeholder="JAR-123 or full URL"
+                  />
+                  <Select
+                    label="Type"
+                    value={formType}
+                    options={[
+                      { value: 'refinement', label: 'Refinement' },
+                      { value: 'implementation', label: 'Implementation' },
+                      { value: 'review', label: 'Review' },
+                    ]}
+                    onChange={(e) => setFormType(e.target.value as TaskType)}
+                  />
+
+                  <div className="task-board__form-dates">
+                    <label className="task-board__form-label">Dates</label>
+                    <div className="task-board__form-date-row">
+                      <input
+                        type="date"
+                        className="task-board__form-date-input"
+                        value={formDateInput}
+                        onChange={(e) => setFormDateInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDate(formDateInput); } }}
+                      />
+                      <Button
+                        variant="secondary"
+                        onClick={() => addDate(formDateInput)}
+                        disabled={!formDateInput}
+                      >
+                        Add
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => addDate(today)}
+                      >
+                        + Today
+                      </Button>
+                    </div>
+                    {formDates.length > 0 && (
+                      <div className="task-board__form-date-tags">
+                        {formDates.map((d) => (
+                          <span key={d} className="task-board__form-date-tag">
+                            {d}
+                            <button
+                              type="button"
+                              className="task-board__form-date-tag-remove"
+                              onClick={() => removeDate(d)}
+                              aria-label={`Remove date ${d}`}
+                            >
+                              x
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="task-board__form-actions">
+                    {editingTask ? (
+                      <>
+                        <Button onClick={handleSaveEdit}>Save</Button>
+                      </>
+                    ) : (
+                      <Button onClick={handleCreate} disabled={!formTitle}>Create</Button>
+                    )}
+                    <Button variant="ghost" onClick={closeForm}>
+                      Cancel
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -446,6 +621,7 @@ export default function TaskBoard() {
                 <SortableTaskCard
                   key={task.id}
                   task={task}
+                  jiraProjectUrl={jiraConfig?.projectUrl ?? undefined}
                   onEdit={() => startEdit(task)}
                   onDelete={() => deleteMutation.mutate(task.id)}
                   onToggleStatus={() => toggleStatusMutation.mutate(task)}

@@ -26,9 +26,15 @@ spec:
                 name: {{ .Release.Name }}-backend-config
             - secretRef:
                 name: {{ .Release.Name }}-backend-secret
+                optional: true
           volumeMounts:
             - name: sqlite-data
               mountPath: /data
+            {{- if .Values.backend.config.googleServiceAccountKeyPath }}
+            - name: google-sa-key
+              mountPath: /etc/google
+              readOnly: true
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /health
@@ -48,3 +54,8 @@ spec:
         - name: sqlite-data
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-sqlite
+        {{- if .Values.backend.config.googleServiceAccountKeyPath }}
+        - name: google-sa-key
+          secret:
+            secretName: {{ .Release.Name }}-google-sa-key
+        {{- end }}

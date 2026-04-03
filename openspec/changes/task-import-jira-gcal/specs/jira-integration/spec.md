@@ -88,3 +88,5 @@ The task creation form SHALL include a source selector with at least "Manual" an
 #### Scenario: JIRA not configured — mode hidden
 - **WHEN** `GET /api/v1/jira/config` returns `{ "configured": false }`
 - **THEN** the JIRA option SHALL NOT appear in the source selector
+jira 3.10.5
+

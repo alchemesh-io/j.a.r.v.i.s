@@ -128,4 +128,46 @@ describe('TaskCard', () => {
     render(<TaskCard title="Task" type="refinement" status="created" />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  // --- JIRA deep-link ---
+
+  it('renders JIRA link when jiraTicketId and jiraProjectUrl are provided', () => {
+    render(
+      <TaskCard
+        title="Fix login"
+        type="review"
+        status="created"
+        jiraTicketId="JAR-42"
+        jiraProjectUrl="https://myorg.atlassian.net"
+      />,
+    );
+    const link = screen.getByRole('link', { name: 'Open JIRA ticket JAR-42' });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', 'https://myorg.atlassian.net/browse/JAR-42');
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
+  it('does not render JIRA link when jiraTicketId is missing', () => {
+    render(
+      <TaskCard
+        title="Fix login"
+        type="review"
+        status="created"
+        jiraProjectUrl="https://myorg.atlassian.net"
+      />,
+    );
+    expect(screen.queryByRole('link', { name: /Open JIRA ticket/ })).not.toBeInTheDocument();
+  });
+
+  it('does not render JIRA link when jiraProjectUrl is missing', () => {
+    render(
+      <TaskCard
+        title="Fix login"
+        type="review"
+        status="created"
+        jiraTicketId="JAR-42"
+      />,
+    );
+    expect(screen.queryByRole('link', { name: /Open JIRA ticket/ })).not.toBeInTheDocument();
+  });
 });

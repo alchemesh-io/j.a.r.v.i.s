@@ -143,6 +143,66 @@ export function reorderDailyTasks(
   });
 }
 
+// --- JIRA API ---
+
+export interface JiraConfig {
+  configured: boolean;
+  projectUrl: string | null;
+}
+
+export interface JiraTicket {
+  key: string;
+  summary: string;
+  status: string;
+  url: string;
+}
+
+export function getJiraConfig(): Promise<JiraConfig> {
+  return request('/jira/config');
+}
+
+export function listJiraTickets(): Promise<JiraTicket[]> {
+  return request('/jira/tickets');
+}
+
+// --- Google Calendar API ---
+
+export interface GCalAuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+  mode: 'oauth2' | 'service_account' | null;
+}
+
+export interface CalendarEvent {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+  calendar_name: string;
+  calendar_color: string;
+}
+
+export interface CalendarGroup {
+  calendar_name: string;
+  calendar_color: string;
+  events: CalendarEvent[];
+}
+
+export function getGcalAuthStatus(): Promise<GCalAuthStatus> {
+  return request('/gcal/auth/status');
+}
+
+export function getGcalAuthLoginUrl(): string {
+  return `${API_BASE}/gcal/auth/login`;
+}
+
+export function listGcalEvents(
+  date: string,
+  view: 'daily' | 'weekly' = 'daily',
+): Promise<CalendarGroup[]> {
+  return request(`/gcal/events?date=${date}&view=${view}`);
+}
+
 // --- Helpers ---
 
 function getWeekStart(date: string): string {
