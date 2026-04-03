@@ -97,8 +97,8 @@ def auth_callback(code: str = Query(None), error: str = Query(None)):
     return RedirectResponse(url="/?gcal_auth=success")
 
 
-@router.get("/events/{event_id}", response_model=CalendarEvent)
-def get_event(event_id: str):
+@router.get("/event", response_model=CalendarEvent)
+def get_event(event_id: str = Query(...)):
     _require_configured()
     client = _get_client()
     if not client.is_authenticated():

@@ -226,7 +226,7 @@ export function getGcalAuthLoginUrl(): string {
 }
 
 export function getGcalEvent(eventId: string): Promise<CalendarEvent> {
-  return request(`/gcal/events/${eventId}`);
+  return request(`/gcal/event?event_id=${encodeURIComponent(eventId)}`);
 }
 
 export function listGcalEvents(
