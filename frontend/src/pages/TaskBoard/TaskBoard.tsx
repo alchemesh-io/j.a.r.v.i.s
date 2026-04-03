@@ -82,6 +82,146 @@ const SCOPE_OPTIONS = [
 
 type ImportSource = 'manual' | 'jira' | 'gcal';
 
+function jiraWikiToHtml(wiki: string): string {
+  const lines = wiki.split('\n');
+  const result: string[] = [];
+  // Stack tracks open list tags: { tag: 'ul'|'ol', depth: number }
+  const listStack: { tag: string; depth: number }[] = [];
+  let inCodeBlock = false;
+  let codeBlockContent: string[] = [];
+
+  function closeListsTo(targetDepth: number) {
+    while (listStack.length > 0 && listStack[listStack.length - 1].depth > targetDepth) {
+      const popped = listStack.pop()!;
+      result.push(`</${popped.tag}>`);
+    }
+  }
+
+  function closeAllLists() {
+    while (listStack.length > 0) {
+      const popped = listStack.pop()!;
+      result.push(`</${popped.tag}>`);
+    }
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Code blocks: {code} or {noformat}
+    if (/^\{(code|noformat)\}/.test(trimmed)) {
+      if (inCodeBlock) {
+        result.push(`<pre><code>${codeBlockContent.join('\n').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`);
+        codeBlockContent = [];
+        inCodeBlock = false;
+      } else {
+        closeAllLists();
+        inCodeBlock = true;
+      }
+      continue;
+    }
+    if (inCodeBlock) {
+      codeBlockContent.push(line);
+      continue;
+    }
+
+    // Headings: h1. through h6.
+    const headingMatch = trimmed.match(/^h([1-6])\.\s*(.+)/);
+    if (headingMatch) {
+      closeAllLists();
+      result.push(`<h${headingMatch[1]}>${formatInline(headingMatch[2])}</h${headingMatch[1]}>`);
+      continue;
+    }
+
+    // Bullet list items: * or ** or *** etc.
+    const bulletMatch = trimmed.match(/^(\*+)\s+(.+)/);
+    if (bulletMatch) {
+      const depth = bulletMatch[1].length;
+      const content = formatInline(bulletMatch[2]);
+      if (listStack.length === 0 || listStack[listStack.length - 1].depth < depth) {
+        listStack.push({ tag: 'ul', depth });
+        result.push('<ul>');
+      } else {
+        closeListsTo(depth);
+      }
+      result.push(`<li>${content}</li>`);
+      continue;
+    }
+
+    // Ordered list items: # or ## or ### etc.
+    const orderedMatch = trimmed.match(/^(#+)\s+(.+)/);
+    if (orderedMatch) {
+      const depth = orderedMatch[1].length;
+      const content = formatInline(orderedMatch[2]);
+      if (listStack.length === 0 || listStack[listStack.length - 1].depth < depth) {
+        listStack.push({ tag: 'ol', depth });
+        result.push('<ol>');
+      } else {
+        closeListsTo(depth);
+      }
+      result.push(`<li>${content}</li>`);
+      continue;
+    }
+
+    // Empty line
+    if (!trimmed) {
+      closeAllLists();
+      continue;
+    }
+
+    // Regular paragraph
+    closeAllLists();
+    result.push(`<p>${formatInline(trimmed)}</p>`);
+  }
+
+  closeAllLists();
+  if (inCodeBlock) {
+    result.push(`<pre><code>${codeBlockContent.join('\n').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`);
+  }
+  return result.join('');
+}
+
+function formatInline(text: string): string {
+  return text
+    // Monospace: {{text}} — must run before bold to avoid conflicts
+    .replace(/\{\{([^}]+)\}\}/g, '<code>$1</code>')
+    // Links: [label|url] or [label|url|smart-link]
+    .replace(/\[([^|\]]+)\|([^|\]]+)(?:\|[^\]]*)?\]/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    // Standalone URLs (not already inside an href)
+    .replace(/(?<![">])(https?:\/\/[^\s<\]|)]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
+    // Bold: *text*
+    .replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
+    // Italic: _text_
+    .replace(/(?<!\w)_([^_]+)_(?!\w)/g, '<em>$1</em>');
+}
+
+const JIRA_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  'to do':       { bg: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8' },
+  'backlog':     { bg: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8' },
+  'in progress': { bg: 'rgba(59, 130, 246, 0.2)',  color: '#60a5fa' },
+  'in review':   { bg: 'rgba(168, 85, 247, 0.2)',  color: '#c084fc' },
+  'done':        { bg: 'rgba(34, 197, 94, 0.2)',   color: '#4ade80' },
+  'closed':      { bg: 'rgba(34, 197, 94, 0.2)',   color: '#4ade80' },
+  'blocked':     { bg: 'rgba(239, 68, 68, 0.2)',   color: '#f87171' },
+};
+
+function getStatusStyle(status: string) {
+  const key = status.toLowerCase();
+  return JIRA_STATUS_COLORS[key] ?? { bg: 'rgba(100, 116, 139, 0.15)', color: '#94a3b8' };
+}
+
+const JIRA_PRIORITY_COLORS: Record<string, { bg: string; color: string }> = {
+  'highest':  { bg: 'rgba(239, 68, 68, 0.2)',   color: '#f87171' },
+  'high':     { bg: 'rgba(249, 115, 22, 0.2)',  color: '#fb923c' },
+  'medium':   { bg: 'rgba(234, 179, 8, 0.2)',   color: '#facc15' },
+  'low':      { bg: 'rgba(34, 197, 94, 0.2)',   color: '#4ade80' },
+  'lowest':   { bg: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8' },
+};
+
+function getPriorityStyle(priority: string) {
+  const key = priority.toLowerCase();
+  return JIRA_PRIORITY_COLORS[key] ?? { bg: 'rgba(100, 116, 139, 0.15)', color: '#94a3b8' };
+}
+
 // --- SortableTaskCard ---
 
 function SortableTaskCard({
@@ -142,11 +282,25 @@ export default function TaskBoard() {
   const [formDates, setFormDates] = useState<string[]>([]);
   const [formDateInput, setFormDateInput] = useState('');
 
+  // Batch creation: list of items queued for creation
+  interface PendingItem {
+    title: string;
+    type: TaskType;
+    jira_ticket_id?: string;
+  }
+  const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
+
   const [importSource, setImportSource] = useState<ImportSource>('manual');
   const [gcalDate, setGcalDate] = useState(() => formatDate(new Date()));
   const [gcalView, setGcalView] = useState<'daily' | 'weekly'>('daily');
   const [expandedTicket, setExpandedTicket] = useState<string | null>(null);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+  const [jiraSearch, setJiraSearch] = useState('');
+  const [jiraProjectFilter, setJiraProjectFilter] = useState('all');
+  const [fullscreenTicket, setFullscreenTicket] = useState<JiraTicket | null>(null);
+  const [fullscreenEvent, setFullscreenEvent] = useState<CalendarEvent | null>(null);
+  const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
+  const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
 
   const today = formatDate(new Date());
   const dateStr = formatDate(selectedDate);
@@ -256,22 +410,87 @@ export default function TaskBoard() {
     setFormDates([]);
     setFormDateInput('');
     setImportSource('manual');
+    setJiraSearch('');
+    setJiraProjectFilter('all');
+    setSelectedTickets(new Set());
+    setSelectedEvents(new Set());
+    setPendingItems([]);
+  }
+
+  function toggleTicketSelection(key: string) {
+    setSelectedTickets((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleEventSelection(id: string) {
+    setSelectedEvents((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function selectJiraTicket(ticket: JiraTicket) {
-    setFormTitle(ticket.summary);
-    setFormJira(ticket.key);
+    // Single select: go to manual with one item
+    setPendingItems([{ title: ticket.summary, type: 'implementation', jira_ticket_id: ticket.key }]);
+    setFormTitle('');
+    setFormJira('');
     setImportSource('manual');
   }
 
   function selectGcalEvent(event: CalendarEvent) {
-    setFormTitle(event.summary);
-    setFormType('refinement');
     const eventDate = event.start.slice(0, 10);
     if (eventDate && !formDates.includes(eventDate)) {
       setFormDates((prev) => [...prev, eventDate].sort());
     }
+    setPendingItems([{ title: event.summary, type: 'refinement' }]);
+    setFormTitle('');
+    setFormJira('');
     setImportSource('manual');
+  }
+
+  function confirmSelectedTickets() {
+    const tickets = jiraTickets.filter((t) => selectedTickets.has(t.key));
+    setPendingItems(tickets.map((t) => ({ title: t.summary, type: 'implementation' as TaskType, jira_ticket_id: t.key })));
+    setSelectedTickets(new Set());
+    setFormTitle('');
+    setFormJira('');
+    setImportSource('manual');
+  }
+
+  function confirmSelectedEvents() {
+    const allEvents = gcalGroups.flatMap((g) => g.events);
+    const events = allEvents.filter((e) => selectedEvents.has(e.id));
+    const dates = new Set(formDates);
+    for (const ev of events) {
+      const d = ev.start.slice(0, 10);
+      if (d) dates.add(d);
+    }
+    setFormDates([...dates].sort());
+    setPendingItems(events.map((e) => ({ title: e.summary, type: 'refinement' as TaskType })));
+    setSelectedEvents(new Set());
+    setFormTitle('');
+    setFormJira('');
+    setImportSource('manual');
+  }
+
+  function removePendingItem(index: number) {
+    setPendingItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addManualItem() {
+    if (!formTitle) return;
+    setPendingItems((prev) => [
+      ...prev,
+      { title: formTitle, type: formType, jira_ticket_id: formJira || undefined },
+    ]);
+    setFormTitle('');
+    setFormJira('');
   }
 
   function extractJiraId(input: string): string | undefined {
@@ -292,14 +511,25 @@ export default function TaskBoard() {
     setFormDates((prev) => prev.filter((d) => d !== date));
   }
 
-  function handleCreate() {
-    const jiraId = formJira ? extractJiraId(formJira) : undefined;
-    createMutation.mutate({
-      title: formTitle,
-      type: formType,
-      jira_ticket_id: jiraId,
-      dates: formDates,
-    });
+  async function handleCreate() {
+    // Collect all items to create: pending items + current form if filled
+    const items = [...pendingItems];
+    if (formTitle) {
+      const jiraId = formJira ? extractJiraId(formJira) : undefined;
+      items.push({ title: formTitle, type: formType, jira_ticket_id: jiraId });
+    }
+    if (items.length === 0) return;
+
+    for (const item of items) {
+      const task = await createTask(item);
+      if (formDates.length > 0) {
+        await assignTaskToDates(task.id, formDates);
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    queryClient.invalidateQueries({ queryKey: ['daily'] });
+    setShowCreateForm(false);
+    resetForm();
   }
 
   async function handleSaveEdit() {
@@ -441,73 +671,144 @@ export default function TaskBoard() {
 
               {importSource === 'jira' && !editingTask && (
                 <div className="task-board__import-list">
+                  <div className="task-board__jira-filters">
+                    <input
+                      type="text"
+                      className="task-board__jira-search"
+                      placeholder="Search tickets..."
+                      value={jiraSearch}
+                      onChange={(e) => setJiraSearch(e.target.value)}
+                    />
+                    <select
+                      className="task-board__jira-project-filter"
+                      value={jiraProjectFilter}
+                      onChange={(e) => setJiraProjectFilter(e.target.value)}
+                    >
+                      <option value="all">All projects</option>
+                      {[...new Set(jiraTickets.map((t) => t.key.split('-')[0]))].sort().map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
                   {jiraLoading && <p className="task-board__import-loading">Loading tickets...</p>}
                   {!jiraLoading && jiraTickets.length === 0 && (
                     <p className="task-board__import-empty">No tickets available</p>
                   )}
                   {!jiraLoading && (() => {
-                    const grouped: Record<string, Record<string, typeof jiraTickets>> = {};
-                    for (const ticket of jiraTickets) {
-                      const project = ticket.key.split('-')[0];
-                      if (!grouped[project]) grouped[project] = {};
-                      if (!grouped[project][ticket.status]) grouped[project][ticket.status] = [];
-                      grouped[project][ticket.status].push(ticket);
-                    }
-                    return Object.entries(grouped).map(([project, statuses]) => (
-                      <div key={project} className="task-board__jira-group">
-                        <h4 className="task-board__jira-group-project">{project}</h4>
-                        {Object.entries(statuses).map(([status, tickets]) => (
-                          <div key={status} className="task-board__jira-group-status">
-                            <h5 className="task-board__jira-group-status-label">{status} ({tickets.length})</h5>
-                            {tickets.map((ticket) => (
-                              <div key={ticket.key} className="task-board__jira-card">
-                                <div className="task-board__jira-card-header">
-                                  <a
-                                    href={ticket.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="task-board__jira-card-key"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    {ticket.key}
-                                  </a>
-                                  {ticket.priority && (
-                                    <span className="task-board__jira-card-priority">{ticket.priority}</span>
-                                  )}
-                                </div>
-                                <div className="task-board__jira-card-title">{ticket.summary}</div>
-                                {ticket.assignee && (
-                                  <div className="task-board__jira-card-assignee">{ticket.assignee}</div>
-                                )}
-                                <div className="task-board__jira-card-actions">
-                                  <Button
-                                    variant="secondary"
-                                    onClick={() => selectJiraTicket(ticket)}
-                                  >
-                                    Import
-                                  </Button>
-                                  {ticket.description && (
-                                    <button
-                                      type="button"
-                                      className="task-board__jira-card-expand"
-                                      onClick={() => setExpandedTicket(expandedTicket === ticket.key ? null : ticket.key)}
-                                    >
-                                      {expandedTicket === ticket.key ? 'Hide details' : 'Show details'}
-                                    </button>
-                                  )}
-                                </div>
-                                {expandedTicket === ticket.key && ticket.description && (
-                                  <div className="task-board__jira-card-description">
-                                    {ticket.description}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                    const query = jiraSearch.toLowerCase();
+                    const filtered = jiraTickets
+                      .filter((t) => {
+                        const s = t.status.toLowerCase();
+                        return s !== 'done' && s !== 'closed';
+                      })
+                      .filter((t) =>
+                        jiraProjectFilter === 'all' || t.key.split('-')[0] === jiraProjectFilter
+                      )
+                      .filter((t) =>
+                        !query ||
+                        t.key.toLowerCase().includes(query) ||
+                        t.summary.toLowerCase().includes(query) ||
+                        (t.assignee?.toLowerCase().includes(query) ?? false)
+                      );
+                    const PRIORITY_ORDER: Record<string, number> = {
+                      highest: 0, high: 1, medium: 2, low: 3, lowest: 4,
+                    };
+                    filtered.sort((a, b) => {
+                      const projA = a.key.split('-')[0];
+                      const projB = b.key.split('-')[0];
+                      if (projA !== projB) return projA.localeCompare(projB);
+                      if (a.status !== b.status) return a.status.localeCompare(b.status);
+                      const pa = PRIORITY_ORDER[(a.priority ?? '').toLowerCase()] ?? 5;
+                      const pb = PRIORITY_ORDER[(b.priority ?? '').toLowerCase()] ?? 5;
+                      return pa - pb;
+                    });
+                    return filtered.map((ticket) => (
+                      <div key={ticket.key} className={`task-board__jira-card ${selectedTickets.has(ticket.key) ? 'task-board__jira-card--selected' : ''}`}>
+                        <div className="task-board__jira-card-top">
+                          <div className="task-board__jira-card-header">
+                            <a
+                              href={ticket.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="task-board__jira-card-key"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {ticket.key}
+                            </a>
+                            <span
+                              className="task-board__jira-status-badge"
+                              style={{ backgroundColor: getStatusStyle(ticket.status).bg, color: getStatusStyle(ticket.status).color }}
+                            >
+                              {ticket.status}
+                            </span>
+                            {ticket.priority && (
+                              <span className="task-board__jira-card-priority" style={{ backgroundColor: getPriorityStyle(ticket.priority).bg, color: getPriorityStyle(ticket.priority).color }}>{ticket.priority}</span>
+                            )}
                           </div>
-                        ))}
+                          <div className="task-board__jira-card-toolbar">
+                            {ticket.description && (
+                              <button
+                                type="button"
+                                className="task-board__toolbar-icon-btn"
+                                onClick={() => setExpandedTicket(expandedTicket === ticket.key ? null : ticket.key)}
+                                aria-label={expandedTicket === ticket.key ? 'Hide details' : 'Show details'}
+                                title={expandedTicket === ticket.key ? 'Hide details' : 'Show details'}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                  <path d="M3 4H13M3 8H10M3 12H7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                </svg>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="task-board__toolbar-icon-btn"
+                              onClick={() => setFullscreenTicket(ticket)}
+                              aria-label="View full ticket"
+                              title="View full ticket"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                <path d="M2 2H6M2 2V6M2 2L6.5 6.5M14 14H10M14 14V10M14 14L9.5 9.5M14 2H10M14 2V6M14 2L9.5 6.5M2 14H6M2 14V10M2 14L6.5 9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              className={`task-board__import-icon-btn ${selectedTickets.has(ticket.key) ? 'task-board__import-icon-btn--selected' : ''}`}
+                              onClick={() => toggleTicketSelection(ticket.key)}
+                              aria-label={selectedTickets.has(ticket.key) ? 'Deselect ticket' : 'Select ticket'}
+                              title={selectedTickets.has(ticket.key) ? 'Deselect ticket' : 'Select ticket'}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                <path d="M4 8L7 11L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                        <div className="task-board__jira-card-title">{ticket.summary}</div>
+                        {ticket.assignee && (
+                          <div className="task-board__jira-card-assignee">{ticket.assignee}</div>
+                        )}
+                        {expandedTicket === ticket.key && ticket.description && (
+                          <div className="task-board__jira-card-detail-panel">
+                            <div
+                              className="task-board__jira-card-description"
+                              dangerouslySetInnerHTML={{ __html: jiraWikiToHtml(ticket.description) }}
+                            />
+                          </div>
+                        )}
                       </div>
                     ));
                   })()}
+                  {selectedTickets.size > 0 && (
+                    <div className="task-board__selection-bar">
+                      <span>{selectedTickets.size} ticket{selectedTickets.size > 1 ? 's' : ''} selected</span>
+                      <Button onClick={confirmSelectedTickets}>
+                        Confirm selection
+                      </Button>
+                      <Button variant="ghost" onClick={() => setSelectedTickets(new Set())}>
+                        Clear
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -569,44 +870,59 @@ export default function TaskBoard() {
                                     {new Date(eventDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                                   </div>
                                 )}
-                                <div className="task-board__gcal-event">
+                                <div className={`task-board__gcal-event ${selectedEvents.has(event.id) ? 'task-board__gcal-event--selected' : ''}`}>
                                   <div
                                     className="task-board__gcal-event-bar"
                                     style={{ backgroundColor: event.calendar_color }}
                                   />
                                   <div className="task-board__gcal-event-body">
-                                    <div className="task-board__gcal-event-header">
-                                      <span className="task-board__gcal-event-time">{timeLabel}</span>
-                                      <span className="task-board__gcal-event-calendar">{event.calendar_name}</span>
+                                    <div className="task-board__gcal-event-top">
+                                      <div className="task-board__gcal-event-header">
+                                        <span className="task-board__gcal-event-time">{timeLabel}</span>
+                                        <span className="task-board__gcal-event-calendar">{event.calendar_name}</span>
+                                      </div>
+                                      <div className="task-board__jira-card-toolbar">
+                                        {(event.description || event.attendees.length > 0 || event.attachments.length > 0) && (
+                                          <button
+                                            type="button"
+                                            className="task-board__toolbar-icon-btn"
+                                            onClick={() => setExpandedEvent(isExpanded ? null : event.id)}
+                                            aria-label={isExpanded ? 'Hide details' : 'Show details'}
+                                            title={isExpanded ? 'Hide details' : 'Show details'}
+                                          >
+                                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                              <path d="M3 4H13M3 8H10M3 12H7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                            </svg>
+                                          </button>
+                                        )}
+                                        <button
+                                          type="button"
+                                          className="task-board__toolbar-icon-btn"
+                                          onClick={() => setFullscreenEvent(event)}
+                                          aria-label="View full event"
+                                          title="View full event"
+                                        >
+                                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                            <path d="M2 2H6M2 2V6M2 2L6.5 6.5M14 14H10M14 14V10M14 14L9.5 9.5M14 2H10M14 2V6M14 2L9.5 6.5M2 14H6M2 14V10M2 14L6.5 9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                          </svg>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={`task-board__import-icon-btn ${selectedEvents.has(event.id) ? 'task-board__import-icon-btn--selected' : ''}`}
+                                          onClick={() => toggleEventSelection(event.id)}
+                                          aria-label={selectedEvents.has(event.id) ? 'Deselect event' : 'Select event'}
+                                          title={selectedEvents.has(event.id) ? 'Deselect event' : 'Select event'}
+                                        >
+                                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                            <path d="M4 8L7 11L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                          </svg>
+                                        </button>
+                                      </div>
                                     </div>
                                     <div className="task-board__gcal-event-title">{event.summary}</div>
                                     {event.location && (
                                       <div className="task-board__gcal-event-location">{event.location}</div>
                                     )}
-                                    <div className="task-board__gcal-event-actions">
-                                      <Button variant="secondary" onClick={() => selectGcalEvent(event)}>
-                                        Import
-                                      </Button>
-                                      {(event.description || event.attendees.length > 0 || event.attachments.length > 0) && (
-                                        <button
-                                          type="button"
-                                          className="task-board__gcal-event-expand"
-                                          onClick={() => setExpandedEvent(isExpanded ? null : event.id)}
-                                        >
-                                          {isExpanded ? 'Hide details' : 'Show details'}
-                                        </button>
-                                      )}
-                                      {event.html_link && (
-                                        <a
-                                          href={event.html_link}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="task-board__gcal-event-link"
-                                        >
-                                          Open in Google
-                                        </a>
-                                      )}
-                                    </div>
                                     {isExpanded && (
                                       <div className="task-board__gcal-event-details">
                                         {event.description && (
@@ -653,6 +969,17 @@ export default function TaskBoard() {
                           });
                         })()}
                       </div>
+                      {selectedEvents.size > 0 && (
+                        <div className="task-board__selection-bar">
+                          <span>{selectedEvents.size} event{selectedEvents.size > 1 ? 's' : ''} selected</span>
+                          <Button onClick={confirmSelectedEvents}>
+                            Confirm selection
+                          </Button>
+                          <Button variant="ghost" onClick={() => setSelectedEvents(new Set())}>
+                            Clear
+                          </Button>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -660,6 +987,46 @@ export default function TaskBoard() {
 
               {(importSource === 'manual' || editingTask) && (
                 <>
+                  {/* Pending items list (batch mode) */}
+                  {!editingTask && pendingItems.length > 0 && (
+                    <div className="task-board__pending-items">
+                      <label className="task-board__form-label">
+                        Tasks to create ({pendingItems.length})
+                      </label>
+                      {pendingItems.map((item, i) => (
+                        <div key={i} className="task-board__pending-item">
+                          <select
+                            className="task-board__pending-item-type-select"
+                            value={item.type}
+                            onChange={(e) => setPendingItems((prev) => prev.map((p, j) => j === i ? { ...p, type: e.target.value as TaskType } : p))}
+                          >
+                            <option value="refinement">Refinement</option>
+                            <option value="implementation">Implementation</option>
+                            <option value="review">Review</option>
+                          </select>
+                          {item.jira_ticket_id && (
+                            <span className="task-board__pending-item-jira">{item.jira_ticket_id}</span>
+                          )}
+                          <span className="task-board__pending-item-title">{item.title}</span>
+                          <button
+                            type="button"
+                            className="task-board__pending-item-remove"
+                            onClick={() => removePendingItem(i)}
+                            aria-label={`Remove ${item.title}`}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add another task form */}
+                  {!editingTask && (
+                    <label className="task-board__form-label">
+                      {pendingItems.length > 0 ? 'Add another task' : 'New task'}
+                    </label>
+                  )}
                   <Input
                     label="Title"
                     value={formTitle}
@@ -683,8 +1050,21 @@ export default function TaskBoard() {
                     onChange={(e) => setFormType(e.target.value as TaskType)}
                   />
 
+                  {/* Add to batch button (only in batch/new mode) */}
+                  {!editingTask && (
+                    <Button
+                      variant="ghost"
+                      onClick={addManualItem}
+                      disabled={!formTitle}
+                    >
+                      + Add to list
+                    </Button>
+                  )}
+
                   <div className="task-board__form-dates">
-                    <label className="task-board__form-label">Dates</label>
+                    <label className="task-board__form-label">
+                      Dates {!editingTask && pendingItems.length > 0 ? '(shared)' : ''}
+                    </label>
                     <div className="task-board__form-date-row">
                       <input
                         type="date"
@@ -728,11 +1108,16 @@ export default function TaskBoard() {
 
                   <div className="task-board__form-actions">
                     {editingTask ? (
-                      <>
-                        <Button onClick={handleSaveEdit}>Save</Button>
-                      </>
+                      <Button onClick={handleSaveEdit}>Save</Button>
                     ) : (
-                      <Button onClick={handleCreate} disabled={!formTitle}>Create</Button>
+                      <Button
+                        onClick={handleCreate}
+                        disabled={!formTitle && pendingItems.length === 0}
+                      >
+                        {pendingItems.length > 0
+                          ? `Create ${pendingItems.length + (formTitle ? 1 : 0)} task${pendingItems.length + (formTitle ? 1 : 0) > 1 ? 's' : ''}`
+                          : 'Create'}
+                      </Button>
                     )}
                     <Button variant="ghost" onClick={closeForm}>
                       Cancel
@@ -740,6 +1125,164 @@ export default function TaskBoard() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {fullscreenTicket && (
+          <div className="task-board__fullscreen-overlay" onClick={() => setFullscreenTicket(null)}>
+            <div className="task-board__fullscreen-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="task-board__fullscreen-header">
+                <a
+                  href={fullscreenTicket.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="task-board__jira-card-key"
+                >
+                  {fullscreenTicket.key}
+                </a>
+                <span
+                  className="task-board__jira-status-badge"
+                  style={{ backgroundColor: getStatusStyle(fullscreenTicket.status).bg, color: getStatusStyle(fullscreenTicket.status).color }}
+                >
+                  {fullscreenTicket.status}
+                </span>
+                {fullscreenTicket.priority && (
+                  <span className="task-board__jira-card-priority" style={{ backgroundColor: getPriorityStyle(fullscreenTicket.priority).bg, color: getPriorityStyle(fullscreenTicket.priority).color }}>{fullscreenTicket.priority}</span>
+                )}
+                <button
+                  type="button"
+                  className="task-board__fullscreen-close"
+                  onClick={() => setFullscreenTicket(null)}
+                  aria-label="Close"
+                >
+                  &times;
+                </button>
+              </div>
+              <h3 className="task-board__fullscreen-title">{fullscreenTicket.summary}</h3>
+              {fullscreenTicket.assignee && (
+                <div className="task-board__jira-card-assignee">{fullscreenTicket.assignee}</div>
+              )}
+              {fullscreenTicket.description && (
+                <div
+                  className="task-board__jira-card-description task-board__fullscreen-body"
+                  dangerouslySetInnerHTML={{ __html: jiraWikiToHtml(fullscreenTicket.description) }}
+                />
+              )}
+              <div className="task-board__fullscreen-footer">
+                <button
+                  type="button"
+                  className="task-board__import-icon-btn"
+                  onClick={() => { selectJiraTicket(fullscreenTicket); setFullscreenTicket(null); }}
+                  aria-label="Import ticket"
+                  title="Import ticket"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M8 2V11M8 11L4.5 7.5M8 11L11.5 7.5M3 14H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                <a
+                  href={fullscreenTicket.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="task-board__gcal-event-link"
+                >
+                  Open in JIRA
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {fullscreenEvent && (
+          <div className="task-board__fullscreen-overlay" onClick={() => setFullscreenEvent(null)}>
+            <div className="task-board__fullscreen-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="task-board__fullscreen-header">
+                <span
+                  className="task-board__gcal-event-bar-dot"
+                  style={{ backgroundColor: fullscreenEvent.calendar_color }}
+                />
+                <span className="task-board__gcal-event-calendar">{fullscreenEvent.calendar_name}</span>
+                <button
+                  type="button"
+                  className="task-board__fullscreen-close"
+                  onClick={() => setFullscreenEvent(null)}
+                  aria-label="Close"
+                >
+                  &times;
+                </button>
+              </div>
+              <h3 className="task-board__fullscreen-title">{fullscreenEvent.summary}</h3>
+              <div className="task-board__gcal-event-time" style={{ fontSize: '0.85rem' }}>
+                {fullscreenEvent.start.slice(11, 16)
+                  ? `${fullscreenEvent.start.slice(11, 16)} – ${fullscreenEvent.end.slice(11, 16)}`
+                  : 'All day'}
+                {' · '}
+                {new Date(fullscreenEvent.start.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              </div>
+              {fullscreenEvent.location && (
+                <div className="task-board__gcal-event-location" style={{ fontSize: '0.85rem', marginTop: '4px' }}>{fullscreenEvent.location}</div>
+              )}
+              {fullscreenEvent.description && (
+                <div className="task-board__fullscreen-body" style={{ whiteSpace: 'pre-wrap' }}>
+                  {fullscreenEvent.description}
+                </div>
+              )}
+              {fullscreenEvent.attendees.length > 0 && (
+                <div className="task-board__fullscreen-section">
+                  <span className="task-board__gcal-event-detail-label">Guests ({fullscreenEvent.attendees.length})</span>
+                  {fullscreenEvent.attendees.map((a) => (
+                    <div key={a.email} className="task-board__gcal-attendee">
+                      <span className="task-board__gcal-attendee-name">{a.display_name || a.email}</span>
+                      {a.response_status && (
+                        <span className={`task-board__gcal-attendee-status task-board__gcal-attendee-status--${a.response_status}`}>
+                          {a.response_status}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {fullscreenEvent.attachments.length > 0 && (
+                <div className="task-board__fullscreen-section">
+                  <span className="task-board__gcal-event-detail-label">Files</span>
+                  {fullscreenEvent.attachments.map((att) => (
+                    <a
+                      key={att.file_url}
+                      href={att.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="task-board__gcal-attachment"
+                    >
+                      {att.icon_link && <img src={att.icon_link} alt="" className="task-board__gcal-attachment-icon" />}
+                      {att.title}
+                    </a>
+                  ))}
+                </div>
+              )}
+              <div className="task-board__fullscreen-footer">
+                <button
+                  type="button"
+                  className="task-board__import-icon-btn"
+                  onClick={() => { selectGcalEvent(fullscreenEvent); setFullscreenEvent(null); }}
+                  aria-label="Import event"
+                  title="Import event"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M8 2V11M8 11L4.5 7.5M8 11L11.5 7.5M3 14H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                {fullscreenEvent.html_link && (
+                  <a
+                    href={fullscreenEvent.html_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="task-board__gcal-event-link"
+                  >
+                    Open in Google Calendar
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         )}
