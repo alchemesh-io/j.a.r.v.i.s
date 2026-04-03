@@ -1,10 +1,13 @@
 import datetime
+import logging
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from googleapiclient.errors import HttpError
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 from app.services.gcal_client import CalendarGroup, GCalClient
 
 router = APIRouter(prefix="/gcal", tags=["gcal"])
@@ -28,6 +31,14 @@ def _require_configured() -> None:
 @router.get("/auth/status")
 def get_auth_status():
     gcal = settings.gcal
+    logger.info(
+        "GCal auth status check — auth_mode=%s, client_id=%s, client_secret=%s, redirect_uri=%s, configured=%s",
+        gcal.auth_mode,
+        bool(gcal.client_id),
+        bool(gcal.client_secret),
+        bool(gcal.redirect_uri),
+        gcal.configured,
+    )
     if not gcal.configured:
         return {"configured": False, "authenticated": False, "mode": None}
 
@@ -36,6 +47,22 @@ def get_auth_status():
         "configured": True,
         "authenticated": client.is_authenticated(),
         "mode": gcal.auth_mode,
+    }
+
+
+@router.get("/auth/debug")
+def get_auth_debug():
+    gcal = settings.gcal
+    return {
+        "auth_mode": gcal.auth_mode,
+        "has_client_id": bool(gcal.client_id),
+        "has_client_secret": bool(gcal.client_secret),
+        "has_redirect_uri": bool(gcal.redirect_uri),
+        "redirect_uri": gcal.redirect_uri,
+        "has_project_id": bool(gcal.project_id),
+        "has_auth_uri": bool(gcal.auth_uri),
+        "has_token_uri": bool(gcal.token_uri),
+        "configured": gcal.configured,
     }
 
 
