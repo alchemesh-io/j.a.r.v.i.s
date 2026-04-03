@@ -18,7 +18,6 @@ j.a.r.v.i.s/
 │   ├── istio-app.yaml          # ArgoCD Application CR for Istio service mesh
 │   ├── jarvis-app.yaml         # ArgoCD Application CR (GHCR images)
 │   ├── jarvis-app-local.yaml   # ArgoCD Application CR (local images)
-│   ├── jarvis-secrets-app.yaml # ArgoCD Application CR for secrets (from secrets/)
 │   └── repo-server-patch.yaml  # hostPath volume patch for argocd-repo-server
 ├── secrets/
 │   ├── backend-secret.example.yaml  # Template — copy to backend-secret.yaml

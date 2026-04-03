@@ -14,9 +14,9 @@ backend:
     appTitle: "J.A.R.V.I.S"
     debug: "false"
     # JIRA integration (optional)
-    jiraProjectUrl: ""
-    jiraUserEmail: ""
-    jiraJql: ""
+    jiraProjectUrl: "https://sage-project.atlassian.net"
+    jiraUserEmail: "guittonbouedronalexandre@gmail.com"
+    jiraJql: "(project = AG) OR (project IN (SAGE, JARVIS) AND assignee = 712020:4c783354-372e-4dbd-abb8-f3a2eb2cf58f)"
     # Google Calendar integration (optional)
     googleAuthMode: ""          # "oauth2" or "service_account"
     googleClientId: ""

@@ -169,13 +169,13 @@ sync: _check-prereqs
 # ---------------------------------------------------------------------------
 
 SECRETS_FILE := secrets/backend-secret.yaml
-SECRETS_APP  := argocd/jarvis-secrets-app.yaml
 
-## Deploy the secrets ArgoCD Application CR
+## Apply the local backend secret manifest (gitignored, not managed by ArgoCD)
 _deploy-secrets:
 	@if [ -f $(SECRETS_FILE) ]; then \
-		echo "==> Deploying secrets ArgoCD Application CR..."; \
-		kubectl apply -f $(SECRETS_APP); \
+		echo "==> Applying backend secret from $(SECRETS_FILE)..."; \
+		kubectl create namespace jarvis --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null; \
+		kubectl apply -f $(SECRETS_FILE); \
 	else \
 		echo "==> No $(SECRETS_FILE) found — skipping secrets deployment."; \
 		echo "    Copy secrets/backend-secret.example.yaml to $(SECRETS_FILE) and fill in values."; \
