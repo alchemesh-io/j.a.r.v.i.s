@@ -18,8 +18,12 @@ class JiraConfig(BaseModel):
 class GoogleCalendarConfig(BaseModel):
     auth_mode: Literal["oauth2", "service_account"] | None = None
     # OAuth2 mode
+    project_id: str = ""
     client_id: str = ""
     client_secret: str = ""
+    auth_uri: str = "https://accounts.google.com/o/oauth2/auth"
+    token_uri: str = "https://oauth2.googleapis.com/token"
+    auth_provider_x509_cert_url: str = "https://www.googleapis.com/oauth2/v1/certs"
     redirect_uri: str = ""
     # Service account mode
     service_account_key_path: str = ""
@@ -32,6 +36,20 @@ class GoogleCalendarConfig(BaseModel):
         if self.auth_mode == "service_account":
             return all([self.service_account_key_path, self.delegated_user_email])
         return False
+
+    @property
+    def client_config(self) -> dict:
+        return {
+            "installed": {
+                "project_id": self.project_id,
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "auth_uri": self.auth_uri,
+                "token_uri": self.token_uri,
+                "auth_provider_x509_cert_url": self.auth_provider_x509_cert_url,
+                "redirect_uris": [self.redirect_uri] if self.redirect_uri else [],
+            }
+        }
 
 
 class Settings(BaseSettings):
@@ -47,8 +65,12 @@ class Settings(BaseSettings):
 
     # Google Calendar integration
     google_auth_mode: Literal["oauth2", "service_account"] | None = None
+    google_project_id: str = ""
     google_client_id: str = ""
     google_client_secret: str = ""
+    google_auth_uri: str = "https://accounts.google.com/o/oauth2/auth"
+    google_token_uri: str = "https://oauth2.googleapis.com/token"
+    google_auth_provider_x509_cert_url: str = "https://www.googleapis.com/oauth2/v1/certs"
     google_redirect_uri: str = ""
     google_service_account_key_path: str = ""
     google_delegated_user_email: str = ""
@@ -68,8 +90,12 @@ class Settings(BaseSettings):
     def gcal(self) -> GoogleCalendarConfig:
         return GoogleCalendarConfig(
             auth_mode=self.google_auth_mode,
+            project_id=self.google_project_id,
             client_id=self.google_client_id,
             client_secret=self.google_client_secret,
+            auth_uri=self.google_auth_uri,
+            token_uri=self.google_token_uri,
+            auth_provider_x509_cert_url=self.google_auth_provider_x509_cert_url,
             redirect_uri=self.google_redirect_uri,
             service_account_key_path=self.google_service_account_key_path,
             delegated_user_email=self.google_delegated_user_email,

@@ -18,9 +18,8 @@ backend:
     jiraUserEmail: "guittonbouedronalexandre@gmail.com"
     jiraJql: "(project = AG) OR (project IN (SAGE, JARVIS) AND assignee = 712020:4c783354-372e-4dbd-abb8-f3a2eb2cf58f)"
     # Google Calendar integration (optional)
-    googleAuthMode: ""          # "oauth2" or "service_account"
-    googleClientId: ""
-    googleRedirectUri: ""
+    googleAuthMode: "oauth2"          # "oauth2" or "service_account"
+    googleRedirectUri: "http://localhost"
     googleServiceAccountKeyPath: ""
     googleDelegatedUserEmail: ""
   secrets: {}

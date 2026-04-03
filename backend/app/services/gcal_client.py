@@ -9,7 +9,15 @@ from pydantic import BaseModel
 
 from app.config import GoogleCalendarConfig
 
-SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/documents.readonly",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/presentations.readonly",
+    "https://www.googleapis.com/auth/cloud-platform",
+]
 
 
 class CalendarEvent(BaseModel):
@@ -35,35 +43,20 @@ class GCalClient(BaseModel):
 
     # --- OAuth2 flow ---
 
-    def get_auth_url(self) -> str:
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": self.config.client_id,
-                    "client_secret": self.config.client_secret,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                }
-            },
+    def _build_flow(self) -> Flow:
+        return Flow.from_client_config(
+            self.config.client_config,
             scopes=SCOPES,
             redirect_uri=self.config.redirect_uri,
         )
+
+    def get_auth_url(self) -> str:
+        flow = self._build_flow()
         url, _ = flow.authorization_url(prompt="consent", access_type="offline")
         return url
 
     def handle_callback(self, code: str) -> None:
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": self.config.client_id,
-                    "client_secret": self.config.client_secret,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                }
-            },
-            scopes=SCOPES,
-            redirect_uri=self.config.redirect_uri,
-        )
+        flow = self._build_flow()
         flow.fetch_token(code=code)
         self._credentials = flow.credentials
 

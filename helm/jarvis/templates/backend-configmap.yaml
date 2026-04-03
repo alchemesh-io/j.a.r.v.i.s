@@ -21,9 +21,6 @@ data:
   {{- if .Values.backend.config.googleAuthMode }}
   GOOGLE_AUTH_MODE: {{ .Values.backend.config.googleAuthMode | quote }}
   {{- end }}
-  {{- if .Values.backend.config.googleClientId }}
-  GOOGLE_CLIENT_ID: {{ .Values.backend.config.googleClientId | quote }}
-  {{- end }}
   {{- if .Values.backend.config.googleRedirectUri }}
   GOOGLE_REDIRECT_URI: {{ .Values.backend.config.googleRedirectUri | quote }}
   {{- end }}
