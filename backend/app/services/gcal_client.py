@@ -20,11 +20,29 @@ SCOPES = [
 ]
 
 
+class EventAttendee(BaseModel):
+    email: str
+    display_name: str | None = None
+    response_status: str | None = None
+
+
+class EventAttachment(BaseModel):
+    title: str
+    file_url: str
+    icon_link: str | None = None
+    mime_type: str | None = None
+
+
 class CalendarEvent(BaseModel):
     id: str
     summary: str
     start: str
     end: str
+    description: str | None = None
+    location: str | None = None
+    attendees: list[EventAttendee] = []
+    attachments: list[EventAttachment] = []
+    html_link: str | None = None
     calendar_name: str
     calendar_color: str
 
@@ -135,17 +153,38 @@ class GCalClient(BaseModel):
             if not raw_events:
                 continue
 
-            events = [
-                CalendarEvent(
+            events = []
+            for ev in raw_events:
+                attendees = [
+                    EventAttendee(
+                        email=a.get("email", ""),
+                        display_name=a.get("displayName"),
+                        response_status=a.get("responseStatus"),
+                    )
+                    for a in ev.get("attendees", [])
+                ]
+                attachments = [
+                    EventAttachment(
+                        title=att.get("title", ""),
+                        file_url=att.get("fileUrl", ""),
+                        icon_link=att.get("iconLink"),
+                        mime_type=att.get("mimeType"),
+                    )
+                    for att in ev.get("attachments", [])
+                ]
+                events.append(CalendarEvent(
                     id=ev["id"],
                     summary=ev.get("summary", "(No title)"),
                     start=ev["start"].get("dateTime", ev["start"].get("date", "")),
                     end=ev["end"].get("dateTime", ev["end"].get("date", "")),
+                    description=ev.get("description"),
+                    location=ev.get("location"),
+                    attendees=attendees,
+                    attachments=attachments,
+                    html_link=ev.get("htmlLink"),
                     calendar_name=cal_name,
                     calendar_color=cal_color,
-                )
-                for ev in raw_events
-            ]
+                ))
             groups.append(CalendarGroup(calendar_name=cal_name, calendar_color=cal_color, events=events))
 
         return groups

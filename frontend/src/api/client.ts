@@ -154,6 +154,9 @@ export interface JiraTicket {
   key: string;
   summary: string;
   status: string;
+  assignee: string | null;
+  priority: string | null;
+  description: string | null;
   url: string;
 }
 
@@ -173,11 +176,29 @@ export interface GCalAuthStatus {
   mode: 'oauth2' | 'service_account' | null;
 }
 
+export interface EventAttendee {
+  email: string;
+  display_name: string | null;
+  response_status: string | null;
+}
+
+export interface EventAttachment {
+  title: string;
+  file_url: string;
+  icon_link: string | null;
+  mime_type: string | null;
+}
+
 export interface CalendarEvent {
   id: string;
   summary: string;
   start: string;
   end: string;
+  description: string | null;
+  location: string | null;
+  attendees: EventAttendee[];
+  attachments: EventAttachment[];
+  html_link: string | null;
   calendar_name: string;
   calendar_color: string;
 }

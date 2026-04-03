@@ -5,9 +5,9 @@ from app.services.jira_client import JiraTicket
 
 def _mock_jira_tickets():
     return [
-        JiraTicket(key="JAR-1", summary="Fix login", status="To Do", url="https://test.atlassian.net/browse/JAR-1"),
-        JiraTicket(key="JAR-2", summary="Add feature", status="In Progress", url="https://test.atlassian.net/browse/JAR-2"),
-        JiraTicket(key="JAR-3", summary="Refactor", status="Done", url="https://test.atlassian.net/browse/JAR-3"),
+        JiraTicket(key="JAR-1", summary="Fix login", status="To Do", assignee="Alice", priority="High", description="Fix the login bug", url="https://test.atlassian.net/browse/JAR-1"),
+        JiraTicket(key="JAR-2", summary="Add feature", status="In Progress", assignee="Bob", priority="Medium", description=None, url="https://test.atlassian.net/browse/JAR-2"),
+        JiraTicket(key="JAR-3", summary="Refactor", status="Done", assignee=None, priority=None, description=None, url="https://test.atlassian.net/browse/JAR-3"),
     ]
 
 

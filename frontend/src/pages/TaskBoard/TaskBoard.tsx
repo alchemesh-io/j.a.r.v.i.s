@@ -145,6 +145,8 @@ export default function TaskBoard() {
   const [importSource, setImportSource] = useState<ImportSource>('manual');
   const [gcalDate, setGcalDate] = useState(() => formatDate(new Date()));
   const [gcalView, setGcalView] = useState<'daily' | 'weekly'>('daily');
+  const [expandedTicket, setExpandedTicket] = useState<string | null>(null);
+  const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
 
   const today = formatDate(new Date());
   const dateStr = formatDate(selectedDate);
@@ -443,18 +445,69 @@ export default function TaskBoard() {
                   {!jiraLoading && jiraTickets.length === 0 && (
                     <p className="task-board__import-empty">No tickets available</p>
                   )}
-                  {jiraTickets.map((ticket) => (
-                    <button
-                      key={ticket.key}
-                      type="button"
-                      className="task-board__import-item"
-                      onClick={() => selectJiraTicket(ticket)}
-                    >
-                      <span className="task-board__import-item-key">{ticket.key}</span>
-                      <span className="task-board__import-item-summary">{ticket.summary}</span>
-                      <span className="task-board__import-item-status">{ticket.status}</span>
-                    </button>
-                  ))}
+                  {!jiraLoading && (() => {
+                    const grouped: Record<string, Record<string, typeof jiraTickets>> = {};
+                    for (const ticket of jiraTickets) {
+                      const project = ticket.key.split('-')[0];
+                      if (!grouped[project]) grouped[project] = {};
+                      if (!grouped[project][ticket.status]) grouped[project][ticket.status] = [];
+                      grouped[project][ticket.status].push(ticket);
+                    }
+                    return Object.entries(grouped).map(([project, statuses]) => (
+                      <div key={project} className="task-board__jira-group">
+                        <h4 className="task-board__jira-group-project">{project}</h4>
+                        {Object.entries(statuses).map(([status, tickets]) => (
+                          <div key={status} className="task-board__jira-group-status">
+                            <h5 className="task-board__jira-group-status-label">{status} ({tickets.length})</h5>
+                            {tickets.map((ticket) => (
+                              <div key={ticket.key} className="task-board__jira-card">
+                                <div className="task-board__jira-card-header">
+                                  <a
+                                    href={ticket.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="task-board__jira-card-key"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {ticket.key}
+                                  </a>
+                                  {ticket.priority && (
+                                    <span className="task-board__jira-card-priority">{ticket.priority}</span>
+                                  )}
+                                </div>
+                                <div className="task-board__jira-card-title">{ticket.summary}</div>
+                                {ticket.assignee && (
+                                  <div className="task-board__jira-card-assignee">{ticket.assignee}</div>
+                                )}
+                                <div className="task-board__jira-card-actions">
+                                  <Button
+                                    variant="secondary"
+                                    onClick={() => selectJiraTicket(ticket)}
+                                  >
+                                    Import
+                                  </Button>
+                                  {ticket.description && (
+                                    <button
+                                      type="button"
+                                      className="task-board__jira-card-expand"
+                                      onClick={() => setExpandedTicket(expandedTicket === ticket.key ? null : ticket.key)}
+                                    >
+                                      {expandedTicket === ticket.key ? 'Hide details' : 'Show details'}
+                                    </button>
+                                  )}
+                                </div>
+                                {expandedTicket === ticket.key && ticket.description && (
+                                  <div className="task-board__jira-card-description">
+                                    {ticket.description}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    ));
+                  })()}
                 </div>
               )}
 
@@ -491,30 +544,114 @@ export default function TaskBoard() {
                           Week
                         </button>
                       </div>
-                      <div className="task-board__import-list">
+                      <div className="task-board__gcal-timeline">
                         {gcalLoading && <p className="task-board__import-loading">Loading events...</p>}
                         {!gcalLoading && gcalGroups.length === 0 && (
                           <p className="task-board__import-empty">No events found</p>
                         )}
-                        {gcalGroups.map((group) =>
-                          group.events.map((event) => (
-                            <button
-                              key={event.id}
-                              type="button"
-                              className="task-board__import-item"
-                              onClick={() => selectGcalEvent(event)}
-                            >
-                              <span
-                                className="task-board__import-item-dot"
-                                style={{ backgroundColor: group.calendar_color }}
-                              />
-                              <span className="task-board__import-item-summary">{event.summary}</span>
-                              <span className="task-board__import-item-time">
-                                {event.start.slice(11, 16) || 'All day'}
-                              </span>
-                            </button>
-                          ))
-                        )}
+                        {!gcalLoading && (() => {
+                          const allEvents = gcalGroups.flatMap((g) => g.events);
+                          allEvents.sort((a, b) => a.start.localeCompare(b.start));
+                          let lastDate = '';
+                          return allEvents.map((event) => {
+                            const eventDate = event.start.slice(0, 10);
+                            const showDateHeader = eventDate !== lastDate;
+                            lastDate = eventDate;
+                            const startTime = event.start.slice(11, 16);
+                            const endTime = event.end.slice(11, 16);
+                            const timeLabel = startTime ? `${startTime} – ${endTime}` : 'All day';
+                            const isExpanded = expandedEvent === event.id;
+
+                            return (
+                              <div key={event.id}>
+                                {showDateHeader && (
+                                  <div className="task-board__gcal-date-header">
+                                    {new Date(eventDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                  </div>
+                                )}
+                                <div className="task-board__gcal-event">
+                                  <div
+                                    className="task-board__gcal-event-bar"
+                                    style={{ backgroundColor: event.calendar_color }}
+                                  />
+                                  <div className="task-board__gcal-event-body">
+                                    <div className="task-board__gcal-event-header">
+                                      <span className="task-board__gcal-event-time">{timeLabel}</span>
+                                      <span className="task-board__gcal-event-calendar">{event.calendar_name}</span>
+                                    </div>
+                                    <div className="task-board__gcal-event-title">{event.summary}</div>
+                                    {event.location && (
+                                      <div className="task-board__gcal-event-location">{event.location}</div>
+                                    )}
+                                    <div className="task-board__gcal-event-actions">
+                                      <Button variant="secondary" onClick={() => selectGcalEvent(event)}>
+                                        Import
+                                      </Button>
+                                      {(event.description || event.attendees.length > 0 || event.attachments.length > 0) && (
+                                        <button
+                                          type="button"
+                                          className="task-board__gcal-event-expand"
+                                          onClick={() => setExpandedEvent(isExpanded ? null : event.id)}
+                                        >
+                                          {isExpanded ? 'Hide details' : 'Show details'}
+                                        </button>
+                                      )}
+                                      {event.html_link && (
+                                        <a
+                                          href={event.html_link}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="task-board__gcal-event-link"
+                                        >
+                                          Open in Google
+                                        </a>
+                                      )}
+                                    </div>
+                                    {isExpanded && (
+                                      <div className="task-board__gcal-event-details">
+                                        {event.description && (
+                                          <div className="task-board__gcal-event-description">{event.description}</div>
+                                        )}
+                                        {event.attendees.length > 0 && (
+                                          <div className="task-board__gcal-event-attendees">
+                                            <span className="task-board__gcal-event-detail-label">Guests</span>
+                                            {event.attendees.map((a) => (
+                                              <div key={a.email} className="task-board__gcal-attendee">
+                                                <span className="task-board__gcal-attendee-name">{a.display_name || a.email}</span>
+                                                {a.response_status && (
+                                                  <span className={`task-board__gcal-attendee-status task-board__gcal-attendee-status--${a.response_status}`}>
+                                                    {a.response_status}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                        {event.attachments.length > 0 && (
+                                          <div className="task-board__gcal-event-attachments">
+                                            <span className="task-board__gcal-event-detail-label">Files</span>
+                                            {event.attachments.map((att) => (
+                                              <a
+                                                key={att.file_url}
+                                                href={att.file_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="task-board__gcal-attachment"
+                                              >
+                                                {att.icon_link && <img src={att.icon_link} alt="" className="task-board__gcal-attachment-icon" />}
+                                                {att.title}
+                                              </a>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
                       </div>
                     </>
                   )}

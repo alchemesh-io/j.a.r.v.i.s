@@ -8,6 +8,9 @@ class JiraTicket(BaseModel):
     key: str
     summary: str
     status: str
+    assignee: str | None
+    priority: str | None
+    description: str | None
     url: str
 
 
@@ -33,6 +36,9 @@ class JiraClient(BaseModel):
                 key=issue.key,
                 summary=issue.fields.summary,
                 status=str(issue.fields.status),
+                assignee=str(issue.fields.assignee) if issue.fields.assignee else None,
+                priority=str(issue.fields.priority) if issue.fields.priority else None,
+                description=issue.fields.description,
                 url=f"{self.config.project_url}/browse/{issue.key}",
             )
             for issue in issues

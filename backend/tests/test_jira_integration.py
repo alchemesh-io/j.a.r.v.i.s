@@ -8,7 +8,7 @@ from app.services.jira_client import JiraTicket
 
 def _tickets():
     return [
-        JiraTicket(key=f"JAR-{i}", summary=f"Ticket {i}", status="To Do", url=f"https://test.atlassian.net/browse/JAR-{i}")
+        JiraTicket(key=f"JAR-{i}", summary=f"Ticket {i}", status="To Do", assignee=None, priority=None, description=None, url=f"https://test.atlassian.net/browse/JAR-{i}")
         for i in range(1, 6)
     ]
 
