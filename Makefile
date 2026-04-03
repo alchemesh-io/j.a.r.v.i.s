@@ -14,7 +14,7 @@ REPO_ROOT       := $(shell pwd)
 MOUNT_TARGET    := /mnt/jarvis-repo
 GHCR_ORG        := alchemesh-io
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -150,6 +150,11 @@ argocd-ui: _check-prereqs
 	@echo "==> Starting port-forward: https://localhost:8080"
 	@echo "    Username: admin"
 	kubectl port-forward svc/argocd-server -n argocd 8080:443
+
+## Port-forward Istio ingress gateway to localhost:7080 (HTTP)
+jarvis-ui: _check-prereqs
+	@echo "==> Starting port-forward: http://localhost:7080"
+	kubectl port-forward svc/jarvis-gateway-istio -n istio-system 7080:80
 
 ## Trigger ArgoCD hard sync for the jarvis application
 sync: _check-prereqs
