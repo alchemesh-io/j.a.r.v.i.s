@@ -720,9 +720,28 @@
   font-size: 0.8rem;
   color: var(--color-text-muted, #94a3b8);
   line-height: 1.5;
-  white-space: pre-wrap;
   max-height: 150px;
   overflow-y: auto;
+}
+
+.task-board__gcal-event-description a {
+  color: var(--jads-color-accent-cyan, #00d4ff);
+  text-decoration: none;
+}
+
+.task-board__gcal-event-description a:hover {
+  text-decoration: underline;
+}
+
+.task-board__gcal-event-description b,
+.task-board__gcal-event-description strong {
+  color: var(--color-text, #e2e8f0);
+}
+
+.task-board__gcal-event-description br + br {
+  display: block;
+  margin-top: 4px;
+  content: '';
 }
 
 .task-board__gcal-event-attendees {

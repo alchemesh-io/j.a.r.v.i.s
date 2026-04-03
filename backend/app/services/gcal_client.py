@@ -126,8 +126,14 @@ class GCalClient(BaseModel):
             start_date = date
             end_date = date + datetime.timedelta(days=1)
 
-        time_min = datetime.datetime.combine(start_date, datetime.time.min).isoformat() + "Z"
-        time_max = datetime.datetime.combine(end_date, datetime.time.min).isoformat() + "Z"
+        # Get user's timezone from primary calendar to avoid UTC offset issues
+        primary = service.calendars().get(calendarId="primary").execute()
+        tz_name = primary.get("timeZone", "UTC")
+
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_name)
+        time_min = datetime.datetime.combine(start_date, datetime.time.min, tzinfo=tz).isoformat()
+        time_max = datetime.datetime.combine(end_date, datetime.time.min, tzinfo=tz).isoformat()
 
         calendars_result = service.calendarList().list().execute()
         calendars = calendars_result.get("items", [])

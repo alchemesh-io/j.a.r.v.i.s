@@ -46,6 +46,19 @@ const JiraIcon = () => (
   </svg>
 );
 
+const GCalIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="#4285f4" strokeWidth="1.3"/>
+    <path d="M2 5.5H14" stroke="#4285f4" strokeWidth="1.3"/>
+    <path d="M5.5 1.5V4" stroke="#4285f4" strokeWidth="1.3" strokeLinecap="round"/>
+    <path d="M10.5 1.5V4" stroke="#4285f4" strokeWidth="1.3" strokeLinecap="round"/>
+    <rect x="4.5" y="7.5" width="2" height="2" rx="0.3" fill="#4285f4"/>
+    <rect x="7" y="7.5" width="2" height="2" rx="0.3" fill="#34a853"/>
+    <rect x="9.5" y="7.5" width="2" height="2" rx="0.3" fill="#fbbc04"/>
+    <rect x="4.5" y="10" width="2" height="2" rx="0.3" fill="#ea4335"/>
+  </svg>
+);
+
 const UndoIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M4 6L2 8L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -106,6 +119,11 @@ export function TaskCard({
             >
               <JiraIcon />
             </a>
+          )}
+          {sourceType === 'gcal' && (
+            <span className="jads-task-card__gcal-badge" aria-label="Imported from Google Calendar">
+              <GCalIcon />
+            </span>
           )}
         </h4>
       </div>

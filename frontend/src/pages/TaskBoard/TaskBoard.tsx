@@ -917,7 +917,7 @@ export default function TaskBoard() {
                                     {isExpanded && (
                                       <div className="task-board__gcal-event-details">
                                         {event.description && (
-                                          <div className="task-board__gcal-event-description">{event.description}</div>
+                                          <div className="task-board__gcal-event-description" dangerouslySetInnerHTML={{ __html: event.description }} />
                                         )}
                                         {event.attendees.length > 0 && (
                                           <div className="task-board__gcal-event-attendees">
@@ -1217,9 +1217,10 @@ export default function TaskBoard() {
                 <div className="task-board__gcal-event-location" style={{ fontSize: '0.85rem', marginTop: '4px' }}>{fullscreenEvent.location}</div>
               )}
               {fullscreenEvent.description && (
-                <div className="task-board__fullscreen-body" style={{ whiteSpace: 'pre-wrap' }}>
-                  {fullscreenEvent.description}
-                </div>
+                <div
+                  className="task-board__fullscreen-body task-board__gcal-event-description"
+                  dangerouslySetInnerHTML={{ __html: fullscreenEvent.description }}
+                />
               )}
               {fullscreenEvent.attendees.length > 0 && (
                 <div className="task-board__fullscreen-section">

@@ -134,6 +134,15 @@
   border-radius: 2px;
 }
 
+/* Google Calendar badge */
+.jads-task-card__gcal-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  vertical-align: middle;
+  opacity: 0.7;
+}
+
 /* JIRA badge */
 .jads-task-card__badge {
   display: inline-flex;
