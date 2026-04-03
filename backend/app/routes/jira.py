@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session import get_db
-from app.models.enums import TaskStatus
+from app.models.enums import SourceType, TaskStatus
 from app.models.task import Task
 from app.services.jira_client import JiraClient, JiraTicket
 
@@ -37,8 +37,9 @@ def list_jira_tickets(db: Session = Depends(get_db)):
         raise HTTPException(status_code=502, detail=f"JIRA API error: {exc.text}") from exc
 
     # Filter out tickets already linked to a non-done task
-    stmt = select(Task.jira_ticket_id).where(
-        Task.jira_ticket_id.is_not(None),
+    stmt = select(Task.source_id).where(
+        Task.source_type == SourceType.jira,
+        Task.source_id.is_not(None),
         Task.status != TaskStatus.done,
     )
     existing_keys = set(db.scalars(stmt).all())

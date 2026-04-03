@@ -251,7 +251,8 @@ function SortableTaskCard({
         title={task.title}
         type={task.type}
         status={task.status}
-        jiraTicketId={task.jira_ticket_id ?? undefined}
+        sourceType={task.source_type ?? undefined}
+        sourceId={task.source_id ?? undefined}
         jiraProjectUrl={jiraProjectUrl}
         dates={task.dates}
         onEdit={onEdit}
@@ -286,7 +287,8 @@ export default function TaskBoard() {
   interface PendingItem {
     title: string;
     type: TaskType;
-    jira_ticket_id?: string;
+    source_type?: 'jira' | 'gcal';
+    source_id?: string;
   }
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
 
@@ -351,29 +353,6 @@ export default function TaskBoard() {
     enabled: scope === 'daily',
   });
 
-  const createMutation = useMutation({
-    mutationFn: async (params: {
-      title: string;
-      type: TaskType;
-      jira_ticket_id?: string;
-      dates: string[];
-    }) => {
-      const { dates, ...body } = params;
-      const task = await createTask(body);
-      if (dates.length > 0) {
-        await assignTaskToDates(task.id, dates);
-      }
-      return task;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['daily'] });
-      setShowCreateForm(false);
-      resetForm();
-    },
-  });
-
-
   const toggleStatusMutation = useMutation({
     mutationFn: (task: Task) =>
       updateTask(task.id, { status: task.status === 'done' ? 'created' : 'done' }),
@@ -436,8 +415,7 @@ export default function TaskBoard() {
   }
 
   function selectJiraTicket(ticket: JiraTicket) {
-    // Single select: go to manual with one item
-    setPendingItems([{ title: ticket.summary, type: 'implementation', jira_ticket_id: ticket.key }]);
+    setPendingItems([{ title: ticket.summary, type: 'implementation', source_type: 'jira', source_id: ticket.key }]);
     setFormTitle('');
     setFormJira('');
     setImportSource('manual');
@@ -448,7 +426,7 @@ export default function TaskBoard() {
     if (eventDate && !formDates.includes(eventDate)) {
       setFormDates((prev) => [...prev, eventDate].sort());
     }
-    setPendingItems([{ title: event.summary, type: 'refinement' }]);
+    setPendingItems([{ title: event.summary, type: 'refinement', source_type: 'gcal', source_id: event.id }]);
     setFormTitle('');
     setFormJira('');
     setImportSource('manual');
@@ -456,7 +434,7 @@ export default function TaskBoard() {
 
   function confirmSelectedTickets() {
     const tickets = jiraTickets.filter((t) => selectedTickets.has(t.key));
-    setPendingItems(tickets.map((t) => ({ title: t.summary, type: 'implementation' as TaskType, jira_ticket_id: t.key })));
+    setPendingItems(tickets.map((t) => ({ title: t.summary, type: 'implementation' as TaskType, source_type: 'jira' as const, source_id: t.key })));
     setSelectedTickets(new Set());
     setFormTitle('');
     setFormJira('');
@@ -472,7 +450,7 @@ export default function TaskBoard() {
       if (d) dates.add(d);
     }
     setFormDates([...dates].sort());
-    setPendingItems(events.map((e) => ({ title: e.summary, type: 'refinement' as TaskType })));
+    setPendingItems(events.map((e) => ({ title: e.summary, type: 'refinement' as TaskType, source_type: 'gcal' as const, source_id: e.id })));
     setSelectedEvents(new Set());
     setFormTitle('');
     setFormJira('');
@@ -485,9 +463,15 @@ export default function TaskBoard() {
 
   function addManualItem() {
     if (!formTitle) return;
+    const jiraId = formJira ? extractJiraId(formJira) : undefined;
     setPendingItems((prev) => [
       ...prev,
-      { title: formTitle, type: formType, jira_ticket_id: formJira || undefined },
+      {
+        title: formTitle,
+        type: formType,
+        source_type: jiraId ? 'jira' as const : undefined,
+        source_id: jiraId || undefined,
+      },
     ]);
     setFormTitle('');
     setFormJira('');
@@ -516,7 +500,12 @@ export default function TaskBoard() {
     const items = [...pendingItems];
     if (formTitle) {
       const jiraId = formJira ? extractJiraId(formJira) : undefined;
-      items.push({ title: formTitle, type: formType, jira_ticket_id: jiraId });
+      items.push({
+        title: formTitle,
+        type: formType,
+        source_type: jiraId ? 'jira' as const : undefined,
+        source_id: jiraId || undefined,
+      });
     }
     if (items.length === 0) return;
 
@@ -535,10 +524,12 @@ export default function TaskBoard() {
   async function handleSaveEdit() {
     if (!editingTask) return;
 
+    const jiraId = formJira ? extractJiraId(formJira) : undefined;
     await updateTask(editingTask.id, {
       title: formTitle,
       type: formType,
-      jira_ticket_id: formJira || undefined,
+      source_type: jiraId ? 'jira' : undefined,
+      source_id: jiraId || undefined,
     });
 
     const oldDates = new Set(editingTask.dates ?? []);
@@ -566,7 +557,7 @@ export default function TaskBoard() {
     setEditingTask(task);
     setFormTitle(task.title);
     setFormType(task.type);
-    setFormJira(task.jira_ticket_id ?? '');
+    setFormJira(task.source_id ?? '');
     setFormDates(task.dates ?? []);
     setFormDateInput('');
     setShowCreateForm(false);
@@ -1004,8 +995,10 @@ export default function TaskBoard() {
                             <option value="implementation">Implementation</option>
                             <option value="review">Review</option>
                           </select>
-                          {item.jira_ticket_id && (
-                            <span className="task-board__pending-item-jira">{item.jira_ticket_id}</span>
+                          {item.source_id && (
+                            <span className="task-board__pending-item-source">
+                              {item.source_type === 'jira' ? item.source_id : item.source_type === 'gcal' ? 'GCal' : ''}
+                            </span>
                           )}
                           <span className="task-board__pending-item-title">{item.title}</span>
                           <button

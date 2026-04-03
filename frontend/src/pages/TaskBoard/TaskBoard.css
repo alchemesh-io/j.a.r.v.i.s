@@ -860,7 +860,7 @@
   outline-offset: 1px;
 }
 
-.task-board__pending-item-jira {
+.task-board__pending-item-source {
   font-size: 0.7rem;
   font-weight: 600;
   color: var(--jads-color-accent-cyan, #00d4ff);

@@ -1,5 +1,6 @@
 from unittest.mock import patch, MagicMock
 
+from app.models.enums import SourceType
 from app.services.jira_client import JiraTicket
 
 
@@ -57,7 +58,7 @@ def test_jira_tickets_returns_filtered_list(mock_settings, mock_client_cls, clie
     from app.models.task import Task
     from app.models.enums import TaskStatus, TaskType
 
-    task = Task(title="Existing", type=TaskType.implementation, status=TaskStatus.created, jira_ticket_id="JAR-1")
+    task = Task(title="Existing", type=TaskType.implementation, status=TaskStatus.created, source_type=SourceType.jira, source_id="JAR-1")
     db_session.add(task)
     db_session.flush()
 
@@ -82,7 +83,7 @@ def test_jira_tickets_allows_done_task_reimport(mock_settings, mock_client_cls, 
     from app.models.task import Task
     from app.models.enums import TaskStatus, TaskType
 
-    task = Task(title="Done task", type=TaskType.implementation, status=TaskStatus.done, jira_ticket_id="JAR-1")
+    task = Task(title="Done task", type=TaskType.implementation, status=TaskStatus.done, source_type=SourceType.jira, source_id="JAR-1")
     db_session.add(task)
     db_session.flush()
 

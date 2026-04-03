@@ -10,3 +10,8 @@ class TaskType(str, Enum):
 class TaskStatus(str, Enum):
     created = "created"
     done = "done"
+
+
+class SourceType(str, Enum):
+    jira = "jira"
+    gcal = "gcal"

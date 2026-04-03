@@ -16,10 +16,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export type TaskType = 'refinement' | 'implementation' | 'review';
 export type TaskStatus = 'created' | 'done';
+export type SourceType = 'jira' | 'gcal';
 
 export interface Task {
   id: number;
-  jira_ticket_id: string | null;
+  source_type: SourceType | null;
+  source_id: string | null;
   title: string;
   type: TaskType;
   status: TaskStatus;
@@ -51,7 +53,8 @@ export interface Weekly {
 export function createTask(body: {
   title: string;
   type: TaskType;
-  jira_ticket_id?: string;
+  source_type?: SourceType;
+  source_id?: string;
   status?: TaskStatus;
 }): Promise<Task> {
   return request('/tasks', { method: 'POST', body: JSON.stringify(body) });
@@ -74,7 +77,7 @@ export function getTask(id: number): Promise<Task> {
 
 export function updateTask(
   id: number,
-  body: Partial<Pick<Task, 'title' | 'type' | 'status' | 'jira_ticket_id'>>,
+  body: Partial<Pick<Task, 'title' | 'type' | 'status' | 'source_type' | 'source_id'>>,
 ): Promise<Task> {
   return request(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 }

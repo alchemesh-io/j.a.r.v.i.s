@@ -9,8 +9,8 @@ describe('TaskCard', () => {
     expect(screen.getByRole('heading', { name: 'Fix login bug' })).toBeInTheDocument();
   });
 
-  it('renders title with JIRA prefix when jiraTicketId provided', () => {
-    render(<TaskCard title="Fix login" type="review" status="created" jiraTicketId="JAR-42" />);
+  it('renders title with JIRA prefix when sourceType=jira and sourceId provided', () => {
+    render(<TaskCard title="Fix login" type="review" status="created" sourceType="jira" sourceId="JAR-42" />);
     expect(screen.getByRole('heading', { name: '[JAR-42] - Fix login' })).toBeInTheDocument();
   });
 
@@ -131,13 +131,13 @@ describe('TaskCard', () => {
 
   // --- JIRA deep-link ---
 
-  it('renders JIRA link when jiraTicketId and jiraProjectUrl are provided', () => {
+  it('renders JIRA link when sourceType=jira, sourceId, and jiraProjectUrl are provided', () => {
     render(
       <TaskCard
         title="Fix login"
         type="review"
         status="created"
-        jiraTicketId="JAR-42"
+        sourceType="jira" sourceId="JAR-42"
         jiraProjectUrl="https://myorg.atlassian.net"
       />,
     );
@@ -147,7 +147,7 @@ describe('TaskCard', () => {
     expect(link).toHaveAttribute('target', '_blank');
   });
 
-  it('does not render JIRA link when jiraTicketId is missing', () => {
+  it('does not render JIRA link when sourceId is missing', () => {
     render(
       <TaskCard
         title="Fix login"
@@ -159,13 +159,13 @@ describe('TaskCard', () => {
     expect(screen.queryByRole('link', { name: /Open JIRA ticket/ })).not.toBeInTheDocument();
   });
 
-  it('does not render JIRA link when jiraProjectUrl is missing', () => {
+  it('does not render JIRA link when jiraProjectUrl is missing (sourceType=jira)', () => {
     render(
       <TaskCard
         title="Fix login"
         type="review"
         status="created"
-        jiraTicketId="JAR-42"
+        sourceType="jira" sourceId="JAR-42"
       />,
     );
     expect(screen.queryByRole('link', { name: /Open JIRA ticket/ })).not.toBeInTheDocument();

@@ -1,7 +1,7 @@
 """Integration tests for JIRA ticket listing with duplicate filtering end-to-end."""
 from unittest.mock import MagicMock, patch
 
-from app.models.enums import TaskStatus, TaskType
+from app.models.enums import SourceType, TaskStatus, TaskType
 from app.models.task import Task
 from app.services.jira_client import JiraTicket
 
@@ -23,11 +23,11 @@ def test_duplicate_filtering_end_to_end(mock_settings, mock_client_cls, client, 
     mock_client_cls.return_value.search_tickets.return_value = _tickets()
 
     # JAR-1: non-done task → filtered out
-    db_session.add(Task(title="T1", type=TaskType.implementation, status=TaskStatus.created, jira_ticket_id="JAR-1"))
+    db_session.add(Task(title="T1", type=TaskType.implementation, status=TaskStatus.created, source_type=SourceType.jira, source_id="JAR-1"))
     # JAR-2: done task → allowed
-    db_session.add(Task(title="T2", type=TaskType.review, status=TaskStatus.done, jira_ticket_id="JAR-2"))
+    db_session.add(Task(title="T2", type=TaskType.review, status=TaskStatus.done, source_type=SourceType.jira, source_id="JAR-2"))
     # JAR-3: non-done task → filtered out
-    db_session.add(Task(title="T3", type=TaskType.refinement, status=TaskStatus.created, jira_ticket_id="JAR-3"))
+    db_session.add(Task(title="T3", type=TaskType.refinement, status=TaskStatus.created, source_type=SourceType.jira, source_id="JAR-3"))
     # JAR-4, JAR-5: no task → allowed
     db_session.flush()
 

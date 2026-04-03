@@ -33,7 +33,7 @@ export const Refinement: Story = {
     title: 'Refine daily planning feature requirements',
     type: 'refinement',
     status: 'created',
-    jiraTicketId: 'JAR-01',
+    sourceType: 'jira', sourceId: 'JAR-01',
     onEdit: fn(),
     onDelete: fn(),
   },
@@ -44,7 +44,7 @@ export const Implementation: Story = {
     title: 'Implement Calendar component',
     type: 'implementation',
     status: 'created',
-    jiraTicketId: 'JAR-12',
+    sourceType: 'jira', sourceId: 'JAR-12',
     onEdit: fn(),
     onDelete: fn(),
   },
@@ -65,7 +65,7 @@ export const Done: Story = {
     title: 'Set up component library',
     type: 'implementation',
     status: 'done',
-    jiraTicketId: 'JAR-05',
+    sourceType: 'jira', sourceId: 'JAR-05',
     onEdit: fn(),
     onDelete: fn(),
   },
@@ -76,17 +76,17 @@ export const WithoutActions: Story = {
     title: 'Read-only task card',
     type: 'refinement',
     status: 'created',
-    jiraTicketId: 'JAR-99',
+    sourceType: 'jira', sourceId: 'JAR-99',
   },
 };
 
 export const AllTypes: Story = {
   render: () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--jads-space-3)' }}>
-      <TaskCard title="Refine search feature" type="refinement" status="created" jiraTicketId="JAR-01" onEdit={() => {}} onDelete={() => {}} />
-      <TaskCard title="Build task board" type="implementation" status="created" jiraTicketId="JAR-02" onEdit={() => {}} onDelete={() => {}} />
-      <TaskCard title="Review auth flow" type="review" status="created" jiraTicketId="JAR-03" onEdit={() => {}} onDelete={() => {}} />
-      <TaskCard title="Completed task" type="implementation" status="done" jiraTicketId="JAR-04" onEdit={() => {}} onDelete={() => {}} />
+      <TaskCard title="Refine search feature" type="refinement" status="created" sourceType="jira" sourceId="JAR-01" onEdit={() => {}} onDelete={() => {}} />
+      <TaskCard title="Build task board" type="implementation" status="created" sourceType="jira" sourceId="JAR-02" onEdit={() => {}} onDelete={() => {}} />
+      <TaskCard title="Review auth flow" type="review" status="created" sourceType="jira" sourceId="JAR-03" onEdit={() => {}} onDelete={() => {}} />
+      <TaskCard title="Completed task" type="implementation" status="done" sourceType="jira" sourceId="JAR-04" onEdit={() => {}} onDelete={() => {}} />
     </div>
   ),
 };

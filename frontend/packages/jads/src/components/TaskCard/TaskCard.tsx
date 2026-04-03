@@ -6,7 +6,8 @@ export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   title: string;
   type: 'refinement' | 'implementation' | 'review';
   status: 'created' | 'done';
-  jiraTicketId?: string;
+  sourceType?: 'jira' | 'gcal';
+  sourceId?: string;
   jiraProjectUrl?: string;
   dates?: string[];
   onEdit?: () => void;
@@ -61,7 +62,8 @@ export function TaskCard({
   title,
   type,
   status,
-  jiraTicketId,
+  sourceType,
+  sourceId,
   jiraProjectUrl,
   dates,
   onEdit,
@@ -72,7 +74,7 @@ export function TaskCard({
   ...props
 }: TaskCardProps) {
   const isDone = status === 'done';
-  const displayTitle = jiraTicketId ? `[${jiraTicketId}] - ${title}` : title;
+  const displayTitle = sourceType === 'jira' && sourceId ? `[${sourceId}] - ${title}` : title;
 
   return (
     <article
@@ -93,13 +95,13 @@ export function TaskCard({
       <div className="jads-task-card__content" {...dragListeners}>
         <h4 className="jads-task-card__title">
           {displayTitle}
-          {jiraTicketId && jiraProjectUrl && (
+          {sourceType === 'jira' && sourceId && jiraProjectUrl && (
             <a
-              href={`${jiraProjectUrl}/browse/${jiraTicketId}`}
+              href={`${jiraProjectUrl}/browse/${sourceId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="jads-task-card__jira-link"
-              aria-label={`Open JIRA ticket ${jiraTicketId}`}
+              aria-label={`Open JIRA ticket ${sourceId}`}
               onClick={(e) => e.stopPropagation()}
             >
               <JiraIcon />
