@@ -38,27 +38,31 @@ class CalendarGroup(BaseModel):
 class GCalClient(BaseModel):
     config: GoogleCalendarConfig
     _credentials: Credentials | None = PrivateAttr(default=None)
+    _flow: Flow | None = PrivateAttr(default=None)
 
     model_config = {"arbitrary_types_allowed": True}
 
     # --- OAuth2 flow ---
 
-    def _build_flow(self) -> Flow:
-        return Flow.from_client_config(
-            self.config.client_config,
-            scopes=SCOPES,
-            redirect_uri=self.config.redirect_uri,
-        )
+    def _get_or_create_flow(self) -> Flow:
+        if self._flow is None:
+            self._flow = Flow.from_client_config(
+                self.config.client_config,
+                scopes=SCOPES,
+                redirect_uri=self.config.redirect_uri,
+            )
+        return self._flow
 
     def get_auth_url(self) -> str:
-        flow = self._build_flow()
+        flow = self._get_or_create_flow()
         url, _ = flow.authorization_url(prompt="consent", access_type="offline")
         return url
 
     def handle_callback(self, code: str) -> None:
-        flow = self._build_flow()
+        flow = self._get_or_create_flow()
         flow.fetch_token(code=code)
         self._credentials = flow.credentials
+        self._flow = None
 
     def is_authenticated(self) -> bool:
         if self.config.auth_mode == "service_account":

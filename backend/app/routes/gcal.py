@@ -88,9 +88,10 @@ def auth_callback(code: str = Query(None), error: str = Query(None)):
     client = _get_client()
     try:
         client.handle_callback(code)
-    except Exception:
+    except Exception as exc:
         logger.exception("Google OAuth2 token exchange failed")
-        return RedirectResponse(url="/?gcal_error=token_exchange_failed")
+        from urllib.parse import quote
+        return RedirectResponse(url=f"/?gcal_error=token_exchange_failed&detail={quote(str(exc))}")
 
     return RedirectResponse(url="/?gcal_auth=success")
 
