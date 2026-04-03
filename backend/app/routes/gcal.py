@@ -89,6 +89,7 @@ def auth_callback(code: str = Query(None), error: str = Query(None)):
     try:
         client.handle_callback(code)
     except Exception:
+        logger.exception("Google OAuth2 token exchange failed")
         return RedirectResponse(url="/?gcal_error=token_exchange_failed")
 
     return RedirectResponse(url="/?gcal_auth=success")
