@@ -493,6 +493,11 @@ export default function TaskBoard() {
       } catch { /* ignore */ }
     } else if (task.source_type === 'gcal' && task.source_id) {
       try {
+        const status = await getGcalAuthStatus();
+        if (!status.authenticated) {
+          window.location.href = getGcalAuthLoginUrl();
+          return;
+        }
         const event = await getGcalEvent(task.source_id);
         setFullscreenEvent(event);
       } catch { /* ignore */ }
