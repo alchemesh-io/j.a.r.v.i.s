@@ -24,6 +24,9 @@ data:
   {{- if .Values.backend.config.googleRedirectUri }}
   GOOGLE_REDIRECT_URI: {{ .Values.backend.config.googleRedirectUri | quote }}
   {{- end }}
+  {{- if .Values.backend.config.googleCalendarEmail }}
+  GOOGLE_CALENDAR_EMAIL: {{ .Values.backend.config.googleCalendarEmail | quote }}
+  {{- end }}
   {{- if .Values.backend.config.googleServiceAccountKeyPath }}
   GOOGLE_SERVICE_ACCOUNT_KEY_PATH: {{ .Values.backend.config.googleServiceAccountKeyPath | quote }}
   {{- end }}

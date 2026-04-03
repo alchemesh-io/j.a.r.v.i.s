@@ -115,6 +115,48 @@ class GCalClient(BaseModel):
             creds = self._credentials
         return build("calendar", "v3", credentials=creds)
 
+    def get_event(self, event_id: str) -> CalendarEvent | None:
+        service = self._get_service()
+        calendars_result = service.calendarList().list().execute()
+        for cal in calendars_result.get("items", []):
+            try:
+                ev = service.events().get(calendarId=cal["id"], eventId=event_id).execute()
+                cal_name = cal.get("summary", cal["id"])
+                cal_color = cal.get("backgroundColor", "#4285f4")
+                attendees = [
+                    EventAttendee(
+                        email=a.get("email", ""),
+                        display_name=a.get("displayName"),
+                        response_status=a.get("responseStatus"),
+                    )
+                    for a in ev.get("attendees", [])
+                ]
+                attachments = [
+                    EventAttachment(
+                        title=att.get("title", ""),
+                        file_url=att.get("fileUrl", ""),
+                        icon_link=att.get("iconLink"),
+                        mime_type=att.get("mimeType"),
+                    )
+                    for att in ev.get("attachments", [])
+                ]
+                return CalendarEvent(
+                    id=ev["id"],
+                    summary=ev.get("summary", "(No title)"),
+                    start=ev["start"].get("dateTime", ev["start"].get("date", "")),
+                    end=ev["end"].get("dateTime", ev["end"].get("date", "")),
+                    description=ev.get("description"),
+                    location=ev.get("location"),
+                    attendees=attendees,
+                    attachments=attachments,
+                    html_link=ev.get("htmlLink"),
+                    calendar_name=cal_name,
+                    calendar_color=cal_color,
+                )
+            except Exception:
+                continue
+        return None
+
     def list_events(self, date: datetime.date, view: str = "daily") -> list[CalendarGroup]:
         service = self._get_service()
 

@@ -8,7 +8,7 @@ from googleapiclient.errors import HttpError
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-from app.services.gcal_client import CalendarGroup, GCalClient
+from app.services.gcal_client import CalendarEvent, CalendarGroup, GCalClient
 
 router = APIRouter(prefix="/gcal", tags=["gcal"])
 
@@ -40,13 +40,14 @@ def get_auth_status():
         gcal.configured,
     )
     if not gcal.configured:
-        return {"configured": False, "authenticated": False, "mode": None}
+        return {"configured": False, "authenticated": False, "mode": None, "calendarEmail": None}
 
     client = _get_client()
     return {
         "configured": True,
         "authenticated": client.is_authenticated(),
         "mode": gcal.auth_mode,
+        "calendarEmail": gcal.calendar_email or None,
     }
 
 
@@ -94,6 +95,21 @@ def auth_callback(code: str = Query(None), error: str = Query(None)):
         return RedirectResponse(url=f"/?gcal_error=token_exchange_failed&detail={quote(str(exc))}")
 
     return RedirectResponse(url="/?gcal_auth=success")
+
+
+@router.get("/events/{event_id}", response_model=CalendarEvent)
+def get_event(event_id: str):
+    _require_configured()
+    client = _get_client()
+    if not client.is_authenticated():
+        raise HTTPException(status_code=401, detail="Google Calendar authentication required")
+    try:
+        event = client.get_event(event_id)
+    except HttpError as exc:
+        raise HTTPException(status_code=502, detail=f"Google Calendar API error: {exc.reason}") from exc
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
 
 
 @router.get("/events", response_model=list[CalendarGroup])

@@ -134,13 +134,24 @@
   border-radius: 2px;
 }
 
-/* Google Calendar badge */
-.jads-task-card__gcal-badge {
+/* Google Calendar link */
+.jads-task-card__gcal-link {
   display: inline-flex;
   align-items: center;
   margin-left: 6px;
   vertical-align: middle;
   opacity: 0.7;
+  transition: opacity var(--jads-transition-fast);
+}
+
+.jads-task-card__gcal-link:hover {
+  opacity: 1;
+}
+
+.jads-task-card__gcal-link:focus-visible {
+  outline: 2px solid var(--jads-color-accent-cyan);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 /* JIRA badge */

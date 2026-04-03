@@ -29,6 +29,18 @@ class JiraClient(BaseModel):
             )
         return self._client
 
+    def get_ticket(self, key: str) -> JiraTicket:
+        issue = self.client.issue(key)
+        return JiraTicket(
+            key=issue.key,
+            summary=issue.fields.summary,
+            status=str(issue.fields.status),
+            assignee=str(issue.fields.assignee) if issue.fields.assignee else None,
+            priority=str(issue.fields.priority) if issue.fields.priority else None,
+            description=issue.fields.description,
+            url=f"{self.config.project_url}/browse/{issue.key}",
+        )
+
     def search_tickets(self) -> list[JiraTicket]:
         issues = self.client.search_issues(self.config.jql, maxResults=50)
         return [

@@ -20,6 +20,7 @@ backend:
     # Google Calendar integration (optional)
     googleAuthMode: "oauth2"          # "oauth2" or "service_account"
     googleRedirectUri: "http://localhost/api/v1/gcal/auth/callback"
+    googleCalendarEmail: "alexandre.guitton@doctolib.com"
     googleServiceAccountKeyPath: ""
     googleDelegatedUserEmail: ""
   secrets: {}

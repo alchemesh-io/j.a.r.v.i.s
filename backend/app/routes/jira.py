@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from jira import JIRAError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -24,6 +24,16 @@ def get_jira_config():
         "configured": jira.configured,
         "projectUrl": jira.project_url if jira.configured else None,
     }
+
+
+@router.get("/ticket", response_model=JiraTicket)
+def get_jira_ticket(key: str = Query(...)):
+    _require_configured()
+    client = JiraClient(config=settings.jira)
+    try:
+        return client.get_ticket(key)
+    except JIRAError as exc:
+        raise HTTPException(status_code=502, detail=f"JIRA API error: {exc.text}") from exc
 
 
 @router.get("/tickets", response_model=list[JiraTicket])

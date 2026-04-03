@@ -32,6 +32,8 @@ import {
   getGcalAuthStatus,
   getGcalAuthLoginUrl,
   listGcalEvents,
+  getJiraTicket,
+  getGcalEvent,
   type Task,
   type TaskType,
   type JiraTicket,
@@ -227,15 +229,19 @@ function getPriorityStyle(priority: string) {
 function SortableTaskCard({
   task,
   jiraProjectUrl,
+  gcalCalendarEmail,
   onEdit,
   onDelete,
   onToggleStatus,
+  onExpand,
 }: {
   task: Task;
   jiraProjectUrl?: string;
+  gcalCalendarEmail?: string;
   onEdit: () => void;
   onDelete: () => void;
   onToggleStatus: () => void;
+  onExpand: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: task.id });
@@ -254,10 +260,12 @@ function SortableTaskCard({
         sourceType={task.source_type ?? undefined}
         sourceId={task.source_id ?? undefined}
         jiraProjectUrl={jiraProjectUrl}
+        gcalCalendarEmail={gcalCalendarEmail}
         dates={task.dates}
         onEdit={onEdit}
         onDelete={onDelete}
         onToggleStatus={onToggleStatus}
+        onExpand={task.source_type ? onExpand : undefined}
         dragListeners={listeners}
       />
     </div>
@@ -475,6 +483,20 @@ export default function TaskBoard() {
     ]);
     setFormTitle('');
     setFormJira('');
+  }
+
+  async function handleExpandBoardTask(task: Task) {
+    if (task.source_type === 'jira' && task.source_id) {
+      try {
+        const ticket = await getJiraTicket(task.source_id);
+        setFullscreenTicket(ticket);
+      } catch { /* ignore */ }
+    } else if (task.source_type === 'gcal' && task.source_id) {
+      try {
+        const event = await getGcalEvent(task.source_id);
+        setFullscreenEvent(event);
+      } catch { /* ignore */ }
+    }
   }
 
   function extractJiraId(input: string): string | undefined {
@@ -1027,10 +1049,11 @@ export default function TaskBoard() {
                     placeholder="Task title"
                   />
                   <Input
-                    label="JIRA Ticket"
+                    label={editingTask?.source_type === 'gcal' ? 'Event ID' : 'JIRA Ticket'}
                     value={formJira}
                     onChange={(e) => setFormJira(e.target.value)}
-                    placeholder="JAR-123 or full URL"
+                    placeholder={editingTask?.source_type === 'gcal' ? 'Google Calendar event ID' : 'JAR-123 or full URL'}
+                    disabled={editingTask?.source_type === 'gcal'}
                   />
                   <Select
                     label="Type"
@@ -1296,9 +1319,11 @@ export default function TaskBoard() {
                   key={task.id}
                   task={task}
                   jiraProjectUrl={jiraConfig?.projectUrl ?? undefined}
+                  gcalCalendarEmail={gcalAuthStatus?.calendarEmail ?? undefined}
                   onEdit={() => startEdit(task)}
                   onDelete={() => deleteMutation.mutate(task.id)}
                   onToggleStatus={() => toggleStatusMutation.mutate(task)}
+                  onExpand={() => handleExpandBoardTask(task)}
                 />
               ))}
               {visibleTasks.length === 0 && (

@@ -171,12 +171,17 @@ export function listJiraTickets(): Promise<JiraTicket[]> {
   return request('/jira/tickets');
 }
 
+export function getJiraTicket(key: string): Promise<JiraTicket> {
+  return request(`/jira/ticket?key=${encodeURIComponent(key)}`);
+}
+
 // --- Google Calendar API ---
 
 export interface GCalAuthStatus {
   configured: boolean;
   authenticated: boolean;
   mode: 'oauth2' | 'service_account' | null;
+  calendarEmail: string | null;
 }
 
 export interface EventAttendee {
@@ -218,6 +223,10 @@ export function getGcalAuthStatus(): Promise<GCalAuthStatus> {
 
 export function getGcalAuthLoginUrl(): string {
   return `${API_BASE}/gcal/auth/login`;
+}
+
+export function getGcalEvent(eventId: string): Promise<CalendarEvent> {
+  return request(`/gcal/events/${eventId}`);
 }
 
 export function listGcalEvents(

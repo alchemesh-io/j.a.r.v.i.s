@@ -9,10 +9,12 @@ export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   sourceType?: 'jira' | 'gcal';
   sourceId?: string;
   jiraProjectUrl?: string;
+  gcalCalendarEmail?: string;
   dates?: string[];
   onEdit?: () => void;
   onDelete?: () => void;
   onToggleStatus?: () => void;
+  onExpand?: () => void;
   dragListeners?: Record<string, Function>;
 }
 
@@ -35,7 +37,7 @@ const CheckIcon = () => (
 );
 
 const JiraIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 128 128" aria-hidden="true">
+  <svg width="20" height="20" viewBox="0 0 128 128" aria-hidden="true">
     <defs>
       <linearGradient id="jira-a" gradientUnits="userSpaceOnUse" x1="22.034" y1="9.773" x2="17.118" y2="14.842" gradientTransform="scale(4)"><stop offset=".176" stopColor="#0052cc"/><stop offset="1" stopColor="#2684ff"/></linearGradient>
       <linearGradient id="jira-b" gradientUnits="userSpaceOnUse" x1="16.641" y1="15.564" x2="10.957" y2="21.094" gradientTransform="scale(4)"><stop offset=".176" stopColor="#0052cc"/><stop offset="1" stopColor="#2684ff"/></linearGradient>
@@ -47,7 +49,7 @@ const JiraIcon = () => (
 );
 
 const GCalIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+  <svg width="20" height="20" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="#4285f4" strokeWidth="1.3"/>
     <path d="M2 5.5H14" stroke="#4285f4" strokeWidth="1.3"/>
     <path d="M5.5 1.5V4" stroke="#4285f4" strokeWidth="1.3" strokeLinecap="round"/>
@@ -78,10 +80,12 @@ export function TaskCard({
   sourceType,
   sourceId,
   jiraProjectUrl,
+  gcalCalendarEmail,
   dates,
   onEdit,
   onDelete,
   onToggleStatus,
+  onExpand,
   dragListeners,
   className = '',
   ...props
@@ -120,10 +124,17 @@ export function TaskCard({
               <JiraIcon />
             </a>
           )}
-          {sourceType === 'gcal' && (
-            <span className="jads-task-card__gcal-badge" aria-label="Imported from Google Calendar">
+          {sourceType === 'gcal' && sourceId && gcalCalendarEmail && (
+            <a
+              href={`https://www.google.com/calendar/event?eid=${btoa(`${sourceId} ${gcalCalendarEmail}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="jads-task-card__gcal-link"
+              aria-label="Open in Google Calendar"
+              onClick={(e) => e.stopPropagation()}
+            >
               <GCalIcon />
-            </span>
+            </a>
           )}
         </h4>
       </div>
@@ -154,6 +165,18 @@ export function TaskCard({
               onClick={onDelete}
             >
               <DeleteIcon />
+            </IconButton>
+          )}
+          {onExpand && (
+            <IconButton
+              aria-label={`View source details: ${title}`}
+              variant="ghost"
+              size="sm"
+              onClick={onExpand}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 4H13M3 8H10M3 12H7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
             </IconButton>
           )}
         </div>

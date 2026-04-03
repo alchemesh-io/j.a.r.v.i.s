@@ -25,6 +25,7 @@ class GoogleCalendarConfig(BaseModel):
     token_uri: str = "https://oauth2.googleapis.com/token"
     auth_provider_x509_cert_url: str = "https://www.googleapis.com/oauth2/v1/certs"
     redirect_uri: str = ""
+    calendar_email: str = ""
     # Service account mode
     service_account_key_path: str = ""
     delegated_user_email: str = ""
@@ -72,6 +73,7 @@ class Settings(BaseSettings):
     google_token_uri: str = "https://oauth2.googleapis.com/token"
     google_auth_provider_x509_cert_url: str = "https://www.googleapis.com/oauth2/v1/certs"
     google_redirect_uri: str = ""
+    google_calendar_email: str = ""
     google_service_account_key_path: str = ""
     google_delegated_user_email: str = ""
 
@@ -97,6 +99,7 @@ class Settings(BaseSettings):
             token_uri=self.google_token_uri,
             auth_provider_x509_cert_url=self.google_auth_provider_x509_cert_url,
             redirect_uri=self.google_redirect_uri,
+            calendar_email=self.google_calendar_email,
             service_account_key_path=self.google_service_account_key_path,
             delegated_user_email=self.google_delegated_user_email,
         )

@@ -8,6 +8,7 @@ from app.models.enums import SourceType, TaskStatus, TaskType
 class TaskCreate(BaseModel):
     source_type: SourceType | None = None
     source_id: str | None = None
+
     title: str
     type: TaskType
     status: TaskStatus = TaskStatus.created
@@ -16,6 +17,7 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     source_type: SourceType | None = None
     source_id: str | None = None
+
     title: str | None = None
     type: TaskType | None = None
     status: TaskStatus | None = None
@@ -27,6 +29,7 @@ class TaskResponse(BaseModel):
     id: int
     source_type: SourceType | None
     source_id: str | None
+    source_url: str | None
     title: str
     type: TaskType
     status: TaskStatus
