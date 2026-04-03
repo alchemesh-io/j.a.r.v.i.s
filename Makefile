@@ -44,10 +44,10 @@ cluster-up: _check-prereqs
 	@echo "==> Starting Minikube cluster (CPUs=$(MINIKUBE_CPUS), Memory=$(MINIKUBE_MEMORY)MB)..."
 	minikube start --cpus=$(MINIKUBE_CPUS) --memory=$(MINIKUBE_MEMORY) --driver=docker
 	@$(MAKE) _mount-start
-	@$(MAKE) _istio-install
 	@$(MAKE) _argocd-install
 	@$(MAKE) _argocd-patch-repo-server
 	@$(MAKE) _argocd-add-repo
+	@$(MAKE) _istio-install
 	@echo ""
 	@echo "==> Cluster ready. Run 'make argocd-ui' to open the ArgoCD dashboard."
 
