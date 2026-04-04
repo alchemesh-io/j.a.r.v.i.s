@@ -16,10 +16,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export type TaskType = 'refinement' | 'implementation' | 'review';
 export type TaskStatus = 'created' | 'done';
+export type SourceType = 'jira' | 'gcal';
 
 export interface Task {
   id: number;
-  jira_ticket_id: string | null;
+  source_type: SourceType | null;
+  source_id: string | null;
   title: string;
   type: TaskType;
   status: TaskStatus;
@@ -51,7 +53,8 @@ export interface Weekly {
 export function createTask(body: {
   title: string;
   type: TaskType;
-  jira_ticket_id?: string;
+  source_type?: SourceType;
+  source_id?: string;
   status?: TaskStatus;
 }): Promise<Task> {
   return request('/tasks', { method: 'POST', body: JSON.stringify(body) });
@@ -74,7 +77,7 @@ export function getTask(id: number): Promise<Task> {
 
 export function updateTask(
   id: number,
-  body: Partial<Pick<Task, 'title' | 'type' | 'status' | 'jira_ticket_id'>>,
+  body: Partial<Pick<Task, 'title' | 'type' | 'status' | 'source_type' | 'source_id'>>,
 ): Promise<Task> {
   return request(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 }
@@ -141,6 +144,96 @@ export function reorderDailyTasks(
     method: 'PUT',
     body: JSON.stringify({ items }),
   });
+}
+
+// --- JIRA API ---
+
+export interface JiraConfig {
+  configured: boolean;
+  projectUrl: string | null;
+}
+
+export interface JiraTicket {
+  key: string;
+  summary: string;
+  status: string;
+  assignee: string | null;
+  priority: string | null;
+  description: string | null;
+  url: string;
+}
+
+export function getJiraConfig(): Promise<JiraConfig> {
+  return request('/jira/config');
+}
+
+export function listJiraTickets(): Promise<JiraTicket[]> {
+  return request('/jira/tickets');
+}
+
+export function getJiraTicket(key: string): Promise<JiraTicket> {
+  return request(`/jira/ticket?key=${encodeURIComponent(key)}`);
+}
+
+// --- Google Calendar API ---
+
+export interface GCalAuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+  mode: 'oauth2' | 'service_account' | null;
+  calendarEmail: string | null;
+}
+
+export interface EventAttendee {
+  email: string;
+  display_name: string | null;
+  response_status: string | null;
+}
+
+export interface EventAttachment {
+  title: string;
+  file_url: string;
+  icon_link: string | null;
+  mime_type: string | null;
+}
+
+export interface CalendarEvent {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+  description: string | null;
+  location: string | null;
+  attendees: EventAttendee[];
+  attachments: EventAttachment[];
+  html_link: string | null;
+  calendar_name: string;
+  calendar_color: string;
+}
+
+export interface CalendarGroup {
+  calendar_name: string;
+  calendar_color: string;
+  events: CalendarEvent[];
+}
+
+export function getGcalAuthStatus(): Promise<GCalAuthStatus> {
+  return request('/gcal/auth/status');
+}
+
+export function getGcalAuthLoginUrl(): string {
+  return `${API_BASE}/gcal/auth/login`;
+}
+
+export function getGcalEvent(eventId: string): Promise<CalendarEvent> {
+  return request(`/gcal/event?event_id=${encodeURIComponent(eventId)}`);
+}
+
+export function listGcalEvents(
+  date: string,
+  view: 'daily' | 'weekly' = 'daily',
+): Promise<CalendarGroup[]> {
+  return request(`/gcal/events?date=${date}&view=${view}`);
 }
 
 // --- Helpers ---

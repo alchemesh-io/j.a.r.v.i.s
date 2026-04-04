@@ -32,10 +32,12 @@ def test_create_task_with_jira(client):
     r = client.post("/api/v1/tasks", json={
         "title": "JIRA task",
         "type": "refinement",
-        "jira_ticket_id": "JAR-42",
+        "source_type": "jira",
+        "source_id": "JAR-42",
     })
     assert r.status_code == 201
-    assert r.json()["jira_ticket_id"] == "JAR-42"
+    assert r.json()["source_type"] == "jira"
+    assert r.json()["source_id"] == "JAR-42"
 
 
 def test_create_task_invalid_type(client):

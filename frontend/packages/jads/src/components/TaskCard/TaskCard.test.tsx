@@ -9,8 +9,8 @@ describe('TaskCard', () => {
     expect(screen.getByRole('heading', { name: 'Fix login bug' })).toBeInTheDocument();
   });
 
-  it('renders title with JIRA prefix when jiraTicketId provided', () => {
-    render(<TaskCard title="Fix login" type="review" status="created" jiraTicketId="JAR-42" />);
+  it('renders title with JIRA prefix when sourceType=jira and sourceId provided', () => {
+    render(<TaskCard title="Fix login" type="review" status="created" sourceType="jira" sourceId="JAR-42" />);
     expect(screen.getByRole('heading', { name: '[JAR-42] - Fix login' })).toBeInTheDocument();
   });
 
@@ -127,5 +127,47 @@ describe('TaskCard', () => {
   it('does not render action buttons when no callbacks', () => {
     render(<TaskCard title="Task" type="refinement" status="created" />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  // --- JIRA deep-link ---
+
+  it('renders JIRA link when sourceType=jira, sourceId, and jiraProjectUrl are provided', () => {
+    render(
+      <TaskCard
+        title="Fix login"
+        type="review"
+        status="created"
+        sourceType="jira" sourceId="JAR-42"
+        jiraProjectUrl="https://myorg.atlassian.net"
+      />,
+    );
+    const link = screen.getByRole('link', { name: 'Open JIRA ticket JAR-42' });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', 'https://myorg.atlassian.net/browse/JAR-42');
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
+  it('does not render JIRA link when sourceId is missing', () => {
+    render(
+      <TaskCard
+        title="Fix login"
+        type="review"
+        status="created"
+        jiraProjectUrl="https://myorg.atlassian.net"
+      />,
+    );
+    expect(screen.queryByRole('link', { name: /Open JIRA ticket/ })).not.toBeInTheDocument();
+  });
+
+  it('does not render JIRA link when jiraProjectUrl is missing (sourceType=jira)', () => {
+    render(
+      <TaskCard
+        title="Fix login"
+        type="review"
+        status="created"
+        sourceType="jira" sourceId="JAR-42"
+      />,
+    );
+    expect(screen.queryByRole('link', { name: /Open JIRA ticket/ })).not.toBeInTheDocument();
   });
 });

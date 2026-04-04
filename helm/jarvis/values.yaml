@@ -13,7 +13,19 @@ backend:
     databaseUrl: "sqlite:////data/jarvis.db"
     appTitle: "J.A.R.V.I.S"
     debug: "false"
+    # JIRA integration (optional)
+    jiraProjectUrl: "https://sage-project.atlassian.net"
+    jiraUserEmail: "guittonbouedronalexandre@gmail.com"
+    jiraJql: "(project = AG) OR (project IN (SAGE, JARVIS) AND assignee = 712020:4c783354-372e-4dbd-abb8-f3a2eb2cf58f)"
+    # Google Calendar integration (optional)
+    googleAuthMode: "oauth2"          # "oauth2" or "service_account"
+    googleRedirectUri: "http://localhost/api/v1/gcal/auth/callback"
+    googleCalendarEmail: "alexandre.guitton@doctolib.com"
+    googleServiceAccountKeyPath: ""
+    googleDelegatedUserEmail: ""
   secrets: {}
+  # Secrets are created from .env via `make deploy` / `make deploy-local`.
+  # See .env.example for available variables (JIRA_API_KEY, GOOGLE_CLIENT_SECRET, etc.).
 
 frontend:
   image:

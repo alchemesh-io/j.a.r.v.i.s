@@ -23,7 +23,8 @@ def _task_to_response(task: Task) -> TaskResponse:
     dates = sorted(entry.daily.date for entry in task.daily_entries)
     return TaskResponse(
         id=task.id,
-        jira_ticket_id=task.jira_ticket_id,
+        source_type=task.source_type,
+        source_id=task.source_id,
         title=task.title,
         type=task.type,
         status=task.status,

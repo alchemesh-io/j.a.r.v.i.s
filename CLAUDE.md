@@ -1,5 +1,9 @@
 # J.A.R.V.I.S — Claude Code Guide
 
+## Forbidden Files
+
+**NEVER read, write, display, or reference the contents of `secrets/backend-secret.yaml`.** This file contains sensitive credentials (API keys, OAuth secrets) and is not version-controlled. Use `secrets/backend-secret.example.yaml` as a reference for the expected structure.
+
 ## Project Overview
 
 J.A.R.V.I.S (Just A Rather Very Intelligent System) is a multi-agent personal assistant platform targeting a production Kubernetes deployment. This repository contains a Python/FastAPI backend with task management API, a React/Vite frontend with dashboard and task board UIs, a J.A.D.S design system, an MCP server for agent integration, a Helm chart, and a Makefile-driven local dev cluster.
@@ -11,10 +15,13 @@ j.a.r.v.i.s/
 ├── Makefile                  # Local cluster and deploy lifecycle
 ├── CLAUDE.md                 # This file
 ├── argocd/
-│   ├── istio-app.yaml        # ArgoCD Application CR for Istio service mesh
-│   ├── jarvis-app.yaml       # ArgoCD Application CR (GHCR images)
-│   ├── jarvis-app-local.yaml # ArgoCD Application CR (local images)
-│   └── repo-server-patch.yaml # hostPath volume patch for argocd-repo-server
+│   ├── istio-app.yaml          # ArgoCD Application CR for Istio service mesh
+│   ├── jarvis-app.yaml         # ArgoCD Application CR (GHCR images)
+│   ├── jarvis-app-local.yaml   # ArgoCD Application CR (local images)
+│   └── repo-server-patch.yaml  # hostPath volume patch for argocd-repo-server
+├── secrets/
+│   ├── backend-secret.example.yaml  # Template — copy to backend-secret.yaml
+│   └── backend-secret.yaml          # (gitignored) Actual K8s Secret manifest
 ├── backend/
 │   ├── app/
 │   │   ├── main.py           # FastAPI application — routes mounted under /api/v1

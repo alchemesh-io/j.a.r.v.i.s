@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.models import Daily, DailyTask, Task, Weekly
-from app.models.enums import TaskStatus, TaskType
+from app.models.enums import SourceType, TaskStatus, TaskType
 
 
 def test_create_weekly(db_session):
@@ -54,7 +54,8 @@ def test_cascade_delete_weekly_deletes_dailies(db_session):
 
 def test_create_task(db_session):
     t = Task(
-        jira_ticket_id="JAR-123",
+        source_type=SourceType.jira,
+        source_id="JAR-123",
         title="Implement login",
         type=TaskType.implementation,
         status=TaskStatus.created,
@@ -62,14 +63,16 @@ def test_create_task(db_session):
     db_session.add(t)
     db_session.commit()
     assert t.id is not None
-    assert t.jira_ticket_id == "JAR-123"
+    assert t.source_type == SourceType.jira
+    assert t.source_id == "JAR-123"
 
 
-def test_create_task_without_jira(db_session):
+def test_create_task_without_source(db_session):
     t = Task(title="Ad-hoc task", type=TaskType.review, status=TaskStatus.created)
     db_session.add(t)
     db_session.commit()
-    assert t.jira_ticket_id is None
+    assert t.source_type is None
+    assert t.source_id is None
 
 
 def test_daily_task_association(db_session):

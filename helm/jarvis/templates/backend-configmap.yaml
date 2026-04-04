@@ -9,3 +9,27 @@ data:
   DATABASE_URL: {{ .Values.backend.config.databaseUrl | default "sqlite:////data/jarvis.db" | quote }}
   APP_TITLE: {{ .Values.backend.config.appTitle | default "J.A.R.V.I.S" | quote }}
   DEBUG: {{ .Values.backend.config.debug | default "false" | quote }}
+  {{- if .Values.backend.config.jiraProjectUrl }}
+  JIRA_PROJECT_URL: {{ .Values.backend.config.jiraProjectUrl | quote }}
+  {{- end }}
+  {{- if .Values.backend.config.jiraUserEmail }}
+  JIRA_USER_EMAIL: {{ .Values.backend.config.jiraUserEmail | quote }}
+  {{- end }}
+  {{- if .Values.backend.config.jiraJql }}
+  JIRA_JQL: {{ .Values.backend.config.jiraJql | quote }}
+  {{- end }}
+  {{- if .Values.backend.config.googleAuthMode }}
+  GOOGLE_AUTH_MODE: {{ .Values.backend.config.googleAuthMode | quote }}
+  {{- end }}
+  {{- if .Values.backend.config.googleRedirectUri }}
+  GOOGLE_REDIRECT_URI: {{ .Values.backend.config.googleRedirectUri | quote }}
+  {{- end }}
+  {{- if .Values.backend.config.googleCalendarEmail }}
+  GOOGLE_CALENDAR_EMAIL: {{ .Values.backend.config.googleCalendarEmail | quote }}
+  {{- end }}
+  {{- if .Values.backend.config.googleServiceAccountKeyPath }}
+  GOOGLE_SERVICE_ACCOUNT_KEY_PATH: {{ .Values.backend.config.googleServiceAccountKeyPath | quote }}
+  {{- end }}
+  {{- if .Values.backend.config.googleDelegatedUserEmail }}
+  GOOGLE_DELEGATED_USER_EMAIL: {{ .Values.backend.config.googleDelegatedUserEmail | quote }}
+  {{- end }}
