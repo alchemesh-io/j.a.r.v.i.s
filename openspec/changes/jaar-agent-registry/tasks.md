@@ -55,5 +55,5 @@
 - [x] 8.1 Run `helm template helm/jaar/` — renders without errors (upstream subchart + namespace + httproute)
 - [x] 8.2 Run backend tests — 54 passed
 - [x] 8.3 Run frontend build — production bundle emitted with /jarvis/ base path
-- [ ] 8.4 Test full local deployment: `make cluster-up && make deploy-local` with both JARVIS and JAAR services running
+- [ ] 8.4 Test full local deployment: `make cluster-up && make deploy-local` with both JARVIS and JAAR services running (blocked — minikube mount issue, manual deploy in progress)
 - [ ] 8.5 Verify routing: `/jarvis/api/v1/tasks` → backend, `/jarvis` → frontend, `/jaar/v0/servers` → AgentRegistry, `/` → redirect to `/jarvis`

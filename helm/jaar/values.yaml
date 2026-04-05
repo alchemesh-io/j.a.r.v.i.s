@@ -8,7 +8,10 @@
 
 agentregistry:
   image:
-    tag: "0.3.3"
+    registry: ghcr.io
+    repository: agentregistry-dev/agentregistry
+    name: server
+    tag: "v0.3.3"
 
   config:
     enableAnonymousAuth: "true"
