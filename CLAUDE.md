@@ -121,14 +121,17 @@ j.a.r.v.i.s/
 
 ## API Versioning & Routing
 
-All traffic enters through the Istio ingress gateway with prefix-based routing:
+All traffic enters through the Istio ingress gateway via host-based routing on port 80:
 
-- `/jarvis/api/*` → backend (prefix stripped to `/api/*`)
-- `/jarvis/*` → frontend SPA (prefix stripped)
-- `/jaar/*` → AgentRegistry (prefix stripped)
-- `/` → redirects to `/jarvis`
+- `main.jarvis.io` — JARVIS: `/api/*` → backend, `/*` → frontend SPA
+- `jaar.jarvis.io` — AgentRegistry: `/*` → Next.js UI + API
 
-Backend task management endpoints are under `/api/v1/`. OpenAPI docs at `/jarvis/docs`. The frontend uses `/jarvis/` as base path.
+The gateway listener matches `*.jarvis.io`. For local dev, add entries to `/etc/hosts`:
+```
+<GATEWAY-IP>  main.jarvis.io jaar.jarvis.io
+```
+
+Backend task management endpoints are under `/api/v1/`. OpenAPI docs at `main.jarvis.io/docs`.
 
 ## Local Development Workflow
 
@@ -177,11 +180,9 @@ After `make deploy`, run `minikube tunnel` in a separate terminal, then:
 kubectl get svc istio-ingressgateway -n istio-system   # Shows EXTERNAL-IP for the Istio ingress
 ```
 
-All traffic enters through the Istio ingress gateway. Routing is handled by HTTPRoute resources:
-- `/jarvis/api/*`, `/jarvis/docs`, `/jarvis/health` → backend service (prefix stripped)
-- `/jarvis/*` → frontend SPA (prefix stripped)
-- `/jaar/*` → AgentRegistry (prefix stripped)
-- `/` → redirects to `/jarvis`
+All traffic enters through the Istio ingress gateway via host-based routing (`*.jarvis.io`):
+- `main.jarvis.io`: `/api/*`, `/docs`, `/health` → backend; `/*` → frontend SPA
+- `jaar.jarvis.io`: `/*` → AgentRegistry
 
 ### Teardown
 
@@ -268,10 +269,10 @@ cd artifacts/servers/jarvis-mcp && uv run pytest tests/ -v
 - ArgoCD renders Helm charts internally — never run `helm install/upgrade` directly
 - ArgoCD syncs from `HEAD` of the current branch via `minikube mount`
 - Helm values for image tags use `latest` by default locally; CI tags with short git SHA
-- Kubernetes Gateway API (Gateway + HTTPRoute) with Istio for prefix-based ingress routing (`/jarvis/*` → JARVIS, `/jaar/*` → AgentRegistry)
+- Kubernetes Gateway API (Gateway + HTTPRoute) with Istio: host-based routing on `*.jarvis.io` (`main.jarvis.io` → JARVIS, `jaar.jarvis.io` → AgentRegistry)
 - Backend config via ConfigMap (`backend-configmap.yaml`), secrets via Secret (`backend-secret.yaml`)
 - JAAR config via upstream AgentRegistry subchart, secrets via Secret (`jaar-secret.yaml`)
-- Frontend uses `serve` for static files with `/jarvis/` base path — no nginx (Istio handles routing)
+- Frontend uses `serve` for static files — no nginx (Istio handles routing via host-based matching)
 - MCP server gets `BACKEND_URL` from its deployment env vars
 
 ## Known Limitations
@@ -284,4 +285,4 @@ cd artifacts/servers/jarvis-mcp && uv run pytest tests/ -v
 | **ArgoCD + Istio add ~1 GB RAM overhead** | May strain developer laptops | Tune with `MINIKUBE_MEMORY` override |
 | **MCP server depends on backend** | MCP tools fail if backend is down | httpx with retry logic; K8s readiness probes check backend connectivity |
 | **JAAR + PostgreSQL add ~512 MB RAM** | May require more Minikube memory | Bump with `MINIKUBE_MEMORY=12288` |
-| **JARVIS URLs shifted to `/jarvis/*`** | Old bookmarks to `/*` paths break | Root `/` redirects to `/jarvis` |
+| **Host-based routing requires `/etc/hosts`** | `*.jarvis.io` must resolve to gateway IP | Add entries for `main.jarvis.io` and `jaar.jarvis.io` |

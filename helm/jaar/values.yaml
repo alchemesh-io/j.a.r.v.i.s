@@ -33,3 +33,4 @@ agentregistry:
 gateway:
   name: jarvis-gateway
   namespace: istio-system
+  host: jaar.jarvis.io

@@ -16,7 +16,7 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter basename="/jarvis">
+      <BrowserRouter>
         <div className="app">
           <header className="app-header">
             <Link to="/" className="logo" aria-label="J.A.R.V.I.S">

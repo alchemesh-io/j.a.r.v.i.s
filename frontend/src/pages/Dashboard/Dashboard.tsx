@@ -210,7 +210,7 @@ export default function Dashboard() {
         { label: 'Prompts', count: promptCount, color: '#a855f7' },
       ],
       compact,
-      onNavigate: () => { window.location.href = '/jaar'; },
+      onNavigate: () => { window.open(`${window.location.protocol}//jaar.jarvis.io`, '_blank'); },
     },
   };
 

@@ -155,9 +155,17 @@ argocd-ui: _check-prereqs
 	@echo "    Username: admin"
 	kubectl port-forward svc/argocd-server -n argocd 8080:443
 
-## Port-forward Istio ingress gateway to localhost:7080 (HTTP)
+## Port-forward Istio ingress gateway to localhost:80 (requires minikube tunnel)
+## Access: http://main.jarvis.io (JARVIS), http://jaar.jarvis.io (JAAR)
+## Ensure /etc/hosts maps *.jarvis.io to the gateway IP (minikube tunnel IP)
 jarvis-ui: _check-prereqs
-	@echo "==> Starting port-forward: http://localhost:7080"
+	@echo "==> Access via minikube tunnel:"
+	@echo "    http://main.jarvis.io  (JARVIS)"
+	@echo "    http://jaar.jarvis.io  (Agent Registry)"
+	@echo ""
+	@echo "==> Ensure /etc/hosts contains:"
+	@echo "    <GATEWAY-IP>  main.jarvis.io jaar.jarvis.io"
+	@echo ""
 	kubectl port-forward svc/jarvis-gateway-istio -n istio-system 7080:80
 
 ## Trigger ArgoCD hard sync for jarvis and jaar applications

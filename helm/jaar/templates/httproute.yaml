@@ -9,27 +9,13 @@ spec:
   parentRefs:
     - name: {{ .Values.gateway.name }}
       namespace: {{ .Values.gateway.namespace }}
+  hostnames:
+    - {{ .Values.gateway.host | default "jaar.jarvis.io" }}
   rules:
-    # AgentRegistry: /jaar/* -> /*
     - matches:
         - path:
             type: PathPrefix
-            value: /jaar
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /
-      backendRefs:
-        - name: {{ .Release.Name }}-agentregistry
-          port: 12121
-    # AgentRegistry Next.js assets: /_next/* -> /_next/*
-    # Required because the embedded UI references /_next/static/* without the /jaar prefix
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /_next
+            value: /
       backendRefs:
         - name: {{ .Release.Name }}-agentregistry
           port: 12121

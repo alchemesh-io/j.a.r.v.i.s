@@ -1,4 +1,5 @@
-const JAAR_BASE = '/jaar/v0';
+const JAAR_HOST = import.meta.env.VITE_JAAR_HOST || 'jaar.jarvis.io';
+const JAAR_BASE = `${window.location.protocol}//${JAAR_HOST}/v0`;
 
 export interface ArtifactList<T = unknown> {
   items: T[];

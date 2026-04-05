@@ -9,86 +9,45 @@ spec:
   parentRefs:
     - name: {{ .Values.gateway.name }}
       namespace: {{ .Values.gateway.namespace }}
+  hostnames:
+    - {{ .Values.gateway.host | default "main.jarvis.io" }}
   rules:
-    # Root redirect: / -> /jarvis
+    # Backend API
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/
+      backendRefs:
+        - name: {{ .Release.Name }}-backend
+          port: {{ .Values.backend.service.port }}
+    # OpenAPI docs
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /docs
+      backendRefs:
+        - name: {{ .Release.Name }}-backend
+          port: {{ .Values.backend.service.port }}
     - matches:
         - path:
             type: Exact
+            value: /openapi.json
+      backendRefs:
+        - name: {{ .Release.Name }}-backend
+          port: {{ .Values.backend.service.port }}
+    # Health check
+    - matches:
+        - path:
+            type: Exact
+            value: /health
+      backendRefs:
+        - name: {{ .Release.Name }}-backend
+          port: {{ .Values.backend.service.port }}
+    # Frontend SPA (catch-all)
+    - matches:
+        - path:
+            type: PathPrefix
             value: /
-      filters:
-        - type: RequestRedirect
-          requestRedirect:
-            path:
-              type: ReplaceFullPath
-              replaceFullPath: /jarvis
-            statusCode: 302
-    # Backend API: /jarvis/api/* -> /api/*
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /jarvis/api/
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /api/
-      backendRefs:
-        - name: {{ .Release.Name }}-backend
-          port: {{ .Values.backend.service.port }}
-    # OpenAPI docs: /jarvis/docs -> /docs
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /jarvis/docs
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /docs
-      backendRefs:
-        - name: {{ .Release.Name }}-backend
-          port: {{ .Values.backend.service.port }}
-    # OpenAPI spec: /jarvis/openapi.json -> /openapi.json
-    - matches:
-        - path:
-            type: Exact
-            value: /jarvis/openapi.json
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplaceFullPath
-              replaceFullPath: /openapi.json
-      backendRefs:
-        - name: {{ .Release.Name }}-backend
-          port: {{ .Values.backend.service.port }}
-    # Health check: /jarvis/health -> /health
-    - matches:
-        - path:
-            type: Exact
-            value: /jarvis/health
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplaceFullPath
-              replaceFullPath: /health
-      backendRefs:
-        - name: {{ .Release.Name }}-backend
-          port: {{ .Values.backend.service.port }}
-    # Frontend SPA: /jarvis/* -> /*
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /jarvis
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /
       backendRefs:
         - name: {{ .Release.Name }}-frontend
           port: {{ .Values.frontend.service.port }}
