@@ -7,6 +7,7 @@ spec:
   parentRefs:
     - name: jarvis-gateway
       namespace: istio-system
+      sectionName: https
   hostnames:
     - jaac.jarvis.io
   rules:
@@ -16,4 +17,4 @@ spec:
             value: /
       backendRefs:
         - name: argocd-server
-          port: 443
+          port: 80

@@ -15,7 +15,7 @@ MOUNT_TARGET    := /mnt/jarvis-repo
 GHCR_ORG        := alchemesh-io
 
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update _tls-secret
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -227,11 +227,31 @@ _istio-install:
 	@echo "==> Waiting for Istio to sync and become healthy (timeout 5m)..."
 	@kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/istio -n argocd --timeout=300s 2>/dev/null || \
 		echo "  (Waiting for Istio sync — may take a moment on first deploy)"
+	@$(MAKE) _tls-secret
 	@echo "==> Labeling jarvis and jaar namespaces for Istio sidecar injection..."
 	kubectl create namespace jarvis --dry-run=client -o yaml | kubectl apply -f -
 	kubectl label namespace jarvis istio-injection=enabled --overwrite
 	kubectl create namespace jaar --dry-run=client -o yaml | kubectl apply -f -
 	kubectl label namespace jaar istio-injection=enabled --overwrite
+
+## Generate self-signed wildcard TLS cert for *.jarvis.io and store in istio-system
+_tls-secret:
+	@if kubectl get secret jarvis-io-tls -n istio-system >/dev/null 2>&1; then \
+		echo "==> TLS secret jarvis-io-tls already exists, skipping."; \
+	else \
+		echo "==> Generating self-signed wildcard certificate for *.jarvis.io..."; \
+		openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+			-keyout /tmp/jarvis-io-tls.key \
+			-out /tmp/jarvis-io-tls.crt \
+			-subj "/CN=*.jarvis.io" \
+			-addext "subjectAltName=DNS:*.jarvis.io,DNS:jarvis.io" 2>/dev/null; \
+		kubectl create secret tls jarvis-io-tls \
+			--cert=/tmp/jarvis-io-tls.crt \
+			--key=/tmp/jarvis-io-tls.key \
+			-n istio-system; \
+		rm -f /tmp/jarvis-io-tls.key /tmp/jarvis-io-tls.crt; \
+		echo "  TLS secret created."; \
+	fi
 
 _argocd-install:
 	@echo "==> Installing ArgoCD $(ARGOCD_VERSION)..."

@@ -13,3 +13,15 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+    - name: https
+      port: 443
+      protocol: HTTPS
+      hostname: "*.jarvis.io"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: jarvis-io-tls
+      allowedRoutes:
+        namespaces:
+          from: All
