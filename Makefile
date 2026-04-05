@@ -144,27 +144,27 @@ undeploy: _check-prereqs
 # ArgoCD helpers
 # ---------------------------------------------------------------------------
 
-## Port-forward ArgoCD UI to localhost:8080 and print admin password
+## Print ArgoCD admin password — UI accessible at http://argocd.jarvis.io
 argocd-ui: _check-prereqs
 	@echo "==> ArgoCD initial admin password:"
 	@kubectl -n argocd get secret argocd-initial-admin-secret \
 		-o jsonpath="{.data.password}" 2>/dev/null | base64 --decode && echo || \
 		echo "  (Secret not found — password may have been changed)"
 	@echo ""
-	@echo "==> Starting port-forward: https://localhost:8080"
+	@echo "==> ArgoCD UI: http://argocd.jarvis.io"
 	@echo "    Username: admin"
-	kubectl port-forward svc/argocd-server -n argocd 8080:443
 
 ## Port-forward Istio ingress gateway to localhost:80 (requires minikube tunnel)
 ## Access: http://main.jarvis.io (JARVIS), http://jaar.jarvis.io (JAAR)
 ## Ensure /etc/hosts maps *.jarvis.io to the gateway IP (minikube tunnel IP)
 jarvis-ui: _check-prereqs
 	@echo "==> Access via minikube tunnel:"
-	@echo "    http://main.jarvis.io  (JARVIS)"
-	@echo "    http://jaar.jarvis.io  (Agent Registry)"
+	@echo "    http://main.jarvis.io    (JARVIS)"
+	@echo "    http://jaar.jarvis.io    (Agent Registry)"
+	@echo "    http://argocd.jarvis.io  (ArgoCD)"
 	@echo ""
 	@echo "==> Ensure /etc/hosts contains:"
-	@echo "    <GATEWAY-IP>  main.jarvis.io jaar.jarvis.io"
+	@echo "    <GATEWAY-IP>  main.jarvis.io jaar.jarvis.io argocd.jarvis.io"
 	@echo ""
 	kubectl port-forward svc/jarvis-gateway-istio -n istio-system 7080:80
 
