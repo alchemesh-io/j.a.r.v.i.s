@@ -228,9 +228,6 @@ _istio-install:
 	@kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/istio -n argocd --timeout=300s 2>/dev/null || \
 		echo "  (Waiting for Istio sync — may take a moment on first deploy)"
 	@$(MAKE) _tls-secret
-	@echo "==> Restarting argocd-server to pick up insecure mode (TLS terminated at gateway)..."
-	kubectl rollout restart deployment argocd-server -n argocd 2>/dev/null || true
-	kubectl rollout status deployment argocd-server -n argocd --timeout=120s 2>/dev/null || true
 	@echo "==> Labeling jarvis and jaar namespaces for Istio sidecar injection..."
 	kubectl create namespace jarvis --dry-run=client -o yaml | kubectl apply -f -
 	kubectl label namespace jarvis istio-injection=enabled --overwrite
@@ -260,7 +257,12 @@ _argocd-install:
 	@echo "==> Installing ArgoCD $(ARGOCD_VERSION)..."
 	kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 	kubectl apply -n argocd --server-side --force-conflicts -f https://raw.githubusercontent.com/argoproj/argo-cd/$(ARGOCD_VERSION)/manifests/install.yaml
+	@echo "==> Configuring ArgoCD server for insecure mode (TLS terminated at gateway)..."
+	@kubectl create configmap argocd-cmd-params-cm -n argocd \
+		--from-literal=server.insecure=true \
+		--dry-run=client -o yaml | kubectl apply -f -
 	@echo "==> Waiting for ArgoCD to be Ready (timeout 5m)..."
+	kubectl rollout restart deployment argocd-server -n argocd
 	kubectl wait --for=condition=Available deployment --all -n argocd --timeout=300s
 	kubectl wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset --all -n argocd --timeout=300s
 
