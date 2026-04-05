@@ -24,3 +24,12 @@ spec:
       backendRefs:
         - name: {{ .Release.Name }}-agentregistry
           port: 12121
+    # AgentRegistry Next.js assets: /_next/* -> /_next/*
+    # Required because the embedded UI references /_next/static/* without the /jaar prefix
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /_next
+      backendRefs:
+        - name: {{ .Release.Name }}-agentregistry
+          port: 12121
