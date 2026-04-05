@@ -125,11 +125,11 @@ All traffic enters through the Istio ingress gateway via host-based routing on p
 
 - `main.jarvis.io` — JARVIS: `/api/*` → backend, `/*` → frontend SPA
 - `jaar.jarvis.io` — AgentRegistry: `/*` → Next.js UI + API
-- `argocd.jarvis.io` — ArgoCD UI
+- `jaac.jarvis.io` — ArgoCD UI
 
 The gateway listener matches `*.jarvis.io`. For local dev, add entries to `/etc/hosts`:
 ```
-<GATEWAY-IP>  main.jarvis.io jaar.jarvis.io argocd.jarvis.io
+<GATEWAY-IP>  main.jarvis.io jaar.jarvis.io jaac.jarvis.io
 ```
 
 Backend task management endpoints are under `/api/v1/`. OpenAPI docs at `main.jarvis.io/docs`.
@@ -184,7 +184,7 @@ kubectl get svc istio-ingressgateway -n istio-system   # Shows EXTERNAL-IP for t
 All traffic enters through the Istio ingress gateway via host-based routing (`*.jarvis.io`):
 - `main.jarvis.io`: `/api/*`, `/docs`, `/health` → backend; `/*` → frontend SPA
 - `jaar.jarvis.io`: `/*` → AgentRegistry
-- `argocd.jarvis.io`: `/*` → ArgoCD UI
+- `jaac.jarvis.io`: `/*` → ArgoCD UI
 
 ### Teardown
 

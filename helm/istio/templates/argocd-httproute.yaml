@@ -8,7 +8,7 @@ spec:
     - name: jarvis-gateway
       namespace: istio-system
   hostnames:
-    - argocd.jarvis.io
+    - jaac.jarvis.io
   rules:
     - matches:
         - path:
