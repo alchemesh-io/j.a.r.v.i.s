@@ -15,7 +15,7 @@ MOUNT_TARGET    := /mnt/jarvis-repo
 GHCR_ORG        := alchemesh-io
 
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -94,8 +94,8 @@ cluster-status: _check-prereqs
 # Application deployment
 # ---------------------------------------------------------------------------
 
-## Pull latest published images from GHCR, load into Minikube, apply ArgoCD App CR, hard sync
-deploy: _check-prereqs _deploy-secrets
+## Pull latest published images from GHCR, load into Minikube, apply ArgoCD App CRs, hard sync
+deploy: _check-prereqs _deploy-secrets _deploy-jaar-secrets _helm-dep-update
 	@echo "==> Pulling latest images from GHCR..."
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
@@ -104,38 +104,41 @@ deploy: _check-prereqs _deploy-secrets
 	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
 	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-mcp:latest
-	@echo "==> Applying ArgoCD Application CR (GHCR images)..."
+	@echo "==> Applying ArgoCD Application CRs (GHCR images)..."
 	kubectl apply -f argocd/jarvis-app.yaml
+	kubectl apply -f argocd/jaar-app.yaml
 	@$(MAKE) sync
 	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
 	@echo "==> Access via Istio ingress gateway:"
 	@echo "    minikube tunnel  (in a separate terminal)"
 	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
-## Build images locally, load into Minikube, apply ArgoCD App CR, hard sync
-deploy-local: _check-prereqs _deploy-secrets
+## Build images locally, load into Minikube, apply ArgoCD App CRs, hard sync
+deploy-local: _check-prereqs _deploy-secrets _deploy-jaar-secrets _helm-dep-update
 	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
 	@echo "==> Building Docker images locally (tag: $(LOCAL_TAG))..."
 	docker build -t jarvis-backend:$(LOCAL_TAG) ./backend
 	docker build -t jarvis-frontend:$(LOCAL_TAG) ./frontend
-	docker build -t jarvis-mcp:$(LOCAL_TAG) ./mcp_server
+	docker build -t jarvis-mcp:$(LOCAL_TAG) ./artifacts/servers/jarvis-mcp
 	@echo "==> Loading images into Minikube..."
 	minikube image load jarvis-backend:$(LOCAL_TAG)
 	minikube image load jarvis-frontend:$(LOCAL_TAG)
 	minikube image load jarvis-mcp:$(LOCAL_TAG)
-	@echo "==> Applying ArgoCD Application CR (local images, tag: $(LOCAL_TAG))..."
+	@echo "==> Applying ArgoCD Application CRs (local images, tag: $(LOCAL_TAG))..."
 	@sed 's/tag: local/tag: "$(LOCAL_TAG)"/g' argocd/jarvis-app-local.yaml | kubectl apply -f -
+	kubectl apply -f argocd/jaar-app-local.yaml
 	@$(MAKE) sync
 	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
 	@echo "==> Access via Istio ingress gateway:"
 	@echo "    minikube tunnel  (in a separate terminal)"
 	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
-## Delete the ArgoCD Application CR (cascade deletes all managed resources)
+## Delete the ArgoCD Application CRs (cascade deletes all managed resources)
 undeploy: _check-prereqs
-	@echo "==> Deleting ArgoCD Application CR (cascade)..."
+	@echo "==> Deleting ArgoCD Application CRs (cascade)..."
 	kubectl delete -f argocd/jarvis-app.yaml --ignore-not-found=true
-	@echo "==> Application undeployed."
+	kubectl delete -f argocd/jaar-app.yaml --ignore-not-found=true
+	@echo "==> Applications undeployed."
 
 # ---------------------------------------------------------------------------
 # ArgoCD helpers
@@ -157,7 +160,7 @@ jarvis-ui: _check-prereqs
 	@echo "==> Starting port-forward: http://localhost:7080"
 	kubectl port-forward svc/jarvis-gateway-istio -n istio-system 7080:80
 
-## Trigger ArgoCD hard sync for the jarvis application
+## Trigger ArgoCD hard sync for jarvis and jaar applications
 sync: _check-prereqs
 	@echo "==> Triggering ArgoCD sync for 'jarvis'..."
 	@if command -v argocd >/dev/null 2>&1; then \
@@ -165,6 +168,15 @@ sync: _check-prereqs
 		echo "  (argocd CLI sync failed — falling back to kubectl)"; \
 	fi
 	kubectl -n argocd patch app jarvis \
+		--type merge \
+		-p '{"operation":{"initiatedBy":{"username":"make-sync"},"sync":{"revision":"HEAD","prune":true}}}' \
+		2>/dev/null || true
+	@echo "==> Triggering ArgoCD sync for 'jaar'..."
+	@if command -v argocd >/dev/null 2>&1; then \
+		argocd app sync jaar --hard-refresh 2>/dev/null || \
+		echo "  (argocd CLI sync failed — falling back to kubectl)"; \
+	fi
+	kubectl -n argocd patch app jaar \
 		--type merge \
 		-p '{"operation":{"initiatedBy":{"username":"make-sync"},"sync":{"revision":"HEAD","prune":true}}}' \
 		2>/dev/null || true
@@ -207,9 +219,11 @@ _istio-install:
 	@echo "==> Waiting for Istio to sync and become healthy (timeout 5m)..."
 	@kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/istio -n argocd --timeout=300s 2>/dev/null || \
 		echo "  (Waiting for Istio sync — may take a moment on first deploy)"
-	@echo "==> Labeling jarvis namespace for Istio sidecar injection..."
+	@echo "==> Labeling jarvis and jaar namespaces for Istio sidecar injection..."
 	kubectl create namespace jarvis --dry-run=client -o yaml | kubectl apply -f -
 	kubectl label namespace jarvis istio-injection=enabled --overwrite
+	kubectl create namespace jaar --dry-run=client -o yaml | kubectl apply -f -
+	kubectl label namespace jaar istio-injection=enabled --overwrite
 
 _argocd-install:
 	@echo "==> Installing ArgoCD $(ARGOCD_VERSION)..."
@@ -233,6 +247,25 @@ _argocd-patch-repo-server:
 _argocd-add-repo:
 	@echo "==> Configuring ArgoCD repository entry for file:///mnt/jarvis-repo..."
 	kubectl apply -f argocd/jarvis-repo-secret.yaml
+
+JAAR_SECRETS_FILE := secrets/jaar-secret.yaml
+
+## Apply the local JAAR secret manifest (gitignored, not managed by ArgoCD)
+_deploy-jaar-secrets:
+	@if [ -f $(JAAR_SECRETS_FILE) ]; then \
+		echo "==> Applying JAAR secret from $(JAAR_SECRETS_FILE)..."; \
+		kubectl create namespace jaar --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null; \
+		kubectl apply -f $(JAAR_SECRETS_FILE); \
+	else \
+		echo "==> No $(JAAR_SECRETS_FILE) found — skipping JAAR secrets deployment."; \
+		echo "    Copy secrets/jaar-secret.example.yaml to $(JAAR_SECRETS_FILE) and fill in values."; \
+	fi
+
+## Build Helm chart dependencies (pull upstream subcharts)
+_helm-dep-update:
+	@echo "==> Updating Helm dependencies for helm/jaar/..."
+	helm dependency update helm/jaar/ 2>/dev/null || \
+		echo "  (helm dependency update failed — chart may not render correctly)"
 
 
 # ---------------------------------------------------------------------------
@@ -264,4 +297,4 @@ test-e2e:
 	cd frontend && npx playwright test --config e2e/playwright.config.ts
 
 test-mcp:
-	cd mcp_server && uv run pytest tests/ -v
+	cd artifacts/servers/jarvis-mcp && uv run pytest tests/ -v

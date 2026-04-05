@@ -1,0 +1,56 @@
+name: Publish Artifacts to Agent Registry
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "artifacts/**"
+
+env:
+  REGISTRY: ghcr.io
+  ORG: alchemesh-io
+
+jobs:
+  build-and-register:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract short git SHA
+        id: meta
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push MCP server image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./artifacts/servers/jarvis-mcp
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.ORG }}/jarvis-mcp:${{ steps.meta.outputs.sha }}
+            ${{ env.REGISTRY }}/${{ env.ORG }}/jarvis-mcp:latest
+
+      - name: Install arctl
+        run: curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry/main/scripts/get-arctl | bash
+
+      - name: Register artifacts
+        run: |
+          for manifest in artifacts/*/*/manifest.yaml; do
+            TYPE=$(yq '.type' "$manifest")
+            NAME=$(yq '.name' "$manifest")
+            echo "Registering ${TYPE}/${NAME}..."
+            arctl "${TYPE}" register \
+              --docker-url "${{ env.REGISTRY }}/${{ env.ORG }}/${NAME}:${{ steps.meta.outputs.sha }}" \
+              "$manifest" || \
+              echo "  Skipped — JAAR is local-only and not reachable from CI"
+          done

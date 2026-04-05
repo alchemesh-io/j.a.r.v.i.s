@@ -1,0 +1,6 @@
+name: jarvis-mcp
+type: server
+version: 0.1.0
+description: MCP server for J.A.R.V.I.S task, daily, and weekly management
+protocol: mcp
+image: ghcr.io/alchemesh-io/jarvis-mcp

@@ -20,6 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Card, Input } from '@jarvis/jads';
 import { listTasks, type Task } from '../../api/client';
+import { fetchServerCount, fetchAgentCount, fetchSkillCount, fetchPromptCount } from '../../api/jaar';
 import BrainAnimation from './BrainAnimation';
 import './Dashboard.css';
 
@@ -79,7 +80,7 @@ function MetricBlock({ id, title, metrics, compact, onNavigate }: MetricBlockPro
 }
 
 const STORAGE_KEY = 'jarvis-dashboard-layout';
-const DEFAULT_ORDER = ['workers', 'daily-tasks', 'weekly-tasks'];
+const DEFAULT_ORDER = ['workers', 'daily-tasks', 'weekly-tasks', 'agent-registry'];
 
 function getTaskMetrics(tasks: Task[]) {
   const refinement = tasks.filter((t) => t.type === 'refinement').length;
@@ -128,6 +129,23 @@ export default function Dashboard() {
   const { data: weeklyTasks = [] } = useQuery({
     queryKey: ['tasks', today, 'weekly'],
     queryFn: () => listTasks({ date: today, scope: 'weekly' }),
+  });
+
+  const { data: serverCount = 0 } = useQuery({
+    queryKey: ['jaar', 'servers'],
+    queryFn: fetchServerCount,
+  });
+  const { data: agentCount = 0 } = useQuery({
+    queryKey: ['jaar', 'agents'],
+    queryFn: fetchAgentCount,
+  });
+  const { data: skillCount = 0 } = useQuery({
+    queryKey: ['jaar', 'skills'],
+    queryFn: fetchSkillCount,
+  });
+  const { data: promptCount = 0 } = useQuery({
+    queryKey: ['jaar', 'prompts'],
+    queryFn: fetchPromptCount,
   });
 
   useEffect(() => {
@@ -181,6 +199,18 @@ export default function Dashboard() {
       metrics: getTaskMetrics(weeklyTasks),
       compact,
       onNavigate: () => navigateToTasks(navigate, 'weekly'),
+    },
+    'agent-registry': {
+      id: 'agent-registry',
+      title: 'Agent Registry',
+      metrics: [
+        { label: 'Servers', count: serverCount, color: '#3b82f6' },
+        { label: 'Agents', count: agentCount, color: '#f97316' },
+        { label: 'Skills', count: skillCount, color: '#22c55e' },
+        { label: 'Prompts', count: promptCount, color: '#a855f7' },
+      ],
+      compact,
+      onNavigate: () => { window.location.href = '/jaar'; },
     },
   };
 

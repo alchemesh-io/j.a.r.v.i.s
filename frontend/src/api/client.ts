@@ -1,4 +1,4 @@
-const API_BASE = '/api/v1';
+const API_BASE = '/jarvis/api/v1';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {

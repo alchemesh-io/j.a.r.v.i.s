@@ -1,0 +1,32 @@
+# Default values for JAAR (AgentRegistry wrapper chart).
+#
+# All AgentRegistry config lives under the "agentregistry" key
+# and is forwarded to the upstream subchart.
+#
+# JWT key and DB credentials stored in K8s Secret "jaar-secret"
+# (see secrets/jaar-secret.example.yaml).
+
+agentregistry:
+  image:
+    tag: "0.3.3"
+
+  config:
+    enableAnonymousAuth: "true"
+    enableRegistryValidation: "false"
+    # JWT signing key is in the jaar-secret K8s Secret
+    existingSecret: jaar-secret
+
+  # -- Bundled PostgreSQL (enabled by default for local dev).
+  # Set database.postgres.bundled.enabled=false and provide database.postgres.url
+  # when using CloudSQL, RDS, etc.
+  database:
+    postgres:
+      url: ""
+      vectorEnabled: false
+      bundled:
+        enabled: true
+        storage: 5Gi
+
+gateway:
+  name: jarvis-gateway
+  namespace: istio-system
