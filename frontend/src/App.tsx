@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Dashboard from './pages/Dashboard/Dashboard';
 import TaskBoard from './pages/TaskBoard/TaskBoard';
+import ParticlesBackground from './components/ParticlesBackground';
 import './App.css';
 
 const queryClient = new QueryClient({
@@ -17,6 +18,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <ParticlesBackground />
         <div className="app">
           <header className="app-header">
             <Link to="/" className="logo" aria-label="J.A.R.V.I.S">

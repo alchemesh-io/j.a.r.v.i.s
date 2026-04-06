@@ -48,12 +48,16 @@ interface MetricBlockProps {
 }
 
 function MetricBlock({ id, title, metrics, compact, onNavigate }: MetricBlockProps) {
-  const { attributes, listeners, setNodeRef, transform, transition } =
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id });
 
+  // Only apply the dnd translate to the actively dragged item.
+  // Non-dragged items must NOT shift — they are absolutely positioned.
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: isDragging ? CSS.Transform.toString(transform) : undefined,
+    transition: isDragging ? transition : undefined,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 20 : undefined,
   };
 
   return (
@@ -118,6 +122,26 @@ export default function Dashboard() {
     }
   });
   const [compact, setCompact] = useState(false);
+  const [brainHovered, setBrainHovered] = useState(false);
+  const [isDraggingAny, setIsDraggingAny] = useState(false);
+  const [konamiMode, setKonamiMode] = useState(false);
+
+  // Easter egg: Konami code ↑↑↓↓←→←→BA toggles heart mode
+  useEffect(() => {
+    const SEQ = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+    let pos = 0;
+    function onKey(e: KeyboardEvent) {
+      const key = e.key.startsWith('Arrow') ? e.key : e.key.toLowerCase();
+      if (key === SEQ[pos]) {
+        pos++;
+        if (pos === SEQ.length) { setKonamiMode(m => !m); pos = 0; }
+      } else {
+        pos = key === SEQ[0] ? 1 : 0;
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const today = formatDate(new Date());
 
@@ -159,8 +183,13 @@ export default function Dashboard() {
     }),
   );
 
+  const handleDragStart = useCallback(() => {
+    setIsDraggingAny(true);
+  }, []);
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
+      setIsDraggingAny(false);
       const { active, over } = event;
       if (!over || active.id === over.id) return;
       setBlockOrder((prev) => {
@@ -172,6 +201,7 @@ export default function Dashboard() {
     [],
   );
 
+  // TODO: Connect workers data to agents API endpoint
   const mockWorkerMetrics = [
     { label: 'Idle', count: 2, color: '#94a3b8' },
     { label: 'Working', count: 1, color: '#f97316' },
@@ -214,52 +244,73 @@ export default function Dashboard() {
     },
   };
 
+  const orbitalAreas = ['workers', 'daily', 'weekly'] as const;
+
   return (
     <div className="dashboard">
-      <div className="dashboard__controls">
+      <div className="dashboard__topbar">
         <button
           type="button"
-          role="switch"
-          className={`dashboard__compact-toggle ${compact ? '' : 'dashboard__compact-toggle--off'}`}
+          className={`dashboard__compact-toggle${compact ? ' dashboard__compact-toggle--active' : ''}`}
           onClick={() => setCompact((c) => !c)}
-          aria-checked={compact}
+          aria-pressed={compact}
           title={compact ? 'Expand blocks' : 'Compact blocks'}
         >
-          <span className="dashboard__compact-toggle-thumb" />
-          <span className="dashboard__compact-toggle-label">Compact</span>
+          Compact
         </button>
       </div>
 
-      <div className="dashboard__grid">
+      <div className="dashboard__hud" data-brain-hovered={brainHovered ? '' : undefined} data-dragging={isDraggingAny ? '' : undefined}>
+        <div
+          className="dashboard__hud-brain"
+          onMouseEnter={() => setBrainHovered(true)}
+          onMouseLeave={() => setBrainHovered(false)}
+        >
+          <BrainAnimation konamiMode={konamiMode} />
+        </div>
+
+        {/* Orbital metric blocks — positions determined by blockOrder */}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
           <SortableContext
             items={blockOrder}
             strategy={verticalListSortingStrategy}
           >
-            {blockOrder.map((id) => {
+            {blockOrder.map((id, index) => {
               const block = blocks[id];
-              return block ? <MetricBlock key={id} {...block} /> : null;
+              const area = orbitalAreas[index];
+              return block ? (
+                <div
+                  key={id}
+                  className={`dashboard__orbital-block dashboard__hud-${area}`}
+                >
+                  <MetricBlock {...block} />
+                </div>
+              ) : null;
             })}
           </SortableContext>
         </DndContext>
       </div>
 
-      <div className="dashboard__brain">
-        <BrainAnimation />
-      </div>
-
       <div className="dashboard__chat">
-        <Input
-          label=""
-          placeholder="Ask J.A.R.V.I.S anything..."
-          value=""
-          onChange={() => {}}
-          disabled
-        />
+        <div className="dashboard__chat-field">
+          <span className="dashboard__chat-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M14 2H2C1.4 2 1 2.4 1 3V10C1 10.6 1.4 11 2 11H6L8 14L10 11H14C14.6 11 15 10.6 15 10V3C15 2.4 14.6 2 14 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </span>
+          <Input
+            label=""
+            placeholder="Ask J.A.R.V.I.S anything..."
+            value=""
+            onChange={() => {}}
+            disabled
+          />
+        </div>
       </div>
     </div>
   );

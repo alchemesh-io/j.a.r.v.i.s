@@ -76,6 +76,7 @@
 
 .jads-calendar__day:hover {
   background-color: var(--jads-color-surface-hover);
+  border-color: rgba(0, 212, 255, 0.2);
 }
 
 .jads-calendar__day:focus-visible {
@@ -92,11 +93,17 @@
   color: var(--jads-color-text-muted);
 }
 
-/* Today indicator - filled blue circle */
+/* Today indicator - pulsing cyan outline */
 .jads-calendar__day--today {
   background-color: var(--jads-color-accent-cyan);
   color: var(--jads-color-bg);
   font-weight: var(--jads-font-weight-semibold);
+  animation: jads-today-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes jads-today-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.4); }
+  50%       { box-shadow: 0 0 0 4px rgba(0, 212, 255, 0.15); }
 }
 
 .jads-calendar__day--today:hover {

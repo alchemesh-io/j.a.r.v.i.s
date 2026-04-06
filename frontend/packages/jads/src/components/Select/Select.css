@@ -26,9 +26,10 @@
   font-family: var(--jads-font-family);
   font-size: var(--jads-font-size-sm);
   color: var(--jads-color-text);
-  background-color: var(--jads-color-surface);
-  border: 1px solid var(--jads-color-border);
-  border-radius: var(--jads-radius-md);
+  background-color: transparent;
+  border: none;
+  border-bottom: 1px solid var(--jads-color-border);
+  border-radius: 0;
   outline: none;
   cursor: pointer;
   appearance: none;
@@ -52,8 +53,8 @@
 }
 
 .jads-select:focus-visible {
-  border-color: var(--jads-color-accent-cyan);
-  box-shadow: 0 0 0 2px var(--jads-color-accent-cyan-muted);
+  border-bottom-color: var(--jads-color-accent-cyan);
+  box-shadow: 0 4px 12px rgba(0, 212, 255, 0.2);
   outline: none;
 }
 
@@ -73,12 +74,12 @@
 
 /* Error state */
 .jads-select-wrapper--error .jads-select {
-  border-color: var(--jads-color-error);
+  border-bottom-color: var(--jads-color-error);
 }
 
 .jads-select-wrapper--error .jads-select:focus-visible {
-  border-color: var(--jads-color-error);
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+  border-bottom-color: var(--jads-color-error);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
 }
 
 .jads-select__error {

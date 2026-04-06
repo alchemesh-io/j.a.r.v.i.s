@@ -12,8 +12,23 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 2rem;
-  background-color: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  background-color: rgba(11, 14, 26, 0.85);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .app-header {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+
+@keyframes logo-glow {
+  0%, 100% { text-shadow: 0 0 12px rgba(0, 212, 255, 0.4), 0 0 20px rgba(0, 212, 255, 0.2); }
+  50%       { text-shadow: 0 0 20px rgba(0, 212, 255, 0.7), 0 0 40px rgba(0, 212, 255, 0.3); }
 }
 
 .app-header .logo {
@@ -25,6 +40,7 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  animation: logo-glow 2s ease-in-out infinite;
 }
 
 .app-header nav a {
@@ -32,12 +48,13 @@
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-text-muted);
-  transition: color 0.2s;
+  transition: color 0.2s, text-shadow 0.2s;
 }
 
 .app-header nav a:hover {
   color: var(--color-accent-cyan);
   text-decoration: none;
+  text-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
 }
 
 /* Main */
@@ -52,9 +69,16 @@
 /* Footer */
 .app-footer {
   padding: 1rem 2rem;
-  background-color: var(--color-surface);
-  border-top: 1px solid var(--color-border);
+  background-color: rgba(11, 14, 26, 0.85);
+  border-top: 1px solid rgba(0, 212, 255, 0.1);
   text-align: center;
   font-size: 0.8rem;
   color: var(--color-text-muted);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .app-footer {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
 }

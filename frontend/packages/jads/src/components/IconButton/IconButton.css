@@ -39,6 +39,9 @@
 .jads-icon-button--ghost:hover:not(:disabled) {
   background-color: var(--jads-color-surface-hover);
   color: var(--jads-color-text);
+  border-color: var(--jads-color-accent-cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
 }
 
 .jads-icon-button--ghost:active:not(:disabled) {
@@ -51,9 +54,11 @@
 }
 
 .jads-icon-button--outline:hover:not(:disabled) {
-  border-color: var(--jads-color-border-hover);
+  border-color: var(--jads-color-accent-cyan);
+  border-radius: 50%;
   background-color: var(--jads-color-surface-hover);
   color: var(--jads-color-text);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
 }
 
 .jads-icon-button--outline:active:not(:disabled) {

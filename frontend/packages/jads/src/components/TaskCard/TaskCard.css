@@ -25,7 +25,7 @@
   transform: translateY(-2px);
 }
 
-/* Type-based gradient backgrounds */
+/* Type-based gradient backgrounds + pulsing left accent bar */
 .jads-task-card--refinement {
   background: linear-gradient(
     180deg,
@@ -34,6 +34,8 @@
     rgba(59, 130, 246, 0.05) 100%
   );
   border-top: 2px solid var(--jads-color-task-refinement);
+  border-left: 3px solid var(--jads-color-task-refinement);
+  animation: jads-accent-pulse-blue 2s ease-in-out infinite;
 }
 
 .jads-task-card--refinement:hover {
@@ -48,6 +50,8 @@
     rgba(249, 115, 22, 0.05) 100%
   );
   border-top: 2px solid var(--jads-color-task-implementation);
+  border-left: 3px solid var(--jads-color-task-implementation);
+  animation: jads-accent-pulse-orange 2s ease-in-out infinite;
 }
 
 .jads-task-card--implementation:hover {
@@ -62,10 +66,27 @@
     rgba(239, 68, 68, 0.05) 100%
   );
   border-top: 2px solid var(--jads-color-task-review);
+  border-left: 3px solid var(--jads-color-task-review);
+  animation: jads-accent-pulse-red 2s ease-in-out infinite;
 }
 
 .jads-task-card--review:hover {
   border-color: rgba(239, 68, 68, 0.4);
+}
+
+@keyframes jads-accent-pulse-blue {
+  0%, 100% { border-left-color: rgba(59, 130, 246, 0.7); }
+  50%       { border-left-color: rgba(59, 130, 246, 1); }
+}
+
+@keyframes jads-accent-pulse-orange {
+  0%, 100% { border-left-color: rgba(249, 115, 22, 0.7); }
+  50%       { border-left-color: rgba(249, 115, 22, 1); }
+}
+
+@keyframes jads-accent-pulse-red {
+  0%, 100% { border-left-color: rgba(239, 68, 68, 0.7); }
+  50%       { border-left-color: rgba(239, 68, 68, 1); }
 }
 
 /* Done state - dimmed appearance */

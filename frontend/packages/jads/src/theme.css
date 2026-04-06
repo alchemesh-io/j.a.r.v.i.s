@@ -77,4 +77,9 @@
   /* Transitions */
   --jads-transition-fast: 150ms ease;
   --jads-transition-normal: 250ms ease;
+
+  /* Glass / HUD effects */
+  --jads-glass-bg: rgba(11, 14, 26, 0.75);
+  --jads-glass-blur: blur(8px);
+  --jads-glow-cyan-border: rgba(0, 212, 255, 0.25);
 }
