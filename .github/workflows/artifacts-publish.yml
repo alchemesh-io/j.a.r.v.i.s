@@ -20,8 +20,8 @@ jobs:
     strategy:
       matrix:
         server:
-          - name: jarvis-mcp
-            path: artifacts/servers/jarvis-mcp
+          - name: jarvis
+            path: artifacts/servers/jarvis
     steps:
       - uses: actions/checkout@v4
 

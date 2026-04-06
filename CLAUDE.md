@@ -80,7 +80,7 @@ j.a.r.v.i.s/
 │   └── package.json          # Workspace root
 ├── artifacts/                  # Agent Registry managed artifacts
 │   ├── servers/
-│   │   └── jarvis-mcp/         # MCP server (relocated from mcp_server/)
+│   │   └── jarvis/             # MCP server (FastMCP, dynamic tool loading)
 │   │       ├── server.py
 │   │       ├── api_client.py
 │   │       ├── tests/
@@ -207,7 +207,7 @@ cd frontend/packages/jads && npm test
 cd frontend && npx playwright test --config e2e/playwright.config.ts
 
 # MCP server
-cd artifacts/servers/jarvis-mcp && uv run pytest tests/ -v
+cd artifacts/servers/jarvis && uv run pytest tests/ -v
 ```
 
 ## Coding Conventions
@@ -239,7 +239,7 @@ cd artifacts/servers/jarvis-mcp && uv run pytest tests/ -v
 
 ### MCP Server
 
-- Located at `artifacts/servers/jarvis-mcp/` (relocated from `mcp_server/`)
+- Located at `artifacts/servers/jarvis/` (FastMCP with dynamic tool loading)
 - Standalone Python process using the `mcp` SDK
 - Communicates with backend exclusively via REST API (`/api/v1/`) — no direct database access
 - Backend URL configured via `BACKEND_URL` env var
@@ -261,7 +261,7 @@ cd artifacts/servers/jarvis-mcp && uv run pytest tests/ -v
 
   # Common commands (run against local JAAR instance)
   arctl server list
-  arctl server register ./artifacts/servers/jarvis-mcp/manifest.yaml
+  arctl server register ./artifacts/servers/jarvis/mcp.yaml
   arctl agent list
   arctl skill list
   arctl prompt list

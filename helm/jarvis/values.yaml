@@ -39,7 +39,7 @@ frontend:
 
 mcp:
   image:
-    repository: ghcr.io/alchemesh-io/jarvis-mcp
+    repository: ghcr.io/alchemesh-io/jarvis
     tag: latest
     pullPolicy: IfNotPresent
   replicaCount: 1

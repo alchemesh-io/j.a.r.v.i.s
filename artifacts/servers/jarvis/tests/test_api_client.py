@@ -1,8 +1,15 @@
+"""Tests for the J.A.R.V.I.S backend API client."""
+
+import sys
+from pathlib import Path
+
 import pytest
-import httpx
 import respx
 
-from api_client import BackendClient
+# Add src to Python path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from core.api_client import BackendClient  # noqa: E402
 
 
 @pytest.fixture
@@ -112,7 +119,6 @@ async def test_list_weekly_tasks(mock_backend, client):
 
 @pytest.mark.asyncio
 async def test_backend_unreachable(client):
-    # Use a port that's not listening
     bad_client = BackendClient(base_url="http://localhost:1")
     with pytest.raises(RuntimeError, match="Backend unreachable"):
         await bad_client.create_task(title="Test", type="review")

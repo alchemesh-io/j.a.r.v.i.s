@@ -22,7 +22,13 @@ spec:
         certificateRefs:
           - kind: Secret
             name: jarvis-io-tls
-            group: ''
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: localhost
+      port: 80
+      protocol: HTTP
+      hostname: "localhost"
       allowedRoutes:
         namespaces:
           from: All

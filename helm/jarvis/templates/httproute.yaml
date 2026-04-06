@@ -9,8 +9,13 @@ spec:
   parentRefs:
     - name: {{ .Values.gateway.name }}
       namespace: {{ .Values.gateway.namespace }}
+      sectionName: http
+    - name: {{ .Values.gateway.name }}
+      namespace: {{ .Values.gateway.namespace }}
+      sectionName: localhost
   hostnames:
     - {{ .Values.gateway.host | default "main.jarvis.io" }}
+    - localhost
   rules:
     # Backend API
     - matches:
