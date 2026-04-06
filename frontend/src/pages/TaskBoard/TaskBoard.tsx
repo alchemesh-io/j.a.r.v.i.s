@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -39,6 +39,7 @@ import {
   type JiraTicket,
   type CalendarEvent,
 } from '../../api/client';
+import { EmptyState } from './EmptyState';
 import './TaskBoard.css';
 
 // --- localStorage helpers ---
@@ -75,6 +76,10 @@ function formatDate(d: Date): string {
 }
 
 const TYPE_ORDER: Record<string, number> = { review: 0, implementation: 1, refinement: 2 };
+
+function formatDateDisplay(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 const SCOPE_OPTIONS = [
   { value: 'daily', label: 'Day' },
@@ -312,6 +317,9 @@ export default function TaskBoard() {
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
 
+  const [showCalendar, setShowCalendar] = useState(false);
+  const calendarRef = useRef<HTMLDivElement>(null);
+
   const today = formatDate(new Date());
   const dateStr = formatDate(selectedDate);
 
@@ -320,6 +328,18 @@ export default function TaskBoard() {
     const newPrefs: BoardPrefs = { scope, selectedDate: dateStr, doneMode };
     savePrefs(newPrefs);
   }, [scope, dateStr, doneMode]);
+
+  // Close calendar dropdown on outside click
+  useEffect(() => {
+    if (!showCalendar) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (calendarRef.current && !calendarRef.current.contains(e.target as Node)) {
+        setShowCalendar(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCalendar]);
 
   const { data: jiraConfig } = useQuery({
     queryKey: ['jira-config'],
@@ -620,34 +640,72 @@ export default function TaskBoard() {
 
   return (
     <div className="task-board">
-      <aside className="task-board__sidebar">
-        <Button
-          className="task-board__create-btn"
-          onClick={() => { setShowCreateForm(true); setEditingTask(null); resetForm(); }}
-        >
-          + Create
-        </Button>
-        <Calendar selectedDate={selectedDate} onDateSelect={handleDateChange} />
-      </aside>
-
       <div className="task-board__toolbar">
-        <Select
-          label=""
-          value={scope}
-          options={SCOPE_OPTIONS}
-          onChange={(e) => setScope(e.target.value as 'daily' | 'weekly' | 'all')}
-        />
-        <button
-          type="button"
-          role="switch"
-          className={`task-board__done-toggle ${doneMode === 'hide' ? 'task-board__done-toggle--off' : ''}`}
-          onClick={() => setDoneMode((m) => m === 'dim' ? 'hide' : 'dim')}
-          aria-checked={doneMode !== 'hide'}
-          title={doneMode === 'hide' ? 'Show done tasks' : 'Hide done tasks'}
-        >
-          <span className="task-board__done-toggle-thumb" />
-          <span className="task-board__done-toggle-label">Done</span>
-        </button>
+        <div className="task-board__toolbar-left">
+          <button
+            type="button"
+            className="task-board__create-btn"
+            onClick={() => { setShowCreateForm(true); setEditingTask(null); resetForm(); }}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 2V14M2 8H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            Create
+          </button>
+          <div className="task-board__calendar-dropdown" ref={calendarRef}>
+            <button
+              type="button"
+              className={`task-board__date-btn${showCalendar ? ' task-board__date-btn--open' : ''}`}
+              onClick={() => setShowCalendar((v) => !v)}
+              aria-haspopup="true"
+              aria-expanded={showCalendar}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M2 6H14" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M5.5 1.5V4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                <path d="M10.5 1.5V4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+              {formatDateDisplay(selectedDate)}
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true" className="task-board__date-chevron">
+                <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            {showCalendar && (
+              <div className="task-board__calendar-panel">
+                <Calendar
+                  selectedDate={selectedDate}
+                  onDateSelect={(d) => { handleDateChange(d); setShowCalendar(false); }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="task-board__toolbar-right">
+          <div className="task-board__scope-tabs" role="tablist" aria-label="Scope filter">
+            {SCOPE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                role="tab"
+                aria-selected={scope === opt.value}
+                className={`task-board__scope-tab${scope === opt.value ? ' task-board__scope-tab--active' : ''}`}
+                onClick={() => setScope(opt.value as 'daily' | 'weekly' | 'all')}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={`task-board__hud-toggle${doneMode !== 'hide' ? ' task-board__hud-toggle--active' : ''}`}
+            onClick={() => setDoneMode((m) => m === 'dim' ? 'hide' : 'dim')}
+            aria-pressed={doneMode !== 'hide'}
+            title={doneMode === 'hide' ? 'Show done tasks' : 'Dim done tasks'}
+          >
+            Done
+          </button>
+        </div>
       </div>
 
       <section className="task-board__content">
@@ -1332,7 +1390,10 @@ export default function TaskBoard() {
                 />
               ))}
               {visibleTasks.length === 0 && (
-                <p className="task-board__empty">No tasks for this selection.</p>
+                <EmptyState
+                  scope={scope}
+                  date={dateStr}
+                />
               )}
             </div>
           </SortableContext>

@@ -33,6 +33,28 @@
   background-color: var(--jads-color-accent-cyan);
   color: var(--jads-color-bg);
   border-color: var(--jads-color-accent-cyan);
+  overflow: hidden;
+}
+
+/* Scanner-line sweep on hover */
+.jads-button--primary::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -100%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+}
+
+.jads-button--primary:hover:not(:disabled)::after {
+  animation: jads-scan 0.4s ease forwards;
+}
+
+@keyframes jads-scan {
+  from { top: -100%; }
+  to   { top: 120%; }
 }
 
 .jads-button--primary:hover:not(:disabled) {
@@ -53,11 +75,18 @@
 
 .jads-button--secondary:hover:not(:disabled) {
   background-color: var(--jads-color-accent-cyan-muted);
+  border-style: dashed;
   box-shadow: var(--jads-glow-cyan);
+  animation: jads-glow-pulse 1s ease infinite;
 }
 
 .jads-button--secondary:active:not(:disabled) {
   background-color: rgba(0, 212, 255, 0.25);
+}
+
+@keyframes jads-glow-pulse {
+  0%, 100% { box-shadow: var(--jads-glow-cyan); }
+  50%       { box-shadow: var(--jads-glow-cyan-strong); }
 }
 
 /* Ghost variant */
@@ -69,6 +98,8 @@
 
 .jads-button--ghost:hover:not(:disabled) {
   background-color: var(--jads-color-surface-hover);
+  border-style: dashed;
+  border-color: var(--jads-glow-cyan-border);
 }
 
 .jads-button--ghost:active:not(:disabled) {

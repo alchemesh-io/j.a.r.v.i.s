@@ -4,11 +4,28 @@
   border: 1px solid var(--jads-color-border);
   border-radius: var(--jads-radius-lg);
   overflow: hidden;
-  transition: border-color var(--jads-transition-normal);
+  position: relative;
+  transition: border-color var(--jads-transition-normal), box-shadow var(--jads-transition-normal);
+}
+
+/* Top-left L-bracket corner accent */
+.jads-card::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 12px;
+  height: 12px;
+  border-top: 2px solid var(--jads-color-accent-cyan);
+  border-left: 2px solid var(--jads-color-accent-cyan);
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .jads-card:hover {
-  border-color: var(--jads-color-border-hover);
+  border-color: rgba(0, 212, 255, 0.5);
+  box-shadow: 0 0 16px rgba(0, 212, 255, 0.15);
 }
 
 .jads-card__header {
