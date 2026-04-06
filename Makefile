@@ -165,11 +165,12 @@ argocd-ui: _check-prereqs
 jarvis-ui: _check-prereqs
 	@echo "==> Access via minikube tunnel:"
 	@echo "    http://main.jarvis.io    (JARVIS)"
+	@echo "    http://mcp.jarvis.io     (MCP Server)"
 	@echo "    http://jaar.jarvis.io    (Agent Registry)"
-	@echo "    http://jaac.jarvis.io  (ArgoCD)"
+	@echo "    http://jaac.jarvis.io    (ArgoCD)"
 	@echo ""
 	@echo "==> Ensure /etc/hosts contains:"
-	@echo "    <GATEWAY-IP>  main.jarvis.io jaar.jarvis.io jaac.jarvis.io"
+	@echo "    <GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaar.jarvis.io jaac.jarvis.io"
 	@echo ""
 	kubectl port-forward svc/jarvis-gateway-istio -n istio-system 7080:80
 

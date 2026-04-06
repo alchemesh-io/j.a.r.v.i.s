@@ -124,6 +124,7 @@ j.a.r.v.i.s/
 All traffic enters through the Istio ingress gateway via host-based routing on port 80:
 
 - `main.jarvis.io` — JARVIS: `/api/*` → backend, `/*` → frontend SPA (HTTP)
+- `mcp.jarvis.io` — MCP server: `/*` → FastMCP HTTP transport (HTTP)
 - `jaar.jarvis.io` — AgentRegistry: `/*` → Next.js UI + API (HTTP)
 - `jaac.jarvis.io` — ArgoCD UI (HTTPS — self-signed wildcard cert)
 
@@ -131,7 +132,7 @@ The gateway has two listeners: HTTP (:80) and HTTPS (:443) both matching `*.jarv
 
 For local dev, add entries to `/etc/hosts` (or use dnsmasq for wildcard):
 ```
-<GATEWAY-IP>  main.jarvis.io jaar.jarvis.io jaac.jarvis.io
+<GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaar.jarvis.io jaac.jarvis.io
 ```
 
 Backend task management endpoints are under `/api/v1/`. OpenAPI docs at `main.jarvis.io/docs`.
@@ -273,7 +274,7 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
 - ArgoCD renders Helm charts internally — never run `helm install/upgrade` directly
 - ArgoCD syncs from `HEAD` of the current branch via `minikube mount`
 - Helm values for image tags use `latest` by default locally; CI tags with short git SHA
-- Kubernetes Gateway API (Gateway + HTTPRoute) with Istio: host-based routing on `*.jarvis.io` (`main.jarvis.io` → JARVIS, `jaar.jarvis.io` → AgentRegistry)
+- Kubernetes Gateway API (Gateway + HTTPRoute) with Istio: host-based routing on `*.jarvis.io` (`main.jarvis.io` → JARVIS, `mcp.jarvis.io` → MCP server, `jaar.jarvis.io` → AgentRegistry)
 - Backend config via ConfigMap (`backend-configmap.yaml`), secrets via Secret (`backend-secret.yaml`)
 - JAAR config via upstream AgentRegistry subchart, secrets via Secret (`jaar-secret.yaml`)
 - Frontend uses `serve` for static files — no nginx (Istio handles routing via host-based matching)

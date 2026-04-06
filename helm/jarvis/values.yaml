@@ -53,6 +53,7 @@ gateway:
   name: jarvis-gateway
   namespace: istio-system
   host: main.jarvis.io
+  mcpHost: mcp.jarvis.io
 
 persistence:
   storageClass: standard
