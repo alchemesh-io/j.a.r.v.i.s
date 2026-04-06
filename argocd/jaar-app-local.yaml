@@ -13,6 +13,9 @@ spec:
     targetRevision: HEAD
     helm:
       releaseName: jaar
+      valuesObject:
+        persistence:
+          hostPath: /mnt/jarvis-data/jaar
   destination:
     server: https://kubernetes.default.svc
     namespace: jaar

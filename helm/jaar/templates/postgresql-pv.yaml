@@ -1,0 +1,20 @@
+{{- if .Values.persistence.hostPath }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Release.Name }}-agentregistry-postgresql
+  labels:
+    app: {{ .Release.Name }}-agentregistry-postgresql
+spec:
+  capacity:
+    storage: {{ .Values.persistence.size | default "5Gi" }}
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  hostPath:
+    path: {{ .Values.persistence.hostPath }}
+    type: DirectoryOrCreate
+  claimRef:
+    namespace: {{ .Release.Namespace }}
+    name: {{ .Release.Name }}-agentregistry-postgresql
+{{- end }}

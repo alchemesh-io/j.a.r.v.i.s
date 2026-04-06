@@ -9,13 +9,16 @@
 MINIKUBE_CPUS   ?= 4
 MINIKUBE_MEMORY ?= 8192
 ARGOCD_VERSION  := v3.3.6
-MOUNT_PID_FILE  := .minikube-mount.pid
-REPO_ROOT       := $(shell pwd)
-MOUNT_TARGET    := /mnt/jarvis-repo
-GHCR_ORG        := alchemesh-io
+MOUNT_PID_FILE      := .minikube-mount.pid
+DATA_MOUNT_PID_FILE := .minikube-data-mount.pid
+REPO_ROOT           := $(shell pwd)
+MOUNT_TARGET        := /mnt/jarvis-repo
+DATA_DIR            := $(REPO_ROOT)/.data
+DATA_MOUNT_TARGET   := /mnt/jarvis-data
+GHCR_ORG            := alchemesh-io
 
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update _tls-secret
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update _tls-secret
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -52,21 +55,22 @@ cluster-up: _check-prereqs
 	@echo ""
 	@echo "==> Cluster ready. Run 'make argocd-ui' to open the ArgoCD dashboard."
 
-## Stop the Minikube cluster and clean up background processes
+## Stop the Minikube cluster and clean up background processes (data in .data/ is preserved)
 cluster-down: _check-prereqs
-	@echo "==> Stopping minikube mount process..."
-	@if [ -f $(MOUNT_PID_FILE) ]; then \
-		PID=$$(cat $(MOUNT_PID_FILE)); \
-		if kill -0 $$PID 2>/dev/null; then \
-			kill $$PID && echo "  Killed mount PID $$PID"; \
-		else \
-			echo "  Mount process $$PID not running (stale PID file)"; \
+	@echo "==> Stopping minikube mount processes..."
+	@for pidfile in $(MOUNT_PID_FILE) $(DATA_MOUNT_PID_FILE); do \
+		if [ -f $$pidfile ]; then \
+			PID=$$(cat $$pidfile); \
+			if kill -0 $$PID 2>/dev/null; then \
+				kill $$PID && echo "  Killed mount PID $$PID"; \
+			else \
+				echo "  Mount process $$PID not running (stale PID file)"; \
+			fi; \
+			rm -f $$pidfile; \
 		fi; \
-		rm -f $(MOUNT_PID_FILE); \
-	else \
-		echo "  No PID file found, skipping."; \
-	fi
+	done
 	@echo "==> Deleting Minikube cluster..."
+	@echo "    Note: data in .data/ is preserved on the host."
 	minikube delete
 	@echo "==> Cluster deleted."
 
@@ -78,17 +82,20 @@ cluster-status: _check-prereqs
 	@echo "==> ArgoCD pods:"
 	kubectl get pods -n argocd 2>/dev/null || echo "  (argocd namespace not found)"
 	@echo ""
-	@echo "==> minikube mount process:"
-	@if [ -f $(MOUNT_PID_FILE) ]; then \
-		PID=$$(cat $(MOUNT_PID_FILE)); \
-		if kill -0 $$PID 2>/dev/null; then \
-			echo "  Running (PID $$PID)"; \
+	@echo "==> minikube mount processes:"
+	@for desc_pid in "Repo:$(MOUNT_PID_FILE)" "Data:$(DATA_MOUNT_PID_FILE)"; do \
+		desc=$${desc_pid%%:*}; pidfile=$${desc_pid#*:}; \
+		if [ -f $$pidfile ]; then \
+			PID=$$(cat $$pidfile); \
+			if kill -0 $$PID 2>/dev/null; then \
+				echo "  $$desc: Running (PID $$PID)"; \
+			else \
+				echo "  $$desc: NOT running (stale PID $$PID)"; \
+			fi; \
 		else \
-			echo "  NOT running (stale PID $$PID)"; \
+			echo "  $$desc: Not started (no PID file)"; \
 		fi; \
-	else \
-		echo "  Not started (no PID file)"; \
-	fi
+	done
 
 # ---------------------------------------------------------------------------
 # Application deployment
@@ -212,13 +219,33 @@ _mount-start:
 	@if [ -f $(MOUNT_PID_FILE) ]; then \
 		PID=$$(cat $(MOUNT_PID_FILE)); \
 		if kill -0 $$PID 2>/dev/null; then \
-			echo "  Mount already running (PID $$PID), skipping."; \
-			exit 0; \
+			echo "  Repo mount already running (PID $$PID), skipping."; \
+		else \
+			minikube mount $(REPO_ROOT):$(MOUNT_TARGET) & \
+			echo $$! > $(MOUNT_PID_FILE); \
+			echo "  Repo mount started (PID $$(cat $(MOUNT_PID_FILE)))"; \
 		fi; \
+	else \
+		minikube mount $(REPO_ROOT):$(MOUNT_TARGET) & \
+		echo $$! > $(MOUNT_PID_FILE); \
+		echo "  Repo mount started (PID $$(cat $(MOUNT_PID_FILE)))"; \
 	fi
-	minikube mount $(REPO_ROOT):$(MOUNT_TARGET) &
-	echo $$! > $(MOUNT_PID_FILE)
-	@echo "  Mount started (PID $$(cat $(MOUNT_PID_FILE)))"
+	@mkdir -p $(DATA_DIR)/jarvis $(DATA_DIR)/jaar
+	@echo "==> Starting minikube mount $(DATA_DIR) -> $(DATA_MOUNT_TARGET)..."
+	@if [ -f $(DATA_MOUNT_PID_FILE) ]; then \
+		PID=$$(cat $(DATA_MOUNT_PID_FILE)); \
+		if kill -0 $$PID 2>/dev/null; then \
+			echo "  Data mount already running (PID $$PID), skipping."; \
+		else \
+			minikube mount $(DATA_DIR):$(DATA_MOUNT_TARGET) & \
+			echo $$! > $(DATA_MOUNT_PID_FILE); \
+			echo "  Data mount started (PID $$(cat $(DATA_MOUNT_PID_FILE)))"; \
+		fi; \
+	else \
+		minikube mount $(DATA_DIR):$(DATA_MOUNT_TARGET) & \
+		echo $$! > $(DATA_MOUNT_PID_FILE); \
+		echo "  Data mount started (PID $$(cat $(DATA_MOUNT_PID_FILE)))"; \
+	fi
 	@sleep 2
 
 _istio-install:
@@ -243,8 +270,11 @@ _tls-secret:
 		openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
 			-keyout /tmp/jarvis-io-tls.key \
 			-out /tmp/jarvis-io-tls.crt \
-			-subj "/CN=*.jarvis.io" \
-			-addext "subjectAltName=DNS:*.jarvis.io,DNS:jarvis.io" 2>/dev/null; \
+			-subj "/O=JARVIS/CN=jarvis.io" \
+			-addext "subjectAltName=DNS:*.jarvis.io,DNS:jarvis.io" \
+			-addext "basicConstraints=critical,CA:TRUE" \
+			-addext "keyUsage=critical,digitalSignature,keyEncipherment,keyCertSign" \
+			-addext "extendedKeyUsage=serverAuth" 2>/dev/null; \
 		kubectl create secret tls jarvis-io-tls \
 			--cert=/tmp/jarvis-io-tls.crt \
 			--key=/tmp/jarvis-io-tls.key \
@@ -316,6 +346,52 @@ dev-frontend-minikube:
 ## Run backend locally with SQLite
 dev-backend:
 	cd backend && DATABASE_URL=sqlite:///./jarvis-dev.db uv run uvicorn app.main:app --reload --port 8000
+
+# ---------------------------------------------------------------------------
+# Artifact publishing
+# ---------------------------------------------------------------------------
+
+## Sync all artifacts to the Agent Registry (publish remote GHCR versions + local images)
+## Requires JAAR to be running. Override registry URL: make sync-artifacts JAAR_URL=http://...
+JAAR_URL ?= http://jaar.jarvis.io
+sync-artifacts: sync-artifacts-servers
+
+## Publish all MCP servers to Agent Registry — all remote tags from GHCR + local git SHA
+sync-artifacts-servers:
+	@echo "==> Syncing MCP servers to Agent Registry ($(JAAR_URL))..."
+	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
+	@for dir in artifacts/servers/*/; do \
+		manifest="$${dir}manifest.yaml"; \
+		if [ ! -f "$$manifest" ]; then continue; fi; \
+		NAME=$$(yq -r '.name' "$$manifest"); \
+		DESC=$$(yq -r '.description' "$$manifest"); \
+		IMAGE=$$(yq -r '.image' "$$manifest"); \
+		echo "  --- $${NAME} ---"; \
+		echo "  Fetching remote tags from GHCR..."; \
+		TAGS=$$(docker images --format '{{.Tag}}' "$$IMAGE" 2>/dev/null; \
+			curl -sf "https://ghcr.io/v2/$(GHCR_ORG)/$${NAME}/tags/list" \
+				-H "Authorization: Bearer $$(curl -sf "https://ghcr.io/token?scope=repository:$(GHCR_ORG)/$${NAME}:pull&service=ghcr.io" | jq -r '.token')" \
+				2>/dev/null | jq -r '.tags[]' 2>/dev/null) || true; \
+		for TAG in $$TAGS; do \
+			echo "  Publishing $${NAME}:$${TAG}..."; \
+			arctl mcp publish $(GHCR_ORG)/$${NAME} \
+				--registry-url "$(JAAR_URL)" \
+				--description "$$DESC" \
+				--version "$$TAG" \
+				--type oci \
+				--package-id "$${IMAGE}:$${TAG}" || \
+				echo "    Skipped $${TAG}"; \
+		done; \
+		echo "  Publishing local $${NAME}:$(LOCAL_TAG)..."; \
+		arctl mcp publish $(GHCR_ORG)/$${NAME} \
+			--registry-url "$(JAAR_URL)" \
+			--description "$$DESC" \
+			--version "$(LOCAL_TAG)" \
+			--type oci \
+			--package-id "$${IMAGE}:$(LOCAL_TAG)" || \
+			echo "    Skipped local"; \
+	done
+	@echo "==> Done."
 
 # ---------------------------------------------------------------------------
 # Tests

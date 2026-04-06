@@ -57,3 +57,6 @@ gateway:
 persistence:
   storageClass: standard
   size: 1Gi
+  # Set hostPath to persist data on the host across cluster rebuilds.
+  # Maps to minikube mount: .data/jarvis -> /mnt/jarvis-data/jarvis
+  hostPath: ""

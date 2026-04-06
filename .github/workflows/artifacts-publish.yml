@@ -12,11 +12,16 @@ env:
   ORG: alchemesh-io
 
 jobs:
-  build-and-register:
+  publish-servers:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        server:
+          - name: jarvis-mcp
+            path: artifacts/servers/jarvis-mcp
     steps:
       - uses: actions/checkout@v4
 
@@ -27,30 +32,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract short git SHA
+      - name: Extract metadata
         id: meta
-        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push MCP server image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./artifacts/servers/jarvis-mcp
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.ORG }}/jarvis-mcp:${{ steps.meta.outputs.sha }}
-            ${{ env.REGISTRY }}/${{ env.ORG }}/jarvis-mcp:latest
+        run: |
+          echo "version=$(yq -r '.version' ${{ matrix.server.path }}/manifest.yaml)" >> "$GITHUB_OUTPUT"
 
       - name: Install arctl
         run: curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry/main/scripts/get-arctl | bash
 
-      - name: Register artifacts
+      - name: Build and push
         run: |
-          for manifest in artifacts/*/*/manifest.yaml; do
-            TYPE=$(yq '.type' "$manifest")
-            NAME=$(yq '.name' "$manifest")
-            echo "Registering ${TYPE}/${NAME}..."
-            arctl "${TYPE}" register \
-              --docker-url "${{ env.REGISTRY }}/${{ env.ORG }}/${NAME}:${{ steps.meta.outputs.sha }}" \
-              "$manifest" || \
-              echo "  Skipped — JAAR is local-only and not reachable from CI"
-          done
+          IMAGE=${{ env.REGISTRY }}/${{ env.ORG }}/${{ matrix.server.name }}
+          arctl mcp build ${{ matrix.server.path }} --image ${IMAGE}:${{ steps.meta.outputs.version }} --push
+          arctl mcp build ${{ matrix.server.path }} --image ${IMAGE}:latest --push
