@@ -30,13 +30,19 @@ class BackendClient:
         self,
         title: str,
         type: str,
-        jira_ticket_id: Optional[str] = None,
+        source_type: Optional[str] = None,
+        source_id: Optional[str] = None,
         status: str = "created",
     ) -> dict:
         body: dict[str, Any] = {"title": title, "type": type, "status": status}
-        if jira_ticket_id:
-            body["jira_ticket_id"] = jira_ticket_id
+        if source_type:
+            body["source_type"] = source_type
+        if source_id:
+            body["source_id"] = source_id
         return await self._request("POST", "/api/v1/tasks", json=body)
+
+    async def get_task(self, task_id: int) -> dict:
+        return await self._request("GET", f"/api/v1/tasks/{task_id}")
 
     async def list_tasks(
         self,
@@ -54,6 +60,19 @@ class BackendClient:
     async def delete_task(self, task_id: int) -> None:
         await self._request("DELETE", f"/api/v1/tasks/{task_id}")
 
+    # --- Weeklies ---
+
+    async def create_weekly(self, week_start: str) -> dict:
+        return await self._request(
+            "POST", "/api/v1/weeklies", json={"week_start": week_start}
+        )
+
+    async def list_weeklies(self) -> list[dict]:
+        return await self._request("GET", "/api/v1/weeklies")
+
+    async def get_weekly(self, weekly_id: int) -> dict:
+        return await self._request("GET", f"/api/v1/weeklies/{weekly_id}")
+
     # --- Dailies ---
 
     async def create_daily(self, date: str, weekly_id: int) -> dict:
@@ -61,8 +80,13 @@ class BackendClient:
             "POST", "/api/v1/dailies", json={"date": date, "weekly_id": weekly_id}
         )
 
+    async def get_daily(self, daily_id: int) -> dict:
+        return await self._request("GET", f"/api/v1/dailies/{daily_id}")
+
     async def get_daily_by_date(self, date: str) -> dict:
         return await self._request("GET", "/api/v1/dailies", params={"date": date})
+
+    # --- Daily Tasks ---
 
     async def add_task_to_daily(
         self, daily_id: int, task_id: int, priority: int
@@ -76,10 +100,11 @@ class BackendClient:
     async def remove_task_from_daily(self, daily_id: int, task_id: int) -> None:
         await self._request("DELETE", f"/api/v1/dailies/{daily_id}/tasks/{task_id}")
 
-    # --- Weeklies ---
-
-    async def list_weekly_tasks(self, date: str) -> list[dict]:
+    async def reorder_daily_tasks(
+        self, daily_id: int, items: list[dict]
+    ) -> list[dict]:
         return await self._request(
-            "GET", "/api/v1/tasks", params={"date": date, "scope": "weekly"}
+            "PUT",
+            f"/api/v1/dailies/{daily_id}/tasks/reorder",
+            json={"items": items},
         )
-

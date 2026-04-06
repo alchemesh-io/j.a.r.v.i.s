@@ -7,6 +7,22 @@ client = BackendClient()
 
 
 @mcp.tool()
-async def list_weekly_tasks(date: str) -> list[dict]:
-    """List all tasks for the week containing the given date."""
-    return await client.list_weekly_tasks(date=date)
+async def create_weekly(week_start: str) -> dict:
+    """Create a weekly planning entry.
+
+    Args:
+        week_start: Start date of the week (YYYY-MM-DD, should be a Sunday).
+    """
+    return await client.create_weekly(week_start=week_start)
+
+
+@mcp.tool()
+async def list_weeklies() -> list[dict]:
+    """List all weekly planning entries with their dailies."""
+    return await client.list_weeklies()
+
+
+@mcp.tool()
+async def get_weekly(weekly_id: int) -> dict:
+    """Get a weekly planning entry by ID, including its dailies."""
+    return await client.get_weekly(weekly_id)
