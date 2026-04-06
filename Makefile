@@ -124,9 +124,11 @@ deploy-local: _check-prereqs _deploy-secrets _deploy-jaar-secrets _helm-dep-upda
 	@echo "==> Building Docker images locally (tag: $(LOCAL_TAG))..."
 	docker build -t jarvis-backend:$(LOCAL_TAG) ./backend
 	docker build -t jarvis-frontend:$(LOCAL_TAG) ./frontend
+	docker build -t jarvis:$(LOCAL_TAG) ./artifacts/servers/jarvis
 	@echo "==> Loading images into Minikube..."
 	minikube image load jarvis-backend:$(LOCAL_TAG)
 	minikube image load jarvis-frontend:$(LOCAL_TAG)
+	minikube image load jarvis:$(LOCAL_TAG)
 	@echo "==> Applying ArgoCD Application CRs (local images, tag: $(LOCAL_TAG))..."
 	@sed 's/tag: local/tag: "$(LOCAL_TAG)"/g' argocd/jarvis-app-local.yaml | kubectl apply -f -
 	kubectl apply -f argocd/jaar-app-local.yaml

@@ -244,7 +244,7 @@ export default function Dashboard() {
     },
   };
 
-  const orbitalAreas = ['workers', 'daily', 'weekly'] as const;
+  const orbitalAreas = ['workers', 'daily', 'weekly', 'registry'] as const;
 
   return (
     <div className="dashboard">

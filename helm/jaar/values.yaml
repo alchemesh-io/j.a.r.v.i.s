@@ -30,12 +30,6 @@ agentregistry:
         enabled: true
         storage: 5Gi
 
-persistence:
-  # Set hostPath to persist PostgreSQL data on the host across cluster rebuilds.
-  # Maps to minikube mount: .data/jaar -> /mnt/jarvis-data/jaar
-  hostPath: ""
-  size: 5Gi
-
 gateway:
   name: jarvis-gateway
   namespace: istio-system

@@ -29,8 +29,6 @@ spec:
             repository: jarvis
             tag: local
             pullPolicy: Never
-        persistence:
-          hostPath: /mnt/jarvis-data/jarvis
   destination:
     server: https://kubernetes.default.svc
     namespace: jarvis
