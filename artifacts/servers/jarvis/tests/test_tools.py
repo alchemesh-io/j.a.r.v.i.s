@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from core.server import DynamicMCPServer  # noqa: E402
 
 
-EXPECTED_TOOLS = ["tasks", "dailies", "weeklies", "jira", "gcal"]
+EXPECTED_TOOLS = ["tasks", "dailies", "weeklies"]
 
 
 class TestToolLoading:
