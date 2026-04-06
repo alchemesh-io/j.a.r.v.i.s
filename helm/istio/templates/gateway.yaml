@@ -18,10 +18,15 @@ spec:
       protocol: HTTPS
       hostname: "*.jarvis.io"
       tls:
-        mode: Terminate
         certificateRefs:
-          - kind: Secret
+          - group: ''
+            kind: Secret
             name: jarvis-io-tls
-      allowedRoutes:
-        namespaces:
-          from: All
+        mode: Terminate
+    - allowedRoutes:	
+        namespaces:	
+          from: All	
+      hostname: localhost	
+      name: localhost	
+      port: 80	
+      protocol: HTTP
