@@ -82,3 +82,27 @@ class BackendClient:
         return await self._request(
             "GET", "/api/v1/tasks", params={"date": date, "scope": "weekly"}
         )
+
+    # --- JIRA ---
+
+    async def get_jira_config(self) -> dict:
+        return await self._request("GET", "/api/v1/jira/config")
+
+    async def list_jira_tickets(self) -> list[dict]:
+        return await self._request("GET", "/api/v1/jira/tickets")
+
+    async def get_jira_ticket(self, key: str) -> dict:
+        return await self._request("GET", "/api/v1/jira/ticket", params={"key": key})
+
+    # --- Google Calendar ---
+
+    async def get_gcal_auth_status(self) -> dict:
+        return await self._request("GET", "/api/v1/gcal/auth/status")
+
+    async def get_gcal_event(self, event_id: str) -> dict:
+        return await self._request("GET", "/api/v1/gcal/event", params={"event_id": event_id})
+
+    async def list_gcal_events(self, date: str, view: str = "daily") -> list[dict]:
+        return await self._request(
+            "GET", "/api/v1/gcal/events", params={"date": date, "view": view}
+        )
