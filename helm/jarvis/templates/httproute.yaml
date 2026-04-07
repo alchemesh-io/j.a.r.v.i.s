@@ -9,6 +9,9 @@ spec:
   parentRefs:
     - name: {{ .Values.gateway.name }}
       namespace: {{ .Values.gateway.namespace }}
+  hostnames:
+    - {{ .Values.gateway.host | default "main.jarvis.io" }}
+    - localhost
   rules:
     # Backend API
     - matches:

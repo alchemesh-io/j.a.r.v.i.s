@@ -1,0 +1,47 @@
+name: Publish Artifacts to Agent Registry
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "artifacts/**"
+
+env:
+  REGISTRY: ghcr.io
+  ORG: alchemesh-io
+
+jobs:
+  publish-servers:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        server:
+          - name: jarvis
+            path: artifacts/servers/jarvis
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          echo "version=$(yq -r '.version' ${{ matrix.server.path }}/mcp.yaml)" >> "$GITHUB_OUTPUT"
+
+      - name: Install arctl
+        run: curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry/main/scripts/get-arctl | bash
+
+      - name: Build and push
+        run: |
+          IMAGE=${{ env.REGISTRY }}/${{ env.ORG }}/${{ matrix.server.name }}
+          arctl mcp build ${{ matrix.server.path }} --image ${IMAGE}:${{ steps.meta.outputs.version }} --push
+          arctl mcp build ${{ matrix.server.path }} --image ${IMAGE}:latest --push

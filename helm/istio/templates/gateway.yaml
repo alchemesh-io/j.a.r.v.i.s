@@ -9,6 +9,24 @@ spec:
     - name: http
       port: 80
       protocol: HTTP
+      # No hostname filter — host matching enforced by HTTPRoute hostnames
       allowedRoutes:
         namespaces:
           from: All
+    - name: https
+      port: 443
+      protocol: HTTPS
+      hostname: "*.jarvis.io"
+      tls:
+        certificateRefs:
+          - group: ''
+            kind: Secret
+            name: jarvis-io-tls
+        mode: Terminate
+    - allowedRoutes:	
+        namespaces:	
+          from: All	
+      hostname: localhost	
+      name: localhost	
+      port: 80	
+      protocol: HTTP

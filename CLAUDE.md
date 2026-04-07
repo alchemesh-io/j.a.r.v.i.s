@@ -2,7 +2,7 @@
 
 ## Forbidden Files
 
-**NEVER read, write, display, or reference the contents of `secrets/backend-secret.yaml`.** This file contains sensitive credentials (API keys, OAuth secrets) and is not version-controlled. Use `secrets/backend-secret.example.yaml` as a reference for the expected structure.
+**NEVER read, write, display, or reference the contents of `secrets/backend-secret.yaml` or `secrets/jaar-secret.yaml`.** These files contain sensitive credentials and are not version-controlled. Use the corresponding `.example.yaml` files as a reference for the expected structure.
 
 ## Project Overview
 
@@ -18,10 +18,14 @@ j.a.r.v.i.s/
 │   ├── istio-app.yaml          # ArgoCD Application CR for Istio service mesh
 │   ├── jarvis-app.yaml         # ArgoCD Application CR (GHCR images)
 │   ├── jarvis-app-local.yaml   # ArgoCD Application CR (local images)
+│   ├── jaar-app.yaml           # ArgoCD Application CR for JAAR (GHCR images)
+│   ├── jaar-app-local.yaml     # ArgoCD Application CR for JAAR (local)
 │   └── repo-server-patch.yaml  # hostPath volume patch for argocd-repo-server
 ├── secrets/
 │   ├── backend-secret.example.yaml  # Template — copy to backend-secret.yaml
-│   └── backend-secret.yaml          # (gitignored) Actual K8s Secret manifest
+│   ├── backend-secret.yaml          # (gitignored) Actual K8s Secret manifest
+│   ├── jaar-secret.example.yaml     # Template — copy to jaar-secret.yaml
+│   └── jaar-secret.yaml             # (gitignored) JAAR PostgreSQL/DB credentials
 ├── backend/
 │   ├── app/
 │   │   ├── main.py           # FastAPI application — routes mounted under /api/v1
@@ -74,16 +78,33 @@ j.a.r.v.i.s/
 │   ├── index.html            # Document title: "J.A.R.V.I.S"
 │   ├── Dockerfile            # Multi-stage: npm workspaces build → serve (static)
 │   └── package.json          # Workspace root
-├── mcp_server/
-│   ├── server.py             # MCP tools for task/daily/weekly management
-│   ├── api_client.py         # httpx client for backend /api/v1/ endpoints
-│   ├── tests/                # pytest + respx test suite
-│   ├── Dockerfile            # Python 3.12 image
-│   └── pyproject.toml        # Deps: mcp SDK, httpx
+├── artifacts/                  # Agent Registry managed artifacts
+│   ├── servers/
+│   │   └── jarvis/             # MCP server (FastMCP, dynamic tool loading)
+│   │       ├── src/
+│   │       │   ├── core/       # server.py, api_client.py, utils.py
+│   │       │   ├── tools/      # tasks.py, dailies.py, weeklies.py
+│   │       │   └── main.py
+│   │       ├── tests/
+│   │       ├── mcp.yaml        # Artifact metadata for Agent Registry
+│   │       ├── Dockerfile
+│   │       └── pyproject.toml
+│   ├── agents/                 # Agent artifacts (add via arctl)
+│   ├── skills/                 # Skill artifacts (add via arctl)
+│   └── prompts/                # Prompt artifacts (add via arctl)
 ├── helm/
 │   ├── istio/                # Istio service mesh (deployed via ArgoCD)
 │   │   ├── Chart.yaml        # Sub-chart deps: base, istiod, gateway
-│   │   └── values.yaml
+│   │   ├── values.yaml
+│   │   └── templates/
+│   │       ├── gateway.yaml          # HTTP (:80) + HTTPS (:443, *.jarvis.io) listeners
+│   │       └── argocd-httproute.yaml # jaac.jarvis.io → ArgoCD (HTTPS + HTTP redirect)
+│   ├── jaar/                 # JAAR — AgentRegistry wrapper chart
+│   │   ├── Chart.yaml        # Depends on upstream agentregistry chart (OCI)
+│   │   ├── values.yaml       # Subchart config, external DB, gateway ref
+│   │   └── templates/
+│   │       ├── namespace.yaml    # jaar namespace with istio-injection
+│   │       └── httproute.yaml    # jaar.jarvis.io → AgentRegistry
 │   └── jarvis/
 │       ├── Chart.yaml
 │       ├── values.yaml       # Backend, frontend, MCP image configs + settings
@@ -94,7 +115,8 @@ j.a.r.v.i.s/
 │           ├── backend-secret.yaml     # Sensitive config placeholder
 │           ├── frontend-deployment.yaml
 │           ├── frontend-service.yaml
-│           ├── httproute.yaml          # Gateway API HTTPRoute (API → backend, / → frontend)
+│           ├── httproute.yaml          # main.jarvis.io + localhost → backend/frontend
+│           ├── mcp-httproute.yaml      # mcp.jarvis.io → MCP server
 │           ├── mcp-deployment.yaml     # Standalone MCP pod with BACKEND_URL
 │           ├── mcp-service.yaml
 │           └── sqlite-pvc.yaml
@@ -103,9 +125,23 @@ j.a.r.v.i.s/
         └── docker-publish.yml  # Build + push to GHCR on push to main
 ```
 
-## API Versioning
+## API Versioning & Routing
 
-All task management endpoints are under `/api/v1/`. The root (`/`) and health (`/health`) endpoints remain unversioned. OpenAPI docs auto-generated at `/docs`.
+All traffic enters through the Istio ingress gateway via host-based routing on port 80:
+
+- `main.jarvis.io` — JARVIS: `/api/*` → backend, `/*` → frontend SPA (HTTP)
+- `mcp.jarvis.io` — MCP server: `/*` → FastMCP HTTP transport (HTTP)
+- `jaar.jarvis.io` — AgentRegistry: `/*` → Next.js UI + API (HTTP)
+- `jaac.jarvis.io` — ArgoCD UI (HTTPS — self-signed wildcard cert)
+
+The gateway has two listeners: HTTP (:80) and HTTPS (:443) both matching `*.jarvis.io`. A self-signed wildcard TLS cert is generated by `make cluster-up` and stored as `jarvis-io-tls` secret in `istio-system`.
+
+For local dev, add entries to `/etc/hosts` (or use dnsmasq for wildcard):
+```
+<GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaar.jarvis.io jaac.jarvis.io
+```
+
+Backend task management endpoints are under `/api/v1/`. OpenAPI docs at `main.jarvis.io/docs`.
 
 ## Local Development Workflow
 
@@ -117,6 +153,8 @@ All task management endpoints are under `/api/v1/`. The root (`/`) and health (`
 | `kubectl` | Yes | Cluster interaction |
 | `docker` | Yes | Image builds |
 | `argocd` CLI | No | Optional; Makefile falls back to `kubectl` |
+| `helm` | Yes | Dependency management for JAAR chart |
+| `arctl` | No | AgentRegistry CLI for managing artifacts. Install: `curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry/main/scripts/get-arctl \| bash` |
 
 ### Starting the cluster
 
@@ -129,7 +167,7 @@ This will:
 1. Start a Minikube cluster
 2. Launch `minikube mount` in the background (PID in `.minikube-mount.pid`)
 3. Deploy Istio service mesh via ArgoCD Application CR (`argocd/istio-app.yaml`)
-4. Label `jarvis` namespace for Istio sidecar injection
+4. Label `jarvis` and `jaar` namespaces for Istio sidecar injection
 5. Install ArgoCD v3.3.6 into the `argocd` namespace
 6. Patch `argocd-repo-server` with a hostPath volume for `/mnt/jarvis-repo`
 7. Register `file:///mnt/jarvis-repo` as an ArgoCD repository
@@ -152,9 +190,11 @@ After `make deploy`, run `minikube tunnel` in a separate terminal, then:
 kubectl get svc istio-ingressgateway -n istio-system   # Shows EXTERNAL-IP for the Istio ingress
 ```
 
-All traffic enters through the Istio ingress gateway. Routing is handled by the VirtualService:
-- `/api/*`, `/docs`, `/health` → backend service
-- `/*` → frontend SPA
+All traffic enters through the Istio ingress gateway via host-based routing (`*.jarvis.io`):
+- `main.jarvis.io`: `/api/*`, `/docs`, `/health` → backend; `/*` → frontend SPA
+- `mcp.jarvis.io`: `/*` → MCP server (FastMCP HTTP transport)
+- `jaar.jarvis.io`: `/*` → AgentRegistry
+- `jaac.jarvis.io`: `/*` → ArgoCD UI (HTTPS)
 
 ### Teardown
 
@@ -175,7 +215,7 @@ cd frontend/packages/jads && npm test
 cd frontend && npx playwright test --config e2e/playwright.config.ts
 
 # MCP server
-cd mcp_server && uv run pytest tests/ -v
+cd artifacts/servers/jarvis && uv run pytest tests/ -v
 ```
 
 ## Coding Conventions
@@ -207,19 +247,46 @@ cd mcp_server && uv run pytest tests/ -v
 
 ### MCP Server
 
-- Standalone Python process using the `mcp` SDK
+- Located at `artifacts/servers/jarvis/` (FastMCP with dynamic tool loading)
+- Scaffolded via `arctl mcp init python`; tools auto-discovered from `src/tools/` directory
 - Communicates with backend exclusively via REST API (`/api/v1/`) — no direct database access
 - Backend URL configured via `BACKEND_URL` env var
 - Uses `httpx` for async HTTP client with timeout and retry
+- Runs in HTTP transport mode in K8s (`--transport http --host 0.0.0.0 --port 8080`)
+- Exposed via gateway at `mcp.jarvis.io`; Claude Code config in `.mcp.json`
+
+### Artifacts & Agent Registry (JAAR)
+
+- JAAR (Just An Agent Registry) runs AgentRegistry v0.3.3 in the `jaar` namespace
+- Helm chart at `helm/jaar/` wraps the upstream `oci://ghcr.io/agentregistry-dev/agentregistry` chart as a dependency
+- Bundled PostgreSQL (Bitnami subchart) enabled by default; set `agentregistry.database.enabled=false` for external DB (CloudSQL, RDS)
+- Credentials stored in `secrets/jaar-secret.yaml` (gitignored); see `secrets/jaar-secret.example.yaml`
+- Anonymous auth enabled — no OAuth/OIDC for local dev
+- The `artifacts/` directory holds registry-managed artifacts, one folder per type: `servers/`, `agents/`, `skills/`, `prompts/`
+- Each artifact lives in its own subfolder with a `manifest.yaml` and source files
+- Use `arctl` to interact with the registry:
+  ```bash
+  # Install arctl
+  curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry/main/scripts/get-arctl | bash
+
+  # Common commands (run against local JAAR instance)
+  arctl server list
+  arctl server register ./artifacts/servers/jarvis/mcp.yaml
+  arctl agent list
+  arctl skill list
+  arctl prompt list
+  ```
+- When adding a new artifact: create a subfolder under the appropriate `artifacts/<type>/` directory with a `manifest.yaml`, then register it with `arctl`
 
 ### Infrastructure
 
 - ArgoCD renders Helm charts internally — never run `helm install/upgrade` directly
 - ArgoCD syncs from `HEAD` of the current branch via `minikube mount`
 - Helm values for image tags use `latest` by default locally; CI tags with short git SHA
-- Kubernetes Gateway API (Gateway + HTTPRoute) with Istio for ingress routing (`/api/*` → backend, `/*` → frontend)
+- Kubernetes Gateway API (Gateway + HTTPRoute) with Istio: host-based routing on `*.jarvis.io` (`main.jarvis.io` → JARVIS, `mcp.jarvis.io` → MCP server, `jaar.jarvis.io` → AgentRegistry)
 - Backend config via ConfigMap (`backend-configmap.yaml`), secrets via Secret (`backend-secret.yaml`)
-- Frontend uses `serve` for static files — no nginx (Istio handles routing)
+- JAAR config via upstream AgentRegistry subchart, secrets via Secret (`jaar-secret.yaml`)
+- Frontend uses `serve` for static files — no nginx (Istio handles routing via host-based matching)
 - MCP server gets `BACKEND_URL` from its deployment env vars
 
 ## Known Limitations
@@ -231,3 +298,6 @@ cd mcp_server && uv run pytest tests/ -v
 | **ArgoCD syncs from HEAD via minikube mount** | Uncommitted Helm changes are visible immediately via the filesystem mount | Use `make sync` to force ArgoCD to re-read |
 | **ArgoCD + Istio add ~1 GB RAM overhead** | May strain developer laptops | Tune with `MINIKUBE_MEMORY` override |
 | **MCP server depends on backend** | MCP tools fail if backend is down | httpx with retry logic; K8s readiness probes check backend connectivity |
+| **JAAR + PostgreSQL add ~512 MB RAM** | May require more Minikube memory | Bump with `MINIKUBE_MEMORY=12288` |
+| **Data persistence requires mount** | `minikube mount` for `.data/` must stay running | `make cluster-status` shows mount health; data survives `minikube delete` |
+| **Host-based routing requires `/etc/hosts`** | `*.jarvis.io` must resolve to gateway IP | Add entries for `main.jarvis.io`, `mcp.jarvis.io`, `jaar.jarvis.io`, `jaac.jarvis.io` (or use dnsmasq for wildcard) |

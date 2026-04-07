@@ -75,6 +75,14 @@
   z-index: 2;
 }
 
+.dashboard__hud-registry {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  width: 380px;
+  z-index: 2;
+}
+
 /* ── Block visibility — nameplate by default ─────────────── */
 .dashboard__hud-workers.dashboard__orbital-block {
   opacity: 1;
@@ -91,6 +99,12 @@
 .dashboard__hud-weekly.dashboard__orbital-block {
   opacity: 1;
   transform: translateY(-50%) scale(1);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dashboard__hud-registry.dashboard__orbital-block {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -128,9 +142,10 @@
 }
 
 /* Stagger each block so scans never overlap */
-.dashboard__hud-workers .dashboard__card-wrapper::after  { animation-delay: 0s; }
-.dashboard__hud-daily   .dashboard__card-wrapper::after  { animation-delay: 0s; }
-.dashboard__hud-weekly  .dashboard__card-wrapper::after  { animation-delay: 0s; }
+.dashboard__hud-workers  .dashboard__card-wrapper::after  { animation-delay: 0s; }
+.dashboard__hud-daily    .dashboard__card-wrapper::after  { animation-delay: 0s; }
+.dashboard__hud-weekly   .dashboard__card-wrapper::after  { animation-delay: 0s; }
+.dashboard__hud-registry .dashboard__card-wrapper::after  { animation-delay: 0s; }
 
 @keyframes nameplate-scan {
   0%   { left: -40%; opacity: 0; }
@@ -154,6 +169,11 @@
 .dashboard__hud[data-brain-hovered] .dashboard__hud-weekly.dashboard__orbital-block,
 .dashboard__hud-weekly.dashboard__orbital-block:hover {
   transform: translateY(-50%) scale(1.03);
+}
+
+.dashboard__hud[data-brain-hovered] .dashboard__hud-registry.dashboard__orbital-block,
+.dashboard__hud-registry.dashboard__orbital-block:hover {
+  transform: translateX(-50%) scale(1.03);
 }
 
 .dashboard__hud[data-brain-hovered] .dashboard__orbital-block .jads-card__body,
@@ -200,6 +220,10 @@
   transform: translateY(-50%) scale(1);
 }
 
+.dashboard__hud[data-dragging] .dashboard__hud-registry.dashboard__orbital-block:hover {
+  transform: translateX(-50%) scale(1);
+}
+
 .dashboard__hud[data-dragging] .dashboard__orbital-block:hover .jads-card__body {
   max-height: 0;
   opacity: 0;
@@ -239,7 +263,8 @@
 
   .dashboard__hud-workers,
   .dashboard__hud-daily,
-  .dashboard__hud-weekly {
+  .dashboard__hud-weekly,
+  .dashboard__hud-registry {
     position: relative;
     top: auto;
     left: auto;
@@ -251,7 +276,8 @@
 
   .dashboard__hud-workers.dashboard__orbital-block,
   .dashboard__hud-daily.dashboard__orbital-block,
-  .dashboard__hud-weekly.dashboard__orbital-block {
+  .dashboard__hud-weekly.dashboard__orbital-block,
+  .dashboard__hud-registry.dashboard__orbital-block {
     opacity: 1;
     transform: none;
     transition: none;

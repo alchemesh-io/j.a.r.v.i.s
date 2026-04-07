@@ -1,3 +1,24 @@
+{{- if .Values.persistence.hostPath }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Release.Name }}-sqlite
+  labels:
+    app: {{ .Release.Name }}-backend
+spec:
+  capacity:
+    storage: {{ .Values.persistence.size }}
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  hostPath:
+    path: {{ .Values.persistence.hostPath }}
+    type: DirectoryOrCreate
+  claimRef:
+    namespace: {{ .Release.Namespace }}
+    name: {{ .Release.Name }}-sqlite
+---
+{{- end }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -8,7 +29,12 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  {{- if .Values.persistence.hostPath }}
+  storageClassName: ""
+  volumeName: {{ .Release.Name }}-sqlite
+  {{- else }}
   storageClassName: {{ .Values.persistence.storageClass }}
+  {{- end }}
   resources:
     requests:
       storage: {{ .Values.persistence.size }}

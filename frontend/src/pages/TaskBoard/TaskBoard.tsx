@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -27,6 +27,7 @@ import {
   getDailyByDate,
   assignTaskToDates,
   removeTaskFromDaily,
+  ensureDaily,
   getJiraConfig,
   listJiraTickets,
   getGcalAuthStatus,
@@ -248,16 +249,19 @@ function SortableTaskCard({
   onToggleStatus: () => void;
   onExpand: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition } =
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 10 : undefined,
+    touchAction: 'manipulation' as const,
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
+    <div ref={setNodeRef} style={style} {...attributes} data-dragging={isDragging || undefined}>
       <TaskCard
         title={task.title}
         type={task.type}
@@ -368,17 +372,30 @@ export default function TaskBoard() {
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks', dateStr, scope],
     queryFn: () => listTasks({ date: dateStr, scope }),
-    select: (data) => [...data].sort((a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9)),
   });
 
+  const [manualOrder, setManualOrder] = useState<number[] | null>(null);
+
+  // Reset manual order when date/scope changes
+  useEffect(() => {
+    setManualOrder(null);
+  }, [dateStr, scope]);
+
+  const sortedTasks = useMemo(() => {
+    if (manualOrder) {
+      const byId = new Map(tasks.map((t) => [t.id, t]));
+      return manualOrder.map((id) => byId.get(id)).filter(Boolean) as Task[];
+    }
+    return [...tasks].sort((a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9));
+  }, [tasks, manualOrder]);
+
   const visibleTasks = doneMode === 'hide'
-    ? tasks.filter((t) => t.status !== 'done')
-    : tasks;
+    ? sortedTasks.filter((t) => t.status !== 'done')
+    : sortedTasks;
 
   const { data: daily } = useQuery({
     queryKey: ['daily', dateStr],
     queryFn: () => getDailyByDate(dateStr).catch(() => null),
-    enabled: scope === 'daily',
   });
 
   const toggleStatusMutation = useMutation({
@@ -615,7 +632,7 @@ export default function TaskBoard() {
   }
 
   const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
+    async (event: DragEndEvent) => {
       const { active, over } = event;
       if (!over || active.id === over.id) return;
 
@@ -624,16 +641,19 @@ export default function TaskBoard() {
       if (oldIndex === -1 || newIndex === -1) return;
 
       const reordered = arrayMove(visibleTasks, oldIndex, newIndex);
-      queryClient.setQueryData(['tasks', dateStr, scope], reordered);
+      setManualOrder(reordered.map((t) => t.id));
 
-      if (daily) {
-        reorderMutation.mutate({
-          dailyId: daily.id,
+      try {
+        const d = daily ?? await ensureDaily(dateStr);
+        await reorderMutation.mutateAsync({
+          dailyId: d.id,
           items: reordered.map((t, i) => ({ task_id: t.id, priority: i + 1 })),
         });
+      } catch {
+        setManualOrder(null);
       }
     },
-    [visibleTasks, daily, dateStr, scope, reorderMutation, queryClient],
+    [visibleTasks, daily, dateStr, reorderMutation],
   );
 
   const closeForm = () => { setShowCreateForm(false); setEditingTask(null); resetForm(); };

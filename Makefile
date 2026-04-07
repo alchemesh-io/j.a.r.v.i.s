@@ -9,13 +9,16 @@
 MINIKUBE_CPUS   ?= 4
 MINIKUBE_MEMORY ?= 8192
 ARGOCD_VERSION  := v3.3.6
-MOUNT_PID_FILE  := .minikube-mount.pid
-REPO_ROOT       := $(shell pwd)
-MOUNT_TARGET    := /mnt/jarvis-repo
-GHCR_ORG        := alchemesh-io
+MOUNT_PID_FILE      := .minikube-mount.pid
+DATA_MOUNT_PID_FILE := .minikube-data-mount.pid
+REPO_ROOT           := $(shell pwd)
+MOUNT_TARGET        := /mnt/jarvis-repo
+DATA_DIR            := $(REPO_ROOT)/.data
+DATA_MOUNT_TARGET   := /mnt/jarvis-data
+GHCR_ORG            := alchemesh-io
 
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update _tls-secret
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -52,21 +55,22 @@ cluster-up: _check-prereqs
 	@echo ""
 	@echo "==> Cluster ready. Run 'make argocd-ui' to open the ArgoCD dashboard."
 
-## Stop the Minikube cluster and clean up background processes
+## Stop the Minikube cluster and clean up background processes (data in .data/ is preserved)
 cluster-down: _check-prereqs
-	@echo "==> Stopping minikube mount process..."
-	@if [ -f $(MOUNT_PID_FILE) ]; then \
-		PID=$$(cat $(MOUNT_PID_FILE)); \
-		if kill -0 $$PID 2>/dev/null; then \
-			kill $$PID && echo "  Killed mount PID $$PID"; \
-		else \
-			echo "  Mount process $$PID not running (stale PID file)"; \
+	@echo "==> Stopping minikube mount processes..."
+	@for pidfile in $(MOUNT_PID_FILE) $(DATA_MOUNT_PID_FILE); do \
+		if [ -f $$pidfile ]; then \
+			PID=$$(cat $$pidfile); \
+			if kill -0 $$PID 2>/dev/null; then \
+				kill $$PID && echo "  Killed mount PID $$PID"; \
+			else \
+				echo "  Mount process $$PID not running (stale PID file)"; \
+			fi; \
+			rm -f $$pidfile; \
 		fi; \
-		rm -f $(MOUNT_PID_FILE); \
-	else \
-		echo "  No PID file found, skipping."; \
-	fi
+	done
 	@echo "==> Deleting Minikube cluster..."
+	@echo "    Note: data in .data/ is preserved on the host."
 	minikube delete
 	@echo "==> Cluster deleted."
 
@@ -78,86 +82,99 @@ cluster-status: _check-prereqs
 	@echo "==> ArgoCD pods:"
 	kubectl get pods -n argocd 2>/dev/null || echo "  (argocd namespace not found)"
 	@echo ""
-	@echo "==> minikube mount process:"
-	@if [ -f $(MOUNT_PID_FILE) ]; then \
-		PID=$$(cat $(MOUNT_PID_FILE)); \
-		if kill -0 $$PID 2>/dev/null; then \
-			echo "  Running (PID $$PID)"; \
+	@echo "==> minikube mount processes:"
+	@for desc_pid in "Repo:$(MOUNT_PID_FILE)" "Data:$(DATA_MOUNT_PID_FILE)"; do \
+		desc=$${desc_pid%%:*}; pidfile=$${desc_pid#*:}; \
+		if [ -f $$pidfile ]; then \
+			PID=$$(cat $$pidfile); \
+			if kill -0 $$PID 2>/dev/null; then \
+				echo "  $$desc: Running (PID $$PID)"; \
+			else \
+				echo "  $$desc: NOT running (stale PID $$PID)"; \
+			fi; \
 		else \
-			echo "  NOT running (stale PID $$PID)"; \
+			echo "  $$desc: Not started (no PID file)"; \
 		fi; \
-	else \
-		echo "  Not started (no PID file)"; \
-	fi
+	done
 
 # ---------------------------------------------------------------------------
 # Application deployment
 # ---------------------------------------------------------------------------
 
-## Pull latest published images from GHCR, load into Minikube, apply ArgoCD App CR, hard sync
-deploy: _check-prereqs _deploy-secrets
+## Pull latest published images from GHCR, load into Minikube, apply ArgoCD App CRs, hard sync
+deploy: _check-prereqs _deploy-secrets _deploy-jaar-secrets _helm-dep-update
 	@echo "==> Pulling latest images from GHCR..."
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
-	docker pull ghcr.io/$(GHCR_ORG)/jarvis-mcp:latest
 	@echo "==> Loading images into Minikube..."
 	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
-	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-mcp:latest
-	@echo "==> Applying ArgoCD Application CR (GHCR images)..."
+	@echo "==> Applying ArgoCD Application CRs (GHCR images)..."
 	kubectl apply -f argocd/jarvis-app.yaml
+	kubectl apply -f argocd/jaar-app.yaml
 	@$(MAKE) sync
 	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
 	@echo "==> Access via Istio ingress gateway:"
 	@echo "    minikube tunnel  (in a separate terminal)"
 	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
-## Build images locally, load into Minikube, apply ArgoCD App CR, hard sync
-deploy-local: _check-prereqs _deploy-secrets
+## Build images locally, load into Minikube, apply ArgoCD App CRs, hard sync
+deploy-local: _check-prereqs _deploy-secrets _deploy-jaar-secrets _helm-dep-update
 	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
 	@echo "==> Building Docker images locally (tag: $(LOCAL_TAG))..."
 	docker build -t jarvis-backend:$(LOCAL_TAG) ./backend
 	docker build -t jarvis-frontend:$(LOCAL_TAG) ./frontend
-	docker build -t jarvis-mcp:$(LOCAL_TAG) ./mcp_server
+	docker build -t jarvis:$(LOCAL_TAG) ./artifacts/servers/jarvis
 	@echo "==> Loading images into Minikube..."
 	minikube image load jarvis-backend:$(LOCAL_TAG)
 	minikube image load jarvis-frontend:$(LOCAL_TAG)
-	minikube image load jarvis-mcp:$(LOCAL_TAG)
-	@echo "==> Applying ArgoCD Application CR (local images, tag: $(LOCAL_TAG))..."
+	minikube image load jarvis:$(LOCAL_TAG)
+	@echo "==> Applying ArgoCD Application CRs (local images, tag: $(LOCAL_TAG))..."
 	@sed 's/tag: local/tag: "$(LOCAL_TAG)"/g' argocd/jarvis-app-local.yaml | kubectl apply -f -
+	kubectl apply -f argocd/jaar-app-local.yaml
 	@$(MAKE) sync
 	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
 	@echo "==> Access via Istio ingress gateway:"
 	@echo "    minikube tunnel  (in a separate terminal)"
 	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
-## Delete the ArgoCD Application CR (cascade deletes all managed resources)
+## Delete the ArgoCD Application CRs (cascade deletes all managed resources)
 undeploy: _check-prereqs
-	@echo "==> Deleting ArgoCD Application CR (cascade)..."
+	@echo "==> Deleting ArgoCD Application CRs (cascade)..."
 	kubectl delete -f argocd/jarvis-app.yaml --ignore-not-found=true
-	@echo "==> Application undeployed."
+	kubectl delete -f argocd/jaar-app.yaml --ignore-not-found=true
+	@echo "==> Applications undeployed."
 
 # ---------------------------------------------------------------------------
 # ArgoCD helpers
 # ---------------------------------------------------------------------------
 
-## Port-forward ArgoCD UI to localhost:8080 and print admin password
+## Print ArgoCD admin password — UI accessible at http://jaac.jarvis.io
 argocd-ui: _check-prereqs
 	@echo "==> ArgoCD initial admin password:"
 	@kubectl -n argocd get secret argocd-initial-admin-secret \
 		-o jsonpath="{.data.password}" 2>/dev/null | base64 --decode && echo || \
 		echo "  (Secret not found — password may have been changed)"
 	@echo ""
-	@echo "==> Starting port-forward: https://localhost:8080"
+	@echo "==> ArgoCD UI: http://jaac.jarvis.io"
 	@echo "    Username: admin"
-	kubectl port-forward svc/argocd-server -n argocd 8080:443
 
-## Port-forward Istio ingress gateway to localhost:7080 (HTTP)
+## Port-forward Istio ingress gateway to localhost:80 (requires minikube tunnel)
+## Access: http://main.jarvis.io (JARVIS), http://jaar.jarvis.io (JAAR)
+## Ensure /etc/hosts maps *.jarvis.io to the gateway IP (minikube tunnel IP)
 jarvis-ui: _check-prereqs
-	@echo "==> Starting port-forward: http://localhost:7080"
+	@echo "==> Access via minikube tunnel:"
+	@echo "    http://main.jarvis.io    (JARVIS)"
+	@echo "    http://mcp.jarvis.io     (MCP Server)"
+	@echo "    http://jaar.jarvis.io    (Agent Registry)"
+	@echo "    http://jaac.jarvis.io    (ArgoCD)"
+	@echo ""
+	@echo "==> Ensure /etc/hosts contains:"
+	@echo "    <GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaar.jarvis.io jaac.jarvis.io"
+	@echo ""
 	kubectl port-forward svc/jarvis-gateway-istio -n istio-system 7080:80
 
-## Trigger ArgoCD hard sync for the jarvis application
+## Trigger ArgoCD hard sync for jarvis and jaar applications
 sync: _check-prereqs
 	@echo "==> Triggering ArgoCD sync for 'jarvis'..."
 	@if command -v argocd >/dev/null 2>&1; then \
@@ -165,6 +182,15 @@ sync: _check-prereqs
 		echo "  (argocd CLI sync failed — falling back to kubectl)"; \
 	fi
 	kubectl -n argocd patch app jarvis \
+		--type merge \
+		-p '{"operation":{"initiatedBy":{"username":"make-sync"},"sync":{"revision":"HEAD","prune":true}}}' \
+		2>/dev/null || true
+	@echo "==> Triggering ArgoCD sync for 'jaar'..."
+	@if command -v argocd >/dev/null 2>&1; then \
+		argocd app sync jaar --hard-refresh 2>/dev/null || \
+		echo "  (argocd CLI sync failed — falling back to kubectl)"; \
+	fi
+	kubectl -n argocd patch app jaar \
 		--type merge \
 		-p '{"operation":{"initiatedBy":{"username":"make-sync"},"sync":{"revision":"HEAD","prune":true}}}' \
 		2>/dev/null || true
@@ -192,13 +218,33 @@ _mount-start:
 	@if [ -f $(MOUNT_PID_FILE) ]; then \
 		PID=$$(cat $(MOUNT_PID_FILE)); \
 		if kill -0 $$PID 2>/dev/null; then \
-			echo "  Mount already running (PID $$PID), skipping."; \
-			exit 0; \
+			echo "  Repo mount already running (PID $$PID), skipping."; \
+		else \
+			minikube mount $(REPO_ROOT):$(MOUNT_TARGET) & \
+			echo $$! > $(MOUNT_PID_FILE); \
+			echo "  Repo mount started (PID $$(cat $(MOUNT_PID_FILE)))"; \
 		fi; \
+	else \
+		minikube mount $(REPO_ROOT):$(MOUNT_TARGET) & \
+		echo $$! > $(MOUNT_PID_FILE); \
+		echo "  Repo mount started (PID $$(cat $(MOUNT_PID_FILE)))"; \
 	fi
-	minikube mount $(REPO_ROOT):$(MOUNT_TARGET) &
-	echo $$! > $(MOUNT_PID_FILE)
-	@echo "  Mount started (PID $$(cat $(MOUNT_PID_FILE)))"
+	@mkdir -p $(DATA_DIR)/jarvis $(DATA_DIR)/jaar
+	@echo "==> Starting minikube mount $(DATA_DIR) -> $(DATA_MOUNT_TARGET)..."
+	@if [ -f $(DATA_MOUNT_PID_FILE) ]; then \
+		PID=$$(cat $(DATA_MOUNT_PID_FILE)); \
+		if kill -0 $$PID 2>/dev/null; then \
+			echo "  Data mount already running (PID $$PID), skipping."; \
+		else \
+			minikube mount $(DATA_DIR):$(DATA_MOUNT_TARGET) & \
+			echo $$! > $(DATA_MOUNT_PID_FILE); \
+			echo "  Data mount started (PID $$(cat $(DATA_MOUNT_PID_FILE)))"; \
+		fi; \
+	else \
+		minikube mount $(DATA_DIR):$(DATA_MOUNT_TARGET) & \
+		echo $$! > $(DATA_MOUNT_PID_FILE); \
+		echo "  Data mount started (PID $$(cat $(DATA_MOUNT_PID_FILE)))"; \
+	fi
 	@sleep 2
 
 _istio-install:
@@ -207,15 +253,45 @@ _istio-install:
 	@echo "==> Waiting for Istio to sync and become healthy (timeout 5m)..."
 	@kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/istio -n argocd --timeout=300s 2>/dev/null || \
 		echo "  (Waiting for Istio sync — may take a moment on first deploy)"
-	@echo "==> Labeling jarvis namespace for Istio sidecar injection..."
+	@$(MAKE) _tls-secret
+	@echo "==> Labeling jarvis and jaar namespaces for Istio sidecar injection..."
 	kubectl create namespace jarvis --dry-run=client -o yaml | kubectl apply -f -
 	kubectl label namespace jarvis istio-injection=enabled --overwrite
+	kubectl create namespace jaar --dry-run=client -o yaml | kubectl apply -f -
+	kubectl label namespace jaar istio-injection=enabled --overwrite
+
+## Generate self-signed wildcard TLS cert for *.jarvis.io and store in istio-system
+_tls-secret:
+	@if kubectl get secret jarvis-io-tls -n istio-system >/dev/null 2>&1; then \
+		echo "==> TLS secret jarvis-io-tls already exists, skipping."; \
+	else \
+		echo "==> Generating self-signed wildcard certificate for *.jarvis.io..."; \
+		openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+			-keyout /tmp/jarvis-io-tls.key \
+			-out /tmp/jarvis-io-tls.crt \
+			-subj "/O=JARVIS/CN=jarvis.io" \
+			-addext "subjectAltName=DNS:*.jarvis.io,DNS:jarvis.io" \
+			-addext "basicConstraints=critical,CA:TRUE" \
+			-addext "keyUsage=critical,digitalSignature,keyEncipherment,keyCertSign" \
+			-addext "extendedKeyUsage=serverAuth" 2>/dev/null; \
+		kubectl create secret tls jarvis-io-tls \
+			--cert=/tmp/jarvis-io-tls.crt \
+			--key=/tmp/jarvis-io-tls.key \
+			-n istio-system; \
+		rm -f /tmp/jarvis-io-tls.key /tmp/jarvis-io-tls.crt; \
+		echo "  TLS secret created."; \
+	fi
 
 _argocd-install:
 	@echo "==> Installing ArgoCD $(ARGOCD_VERSION)..."
 	kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 	kubectl apply -n argocd --server-side --force-conflicts -f https://raw.githubusercontent.com/argoproj/argo-cd/$(ARGOCD_VERSION)/manifests/install.yaml
+	@echo "==> Configuring ArgoCD server for insecure mode (TLS terminated at gateway)..."
+	@kubectl create configmap argocd-cmd-params-cm -n argocd \
+		--from-literal=server.insecure=true \
+		--dry-run=client -o yaml | kubectl apply -f -
 	@echo "==> Waiting for ArgoCD to be Ready (timeout 5m)..."
+	kubectl rollout restart deployment argocd-server -n argocd
 	kubectl wait --for=condition=Available deployment --all -n argocd --timeout=300s
 	kubectl wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset --all -n argocd --timeout=300s
 
@@ -233,6 +309,25 @@ _argocd-patch-repo-server:
 _argocd-add-repo:
 	@echo "==> Configuring ArgoCD repository entry for file:///mnt/jarvis-repo..."
 	kubectl apply -f argocd/jarvis-repo-secret.yaml
+
+JAAR_SECRETS_FILE := secrets/jaar-secret.yaml
+
+## Apply the local JAAR secret manifest (gitignored, not managed by ArgoCD)
+_deploy-jaar-secrets:
+	@if [ -f $(JAAR_SECRETS_FILE) ]; then \
+		echo "==> Applying JAAR secret from $(JAAR_SECRETS_FILE)..."; \
+		kubectl create namespace jaar --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null; \
+		kubectl apply -f $(JAAR_SECRETS_FILE); \
+	else \
+		echo "==> No $(JAAR_SECRETS_FILE) found — skipping JAAR secrets deployment."; \
+		echo "    Copy secrets/jaar-secret.example.yaml to $(JAAR_SECRETS_FILE) and fill in values."; \
+	fi
+
+## Build Helm chart dependencies (pull upstream subcharts)
+_helm-dep-update:
+	@echo "==> Updating Helm dependencies for helm/jaar/..."
+	helm dependency update helm/jaar/ 2>/dev/null || \
+		echo "  (helm dependency update failed — chart may not render correctly)"
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +347,52 @@ dev-backend:
 	cd backend && DATABASE_URL=sqlite:///./jarvis-dev.db uv run uvicorn app.main:app --reload --port 8000
 
 # ---------------------------------------------------------------------------
+# Artifact publishing
+# ---------------------------------------------------------------------------
+
+## Sync all artifacts to the Agent Registry (publish remote GHCR versions + local images)
+## Requires JAAR to be running. Override registry URL: make sync-artifacts JAAR_URL=http://...
+JAAR_URL ?= http://jaar.jarvis.io
+sync-artifacts: sync-artifacts-servers
+
+## Publish all MCP servers to Agent Registry — all remote tags from GHCR + local git SHA
+sync-artifacts-servers:
+	@echo "==> Syncing MCP servers to Agent Registry ($(JAAR_URL))..."
+	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
+	@for dir in artifacts/servers/*/; do \
+		manifest="$${dir}mcp.yaml"; \
+		if [ ! -f "$$manifest" ]; then continue; fi; \
+		NAME=$$(yq -r '.name' "$$manifest"); \
+		DESC=$$(yq -r '.description' "$$manifest"); \
+		IMAGE=$$(yq -r '.image' "$$manifest"); \
+		echo "  --- $${NAME} ---"; \
+		echo "  Fetching remote tags from GHCR..."; \
+		TAGS=$$(docker images --format '{{.Tag}}' "$$IMAGE" 2>/dev/null; \
+			curl -sf "https://ghcr.io/v2/$(GHCR_ORG)/$${NAME}/tags/list" \
+				-H "Authorization: Bearer $$(curl -sf "https://ghcr.io/token?scope=repository:$(GHCR_ORG)/$${NAME}:pull&service=ghcr.io" | jq -r '.token')" \
+				2>/dev/null | jq -r '.tags[]' 2>/dev/null) || true; \
+		for TAG in $$TAGS; do \
+			echo "  Publishing $${NAME}:$${TAG}..."; \
+			arctl mcp publish $(GHCR_ORG)/$${NAME} \
+				--registry-url "$(JAAR_URL)" \
+				--description "$$DESC" \
+				--version "$$TAG" \
+				--type oci \
+				--package-id "$${IMAGE}:$${TAG}" || \
+				echo "    Skipped $${TAG}"; \
+		done; \
+		echo "  Publishing local $${NAME}:$(LOCAL_TAG)..."; \
+		arctl mcp publish $(GHCR_ORG)/$${NAME} \
+			--registry-url "$(JAAR_URL)" \
+			--description "$$DESC" \
+			--version "$(LOCAL_TAG)" \
+			--type oci \
+			--package-id "$${IMAGE}:$(LOCAL_TAG)" || \
+			echo "    Skipped local"; \
+	done
+	@echo "==> Done."
+
+# ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 test-backend:
@@ -264,4 +405,4 @@ test-e2e:
 	cd frontend && npx playwright test --config e2e/playwright.config.ts
 
 test-mcp:
-	cd mcp_server && uv run pytest tests/ -v
+	cd artifacts/servers/jarvis && uv run pytest tests/ -v

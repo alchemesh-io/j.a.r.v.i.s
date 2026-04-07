@@ -32,12 +32,15 @@ Thumbs.db
 
 # Minikube / local cluster
 .minikube-mount.pid
+.minikube-data-mount.pid
+.data/
 
 # Secrets / env
 .env
 .env.*
 !.env.example
 secrets/backend-secret.yaml
+secrets/jaar-secret.yaml
 
 # Helm
 *.tgz

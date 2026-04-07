@@ -39,7 +39,7 @@ frontend:
 
 mcp:
   image:
-    repository: ghcr.io/alchemesh-io/jarvis-mcp
+    repository: ghcr.io/alchemesh-io/jarvis
     tag: latest
     pullPolicy: IfNotPresent
   replicaCount: 1
@@ -52,7 +52,12 @@ mcp:
 gateway:
   name: jarvis-gateway
   namespace: istio-system
+  host: main.jarvis.io
+  mcpHost: mcp.jarvis.io
 
 persistence:
   storageClass: standard
   size: 1Gi
+  # Set hostPath to persist data on the host across cluster rebuilds.
+  # Maps to minikube mount: .data/jarvis -> /mnt/jarvis-data/jarvis
+  hostPath: ""

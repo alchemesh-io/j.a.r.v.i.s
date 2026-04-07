@@ -1,0 +1,16 @@
+name: jarvis
+framework: fastmcp-python
+version: 0.1.0
+description: MCP server to interact with J.A.R.V.I.S backend
+author: Alexandre Guitton
+email: guittonalexandre@outlook.fr
+secrets:
+    local:
+        enabled: false
+        provider: env
+        file: .env.local
+runtimeHint: python
+runtimeArgs:
+    - src/main.py
+created_at: 2026-04-06T20:52:44.038204+02:00
+updated_at: 2026-04-06T20:52:44.098587+02:00
