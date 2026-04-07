@@ -109,6 +109,14 @@
 .jads-task-card__content {
   flex: 1;
   min-width: 0;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.jads-task-card__content:active {
+  cursor: grabbing;
 }
 
 .jads-task-card__title {

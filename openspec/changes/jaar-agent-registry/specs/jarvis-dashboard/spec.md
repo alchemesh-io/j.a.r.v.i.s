@@ -1,11 +1,11 @@
 ## ADDED Requirements
 
 ### Requirement: Agent Registry metric block on Dashboard
-The Dashboard SHALL display an "Agent Registry" card alongside the existing metric blocks (Workers, Daily Tasks, Weekly Tasks). The card SHALL show four artifact counts: MCP Servers, Agents, Skills, and Prompts, fetched from the JAAR API. The card SHALL participate in the existing drag-and-drop layout and compact mode systems.
+The Dashboard SHALL display an "Agent Registry" card alongside the existing metric blocks (Workers, Daily Tasks, Weekly Tasks) in the orbital HUD layout. The card SHALL show four artifact counts: MCP Servers, Agents, Skills, and Prompts, fetched from the JAAR API. The card SHALL participate in the existing drag-and-drop layout and compact mode systems, positioned at the bottom orbital slot (`dashboard__hud-registry`).
 
 #### Scenario: Agent Registry card rendered on dashboard
 - **WHEN** the dashboard page loads
-- **THEN** the Agent Registry card is displayed with four artifact type rows and their counts
+- **THEN** the Agent Registry card is displayed in the bottom orbital position with four artifact type rows and their counts
 
 #### Scenario: Card works in compact mode
 - **WHEN** the user toggles compact mode
@@ -17,4 +17,4 @@ The Dashboard SHALL display an "Agent Registry" card alongside the existing metr
 
 #### Scenario: Card handles JAAR API unavailability
 - **WHEN** the dashboard loads but the JAAR API is unreachable
-- **THEN** the Agent Registry card displays gracefully with zero counts or a loading/error state, without breaking the rest of the dashboard
+- **THEN** the Agent Registry card displays gracefully with zero counts, without breaking the rest of the dashboard

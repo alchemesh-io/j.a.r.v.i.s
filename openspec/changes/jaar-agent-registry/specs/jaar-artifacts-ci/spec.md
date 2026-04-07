@@ -1,49 +1,49 @@
 ## ADDED Requirements
 
 ### Requirement: Artifacts directory structure
-The repository SHALL include an `artifacts/` directory with one subdirectory per artifact type: `servers/`, `agents/`, `skills/`, `prompts/`. Each artifact SHALL reside in its own named subfolder containing a `manifest.yaml` and any associated source files.
+The repository SHALL include an `artifacts/` directory with one subdirectory per artifact type: `servers/`, `agents/`, `skills/`, `prompts/`. Each MCP server artifact SHALL reside in its own named subfolder scaffolded via `arctl mcp init python`, containing a `mcp.yaml` metadata file, `src/` directory, `Dockerfile`, and `pyproject.toml`. Empty type directories use `.gitkeep`.
 
 #### Scenario: Directory structure exists
 - **WHEN** the repository is cloned
 - **THEN** the `artifacts/` directory contains `servers/`, `agents/`, `skills/`, and `prompts/` subdirectories
 
-#### Scenario: Each artifact has a manifest
-- **WHEN** an artifact subfolder is inspected (e.g., `artifacts/servers/jarvis-mcp/`)
-- **THEN** it contains a `manifest.yaml` describing the artifact metadata
+#### Scenario: Each server artifact has an mcp.yaml
+- **WHEN** a server subfolder is inspected (e.g., `artifacts/servers/jarvis/`)
+- **THEN** it contains an `mcp.yaml` describing the artifact metadata (name, version, description)
 
-### Requirement: JARVIS MCP server relocated under artifacts
-The existing MCP server at `mcp_server/` SHALL be relocated to `artifacts/servers/jarvis-mcp/`. The Helm chart Dockerfile path, CI workflow, and any references SHALL be updated to reflect the new location. The MCP server's functionality and API SHALL remain unchanged.
+### Requirement: JARVIS MCP server rewritten under artifacts
+The existing MCP server at `mcp_server/` SHALL be replaced with a new server at `artifacts/servers/jarvis/` scaffolded via `arctl mcp init python`. The server SHALL use FastMCP with dynamic tool loading from `src/tools/`. Tool modules cover task, daily, and weekly management — backend-managed data only (no JIRA/GCal proxy). The API client SHALL be aligned to current backend models (`source_type`/`source_id`).
 
 #### Scenario: MCP server sources at new location
-- **WHEN** the repository is inspected after relocation
-- **THEN** `artifacts/servers/jarvis-mcp/` contains the MCP server source code, Dockerfile, `pyproject.toml`, and `manifest.yaml`
+- **WHEN** the repository is inspected
+- **THEN** `artifacts/servers/jarvis/` contains `src/main.py`, `src/core/api_client.py`, `src/tools/{tasks,dailies,weeklies}.py`, `mcp.yaml`, `Dockerfile`, and `pyproject.toml`
 
 #### Scenario: MCP server Docker image builds from new path
-- **WHEN** `docker build -t jarvis-mcp ./artifacts/servers/jarvis-mcp` is executed
+- **WHEN** `docker build -t jarvis ./artifacts/servers/jarvis` is executed
 - **THEN** the build completes without errors and produces a runnable image
 
-#### Scenario: MCP server tests pass from new location
-- **WHEN** `uv run pytest tests/ -v` is executed in `artifacts/servers/jarvis-mcp/`
-- **THEN** all existing MCP server tests pass
+#### Scenario: MCP server tests pass
+- **WHEN** `uv run pytest tests/ -v` is executed in `artifacts/servers/jarvis/`
+- **THEN** all 33 tests pass (API client, tool loading, discovery, server)
 
-### Requirement: Initial artifact manifests
-The repository SHALL include initial manifests for: `artifacts/servers/jarvis-mcp/manifest.yaml`, `artifacts/agents/jarvis-assistant/manifest.yaml`, `artifacts/skills/task-management/manifest.yaml`, `artifacts/prompts/daily-planning/manifest.yaml`.
-
-#### Scenario: All initial manifests exist
+#### Scenario: Old mcp_server/ removed
 - **WHEN** the repository is inspected
-- **THEN** all four manifest files exist with valid YAML content describing each artifact's name, type, version, and description
+- **THEN** the `mcp_server/` directory no longer exists
 
 ### Requirement: GitHub Actions workflow for artifact publishing
-A GitHub Actions workflow SHALL build artifacts on push to `main`, publish them to GHCR as Docker packages, and call the AgentRegistry API to register them.
+A GitHub Actions workflow SHALL build MCP server artifacts on push to `main` (when `artifacts/**` changes), and publish them to GHCR using `arctl mcp build --push`. The workflow uses a matrix strategy per server. Agent Registry registration is handled separately via `make sync-artifacts`.
 
 #### Scenario: Workflow triggers on push to main
 - **WHEN** a commit is pushed to `main` that modifies files under `artifacts/`
 - **THEN** the artifact publishing workflow is triggered
 
-#### Scenario: Artifacts published to GHCR
+#### Scenario: Server images published to GHCR
 - **WHEN** the workflow runs successfully
-- **THEN** artifact images are pushed to GHCR under the repository's package namespace
+- **THEN** server images are pushed to GHCR with manifest version tag and `latest` tag
 
-#### Scenario: Artifacts registered with AgentRegistry
-- **WHEN** artifacts are published to GHCR
-- **THEN** the workflow calls the AgentRegistry API to register or update the artifact entries
+### Requirement: Makefile target for artifact sync
+The Makefile SHALL include `sync-artifacts` and `sync-artifacts-servers` targets that publish all GHCR image tags plus local images to the Agent Registry via `arctl mcp publish`.
+
+#### Scenario: Sync publishes all versions
+- **WHEN** `make sync-artifacts` is executed with JAAR running
+- **THEN** all remote GHCR tags and the local git SHA version are published to the Agent Registry
