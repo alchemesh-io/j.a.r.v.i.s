@@ -1,26 +1,34 @@
 .note-panel-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.6);
+  z-index: 10;
   display: flex;
-  justify-content: flex-end;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 32px;
+  background-color: rgba(10, 14, 26, 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  overflow-y: auto;
 }
 
 .note-panel {
-  width: min(480px, 90vw);
-  height: 100%;
-  background: var(--jads-color-surface, #0f1729);
-  border-left: 1px solid rgba(0, 212, 255, 0.15);
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100% - 64px);
+  margin-bottom: 32px;
+  background-color: var(--color-surface, #111827);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--jads-radius-lg, 12px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: note-panel-slide-in 0.2s ease-out;
+  animation: note-panel-fade-in 0.15s ease-out;
 }
 
-@keyframes note-panel-slide-in {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
+@keyframes note-panel-fade-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .note-panel__header {

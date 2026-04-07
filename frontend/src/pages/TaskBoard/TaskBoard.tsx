@@ -1466,6 +1466,18 @@ export default function TaskBoard() {
             </div>
           </SortableContext>
         </DndContext>
+
+        {/* Notes panel overlay */}
+        {notePanelTask && (
+          <NotePanel
+            taskTitle={notePanelTask.title}
+            notes={taskNotes}
+            onClose={() => setNotePanelTask(null)}
+            onCreate={(content) => createNoteMutation.mutate({ taskId: notePanelTask.id, content })}
+            onUpdate={(noteId, content) => updateNoteMutation.mutate({ taskId: notePanelTask.id, noteId, content })}
+            onDelete={(noteId) => deleteNoteMutation.mutate({ taskId: notePanelTask.id, noteId })}
+          />
+        )}
       </section>
 
       {/* Task deletion confirmation */}
@@ -1490,17 +1502,6 @@ export default function TaskBoard() {
         </div>
       )}
 
-      {/* Notes panel */}
-      {notePanelTask && (
-        <NotePanel
-          taskTitle={notePanelTask.title}
-          notes={taskNotes}
-          onClose={() => setNotePanelTask(null)}
-          onCreate={(content) => createNoteMutation.mutate({ taskId: notePanelTask.id, content })}
-          onUpdate={(noteId, content) => updateNoteMutation.mutate({ taskId: notePanelTask.id, noteId, content })}
-          onDelete={(noteId) => deleteNoteMutation.mutate({ taskId: notePanelTask.id, noteId })}
-        />
-      )}
     </div>
   );
 }
