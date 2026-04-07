@@ -40,13 +40,10 @@ function getWeekStart(date: string): string {
   return formatDate(d);
 }
 
-function getQuarterStartWeek(date: string): string {
+function getQuarterStartDate(date: string): string {
   const d = new Date(date + 'T00:00:00');
   const quarterMonth = Math.floor(d.getMonth() / 3) * 3;
   const quarterStart = new Date(d.getFullYear(), quarterMonth, 1);
-  // Find the Sunday (week start) on or before the quarter start
-  const dow = quarterStart.getDay();
-  quarterStart.setDate(quarterStart.getDate() - dow);
   return formatDate(quarterStart);
 }
 
@@ -63,9 +60,13 @@ function getISOWeek(d: Date): number {
 }
 
 function formatQuarterLabel(weekStart: string): string {
+  // The week_start may fall in the prior month (e.g. Mar 29 for Q2).
+  // Check the Saturday (end of week) to determine the quarter.
   const d = new Date(weekStart + 'T00:00:00');
-  const quarter = Math.floor(d.getMonth() / 3) + 1;
-  return `Q${quarter} ${d.getFullYear()}`;
+  const saturday = new Date(d.getTime());
+  saturday.setDate(saturday.getDate() + 6);
+  const quarter = Math.floor(saturday.getMonth() / 3) + 1;
+  return `Q${quarter} ${saturday.getFullYear()}`;
 }
 
 const KIND_OPTIONS: { value: KeyFocusKind; label: string }[] = [
@@ -270,10 +271,11 @@ export default function KeyFocusBoard() {
   const handleSubmit = useCallback(async () => {
     if (!formTitle.trim()) return;
 
-    // Resolve weekly from formDate
-    const weekStart = formFrequency === 'quarterly'
-      ? getQuarterStartWeek(formDate)
-      : getWeekStart(formDate);
+    // Resolve weekly from formDate — quarterly uses the quarter's first day
+    const targetDate = formFrequency === 'quarterly'
+      ? getQuarterStartDate(formDate)
+      : formDate;
+    const weekStart = getWeekStart(targetDate);
     let weeklies = await listWeeklies();
     let weekly = weeklies.find((w) => w.week_start === weekStart);
     if (!weekly) {

@@ -102,8 +102,10 @@ def list_key_focuses(
             )
         elif scope == "quarterly":
             q_start, q_end = _get_quarter_bounds(date)
+            # Extend start to include the week containing the quarter start
+            week_start_of_q, _ = _get_week_bounds(q_start)
             stmt = stmt.join(Weekly, Weekly.id == KeyFocus.weekly_id).where(
-                Weekly.week_start >= q_start, Weekly.week_start <= q_end
+                Weekly.week_start >= week_start_of_q, Weekly.week_start <= q_end
             )
 
     key_focuses = db.scalars(stmt).unique().all()
