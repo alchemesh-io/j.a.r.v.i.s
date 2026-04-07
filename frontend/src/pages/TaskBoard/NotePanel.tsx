@@ -84,7 +84,7 @@ export function NotePanel({ taskTitle, notes, onClose, onCreate, onUpdate, onDel
             onChange={(e) => setNewContent(e.target.value)}
             rows={3}
           />
-          <Button size="sm" onClick={handleCreate} disabled={!newContent.trim()}>
+          <Button onClick={handleCreate} disabled={!newContent.trim()}>
             Save
           </Button>
         </div>
@@ -104,10 +104,10 @@ export function NotePanel({ taskTitle, notes, onClose, onCreate, onUpdate, onDel
                     rows={4}
                   />
                   <div className="note-panel__edit-actions">
-                    <Button size="sm" onClick={handleSaveEdit} disabled={!editContent.trim()}>
+                    <Button onClick={handleSaveEdit} disabled={!editContent.trim()}>
                       Save
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={cancelEdit}>
+                    <Button variant="ghost" onClick={cancelEdit}>
                       Cancel
                     </Button>
                   </div>
@@ -116,10 +116,10 @@ export function NotePanel({ taskTitle, notes, onClose, onCreate, onUpdate, onDel
                 <div className="note-panel__confirm">
                   <p>Delete this note?</p>
                   <div className="note-panel__confirm-actions">
-                    <Button size="sm" onClick={() => handleDelete(note.id)}>
+                    <Button onClick={() => handleDelete(note.id)}>
                       Delete
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setDeletingId(null)}>
+                    <Button variant="ghost" onClick={() => setDeletingId(null)}>
                       Cancel
                     </Button>
                   </div>

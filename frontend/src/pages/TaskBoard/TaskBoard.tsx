@@ -41,7 +41,6 @@ import {
   deleteTaskNote,
   type Task,
   type TaskType,
-  type TaskNote,
   type JiraTicket,
   type CalendarEvent,
 } from '../../api/client';
@@ -1480,10 +1479,10 @@ export default function TaskBoard() {
               </p>
             )}
             <div className="task-board__confirm-actions">
-              <Button size="sm" onClick={() => deleteMutation.mutate(deletingTask.id)}>
+              <Button onClick={() => deleteMutation.mutate(deletingTask.id)}>
                 Delete
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setDeletingTask(null)}>
+              <Button variant="ghost" onClick={() => setDeletingTask(null)}>
                 Cancel
               </Button>
             </div>
