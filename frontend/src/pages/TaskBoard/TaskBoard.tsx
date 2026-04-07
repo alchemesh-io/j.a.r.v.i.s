@@ -426,10 +426,17 @@ export default function TaskBoard() {
     queryFn: () => getDailyByDate(dateStr).catch(() => null),
   });
 
-  const { data: allKeyFocuses = [] } = useQuery({
-    queryKey: ['key-focuses-all'],
-    queryFn: () => listKeyFocuses({ scope: 'all' }),
+  const { data: weeklyKeyFocuses = [] } = useQuery({
+    queryKey: ['key-focuses-weekly', dateStr],
+    queryFn: () => listKeyFocuses({ date: dateStr, scope: 'weekly', frequency: 'weekly' }),
   });
+
+  const { data: quarterlyKeyFocuses = [] } = useQuery({
+    queryKey: ['key-focuses-quarterly', dateStr],
+    queryFn: () => listKeyFocuses({ date: dateStr, scope: 'quarterly', frequency: 'quarterly' }),
+  });
+
+  const relevantKeyFocuses = [...weeklyKeyFocuses, ...quarterlyKeyFocuses];
 
   const toggleStatusMutation = useMutation({
     mutationFn: (task: Task) =>
@@ -1322,28 +1329,56 @@ export default function TaskBoard() {
                     )}
                   </div>
 
-                  {allKeyFocuses.length > 0 && (
+                  {relevantKeyFocuses.length > 0 && (
                     <div className="task-board__form-key-focuses">
                       <label className="task-board__form-label">Key Focuses</label>
                       <div className="task-board__form-kf-list">
-                        {allKeyFocuses.map((kf: KeyFocus) => (
-                          <label key={kf.id} className="task-board__form-kf-item">
-                            <input
-                              type="checkbox"
-                              checked={formKeyFocusIds.has(kf.id)}
-                              onChange={() => {
-                                setFormKeyFocusIds((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(kf.id)) next.delete(kf.id);
-                                  else next.add(kf.id);
-                                  return next;
-                                });
-                              }}
-                            />
-                            <span className="task-board__form-kf-kind" style={{ backgroundColor: { delivery: '#3b82f6', learning: '#22c55e', support: '#a855f7', operational: '#f97316', side_quest: '#06b6d4' }[kf.kind] }} />
-                            <span>{kf.title}</span>
-                          </label>
-                        ))}
+                        {weeklyKeyFocuses.length > 0 && (
+                          <>
+                            <div className="task-board__form-kf-group">Weekly</div>
+                            {weeklyKeyFocuses.map((kf: KeyFocus) => (
+                              <label key={kf.id} className="task-board__form-kf-item">
+                                <input
+                                  type="checkbox"
+                                  checked={formKeyFocusIds.has(kf.id)}
+                                  onChange={() => {
+                                    setFormKeyFocusIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(kf.id)) next.delete(kf.id);
+                                      else next.add(kf.id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <span className="task-board__form-kf-kind" style={{ backgroundColor: { delivery: '#3b82f6', learning: '#22c55e', support: '#a855f7', operational: '#f97316', side_quest: '#06b6d4' }[kf.kind] }} />
+                                <span>{kf.title}</span>
+                              </label>
+                            ))}
+                          </>
+                        )}
+                        {quarterlyKeyFocuses.length > 0 && (
+                          <>
+                            <div className="task-board__form-kf-group">Quarterly</div>
+                            {quarterlyKeyFocuses.map((kf: KeyFocus) => (
+                              <label key={kf.id} className="task-board__form-kf-item">
+                                <input
+                                  type="checkbox"
+                                  checked={formKeyFocusIds.has(kf.id)}
+                                  onChange={() => {
+                                    setFormKeyFocusIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(kf.id)) next.delete(kf.id);
+                                      else next.add(kf.id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <span className="task-board__form-kf-kind" style={{ backgroundColor: { delivery: '#3b82f6', learning: '#22c55e', support: '#a855f7', operational: '#f97316', side_quest: '#06b6d4' }[kf.kind] }} />
+                                <span>{kf.title}</span>
+                              </label>
+                            ))}
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
