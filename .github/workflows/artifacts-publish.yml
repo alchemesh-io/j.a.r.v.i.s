@@ -35,7 +35,7 @@ jobs:
       - name: Extract metadata
         id: meta
         run: |
-          echo "version=$(yq -r '.version' ${{ matrix.server.path }}/manifest.yaml)" >> "$GITHUB_OUTPUT"
+          echo "version=$(yq -r '.version' ${{ matrix.server.path }}/mcp.yaml)" >> "$GITHUB_OUTPUT"
 
       - name: Install arctl
         run: curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry/main/scripts/get-arctl | bash

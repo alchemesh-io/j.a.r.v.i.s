@@ -81,10 +81,12 @@ j.a.r.v.i.s/
 ├── artifacts/                  # Agent Registry managed artifacts
 │   ├── servers/
 │   │   └── jarvis/             # MCP server (FastMCP, dynamic tool loading)
-│   │       ├── server.py
-│   │       ├── api_client.py
+│   │       ├── src/
+│   │       │   ├── core/       # server.py, api_client.py, utils.py
+│   │       │   ├── tools/      # tasks.py, dailies.py, weeklies.py
+│   │       │   └── main.py
 │   │       ├── tests/
-│   │       ├── manifest.yaml   # Artifact metadata for Agent Registry
+│   │       ├── mcp.yaml        # Artifact metadata for Agent Registry
 │   │       ├── Dockerfile
 │   │       └── pyproject.toml
 │   ├── agents/                 # Agent artifacts (add via arctl)
@@ -93,13 +95,16 @@ j.a.r.v.i.s/
 ├── helm/
 │   ├── istio/                # Istio service mesh (deployed via ArgoCD)
 │   │   ├── Chart.yaml        # Sub-chart deps: base, istiod, gateway
-│   │   └── values.yaml
+│   │   ├── values.yaml
+│   │   └── templates/
+│   │       ├── gateway.yaml          # HTTP (:80) + HTTPS (:443, *.jarvis.io) listeners
+│   │       └── argocd-httproute.yaml # jaac.jarvis.io → ArgoCD (HTTPS + HTTP redirect)
 │   ├── jaar/                 # JAAR — AgentRegistry wrapper chart
 │   │   ├── Chart.yaml        # Depends on upstream agentregistry chart (OCI)
 │   │   ├── values.yaml       # Subchart config, external DB, gateway ref
 │   │   └── templates/
 │   │       ├── namespace.yaml    # jaar namespace with istio-injection
-│   │       └── httproute.yaml    # /jaar/* → AgentRegistry
+│   │       └── httproute.yaml    # jaar.jarvis.io → AgentRegistry
 │   └── jarvis/
 │       ├── Chart.yaml
 │       ├── values.yaml       # Backend, frontend, MCP image configs + settings
@@ -110,7 +115,8 @@ j.a.r.v.i.s/
 │           ├── backend-secret.yaml     # Sensitive config placeholder
 │           ├── frontend-deployment.yaml
 │           ├── frontend-service.yaml
-│           ├── httproute.yaml          # Gateway API HTTPRoute (/jarvis/api/* → backend, /jarvis/* → frontend, / → redirect)
+│           ├── httproute.yaml          # main.jarvis.io + localhost → backend/frontend
+│           ├── mcp-httproute.yaml      # mcp.jarvis.io → MCP server
 │           ├── mcp-deployment.yaml     # Standalone MCP pod with BACKEND_URL
 │           ├── mcp-service.yaml
 │           └── sqlite-pvc.yaml
@@ -186,8 +192,9 @@ kubectl get svc istio-ingressgateway -n istio-system   # Shows EXTERNAL-IP for t
 
 All traffic enters through the Istio ingress gateway via host-based routing (`*.jarvis.io`):
 - `main.jarvis.io`: `/api/*`, `/docs`, `/health` → backend; `/*` → frontend SPA
+- `mcp.jarvis.io`: `/*` → MCP server (FastMCP HTTP transport)
 - `jaar.jarvis.io`: `/*` → AgentRegistry
-- `jaac.jarvis.io`: `/*` → ArgoCD UI
+- `jaac.jarvis.io`: `/*` → ArgoCD UI (HTTPS)
 
 ### Teardown
 
@@ -241,10 +248,12 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
 ### MCP Server
 
 - Located at `artifacts/servers/jarvis/` (FastMCP with dynamic tool loading)
-- Standalone Python process using the `mcp` SDK
+- Scaffolded via `arctl mcp init python`; tools auto-discovered from `src/tools/` directory
 - Communicates with backend exclusively via REST API (`/api/v1/`) — no direct database access
 - Backend URL configured via `BACKEND_URL` env var
 - Uses `httpx` for async HTTP client with timeout and retry
+- Runs in HTTP transport mode in K8s (`--transport http --host 0.0.0.0 --port 8080`)
+- Exposed via gateway at `mcp.jarvis.io`; Claude Code config in `.mcp.json`
 
 ### Artifacts & Agent Registry (JAAR)
 
@@ -291,4 +300,4 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
 | **MCP server depends on backend** | MCP tools fail if backend is down | httpx with retry logic; K8s readiness probes check backend connectivity |
 | **JAAR + PostgreSQL add ~512 MB RAM** | May require more Minikube memory | Bump with `MINIKUBE_MEMORY=12288` |
 | **Data persistence requires mount** | `minikube mount` for `.data/` must stay running | `make cluster-status` shows mount health; data survives `minikube delete` |
-| **Host-based routing requires `/etc/hosts`** | `*.jarvis.io` must resolve to gateway IP | Add entries for `main.jarvis.io` and `jaar.jarvis.io` |
+| **Host-based routing requires `/etc/hosts`** | `*.jarvis.io` must resolve to gateway IP | Add entries for `main.jarvis.io`, `mcp.jarvis.io`, `jaar.jarvis.io`, `jaac.jarvis.io` (or use dnsmasq for wildcard) |

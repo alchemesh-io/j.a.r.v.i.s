@@ -248,16 +248,19 @@ function SortableTaskCard({
   onToggleStatus: () => void;
   onExpand: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition } =
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 10 : undefined,
+    touchAction: 'manipulation' as const,
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
+    <div ref={setNodeRef} style={style} {...attributes} data-dragging={isDragging || undefined}>
       <TaskCard
         title={task.title}
         type={task.type}

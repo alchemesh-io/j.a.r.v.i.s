@@ -27,13 +27,13 @@ JAAR gets its own namespace. This isolates PostgreSQL storage, prevents Helm nam
 
 *Alternative*: Shared namespace would be simpler but couples deployment lifecycles and complicates resource ownership.
 
-### 2. Prefix-based routing with URL rewrite over subdomain routing
+### 2. Host-based routing over prefix-based routing
 
-Ingress uses path prefixes (`/jarvis/*`, `/jaar/*`) with Istio `URLRewrite` filters that strip the prefix before forwarding. Neither backend sees the prefix — zero code changes needed. Works out of the box with `minikube tunnel` on a single IP.
+Ingress uses host-based routing on `*.jarvis.io`: `main.jarvis.io` → JARVIS, `mcp.jarvis.io` → MCP server, `jaar.jarvis.io` → AgentRegistry, `jaac.jarvis.io` → ArgoCD (HTTPS). No URL rewrite needed — each service sees clean paths. The gateway has HTTP (:80) and HTTPS (:443, TLS-terminated with self-signed wildcard cert) listeners.
 
-A root `/` redirect to `/jarvis` preserves usability.
+*Originally planned*: Prefix-based routing (`/jarvis/*`, `/jaar/*`) was abandoned because AgentRegistry's embedded Next.js UI cannot run behind a path prefix (no `basePath` support), and multiple apps sharing `/_next/` paths would conflict.
 
-*Alternative*: Subdomains (`jarvis.local`, `jaar.local`) would require `/etc/hosts` edits or local DNS, adding friction to every developer setup.
+*Trade-off*: Requires `/etc/hosts` entries (or dnsmasq) for `*.jarvis.io` resolution.
 
 ### 3. HTTPRoute per namespace, attached to shared Gateway
 
@@ -41,9 +41,9 @@ Each namespace owns its own HTTPRoute, referencing the shared Istio Gateway via 
 
 *Alternative*: Centralized HTTPRoute would require cross-namespace backend refs and couple the two Helm releases.
 
-### 4. Frontend calls AgentRegistry directly through the gateway
+### 4. Frontend calls AgentRegistry directly via host-based routing
 
-The JARVIS frontend calls `/jaar/v0/*` from the browser. Same ingress domain means no CORS issues. No backend proxy needed.
+The JARVIS frontend calls `jaar.jarvis.io/v0/*` from the browser. Cross-origin requests work because both are on the same `*.jarvis.io` domain. No backend proxy needed.
 
 *Alternative*: Backend proxy would add latency and coupling between independent services for no benefit.
 
@@ -55,17 +55,17 @@ The JARVIS frontend calls `/jaar/v0/*` from the browser. Same ingress domain mea
 
 PostgreSQL + pgvector included in `helm/jaar/` with a PVC. Self-contained for local dev. External DB configurable via `AGENT_REGISTRY_DATABASE_URL` for production.
 
-### 7. Vendored Helm chart over upstream dependency
+### 7. Upstream Helm chart as dependency
 
-Chart vendored and adapted in `helm/jaar/` for full control: Istio sidecar labels, HTTPRoute (not Ingress), JARVIS conventions. Upstream version pinned in `Chart.yaml`.
+`helm/jaar/` is a thin wrapper chart that depends on the official `agentregistry` chart from `oci://ghcr.io/agentregistry-dev/agentregistry/charts` (v0.3.3). Only JAAR-specific templates are added: `namespace.yaml` (Istio sidecar injection label) and `httproute.yaml` (host-based routing). Upstream chart manages deployment, service, and bundled PostgreSQL.
 
-*Alternative*: Upstream chart dependency wouldn't expose the structural adaptations needed (namespace labels, Gateway API routing).
+*Originally planned*: Vendored chart — abandoned because the upstream chart already exposes all needed configuration and JAAR-specific needs (namespace, HTTPRoute) can be added as wrapper templates.
 
-### 8. MCP server relocation to `artifacts/servers/jarvis-mcp/`
+### 8. MCP server rewrite at `artifacts/servers/jarvis/`
 
-The existing `mcp_server/` directory moves under the artifacts structure as the first registry-managed server artifact. This establishes the convention: one folder per artifact type, each artifact in its own subfolder with manifest + source. Helm chart Dockerfile paths and CI workflow paths update accordingly.
+The existing `mcp_server/` was replaced with a new MCP server scaffolded via `arctl mcp init python` at `artifacts/servers/jarvis/`. The new server uses FastMCP with dynamic tool loading from `src/tools/` and `mcp.yaml` as its artifact metadata (the arctl convention). Tools cover task, daily, and weekly management — backend-managed data only (no JIRA/GCal proxy).
 
-*Alternative*: Keeping `mcp_server/` separate would mean two different patterns for managing server artifacts.
+*Originally planned*: Simple copy to `artifacts/servers/jarvis-mcp/` — replaced by a full rewrite to leverage the arctl scaffold structure and dynamic tool loading pattern.
 
 ## Risks / Trade-offs
 

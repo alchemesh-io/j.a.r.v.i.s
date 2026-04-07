@@ -360,7 +360,7 @@ sync-artifacts-servers:
 	@echo "==> Syncing MCP servers to Agent Registry ($(JAAR_URL))..."
 	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
 	@for dir in artifacts/servers/*/; do \
-		manifest="$${dir}manifest.yaml"; \
+		manifest="$${dir}mcp.yaml"; \
 		if [ ! -f "$$manifest" ]; then continue; fi; \
 		NAME=$$(yq -r '.name' "$$manifest"); \
 		DESC=$$(yq -r '.description' "$$manifest"); \

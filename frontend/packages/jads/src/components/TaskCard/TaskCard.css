@@ -25,6 +25,12 @@
   transform: translateY(-2px);
 }
 
+/* Disable hover transform during drag to avoid conflicting with dnd-kit transforms */
+[data-dragging] .jads-task-card {
+  transform: none !important;
+  transition: none !important;
+}
+
 /* Type-based gradient backgrounds + pulsing left accent bar */
 .jads-task-card--refinement {
   background: linear-gradient(
