@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 import Dashboard from './pages/Dashboard/Dashboard';
 import TaskBoard from './pages/TaskBoard/TaskBoard';
 import KeyFocusBoard from './pages/KeyFocusBoard/KeyFocusBoard';
@@ -21,6 +22,19 @@ const BOARD_TABS = [
   { path: '/key-focuses', label: 'Key Focuses' },
   { path: '/reports', label: 'Reports' },
 ];
+
+function InvalidateOnRouteChange() {
+  const location = useLocation();
+  const qc = useQueryClient();
+  const prevPath = useRef(location.pathname);
+  useEffect(() => {
+    if (prevPath.current !== location.pathname) {
+      prevPath.current = location.pathname;
+      qc.invalidateQueries();
+    }
+  }, [location.pathname, qc]);
+  return null;
+}
 
 function BoardNav() {
   const location = useLocation();
@@ -45,6 +59,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <InvalidateOnRouteChange />
         <ParticlesBackground />
         <div className="app">
           <header className="app-header">

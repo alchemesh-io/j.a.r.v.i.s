@@ -93,12 +93,12 @@ export default function Reports() {
   const prevWeekDate = getPreviousWeekDate(dateStr);
   const { data: prevWeekKFs = [] } = useQuery({
     queryKey: ['report-kf-prev', prevWeekDate],
-    queryFn: () => listKeyFocuses({ date: prevWeekDate, scope: 'weekly' }),
+    queryFn: () => listKeyFocuses({ date: prevWeekDate, scope: 'weekly', frequency: 'weekly' }),
     enabled: scope === 'weekly',
   });
   const { data: currentWeekKFs = [] } = useQuery({
     queryKey: ['report-kf-current', dateStr],
-    queryFn: () => listKeyFocuses({ date: dateStr, scope: 'weekly' }),
+    queryFn: () => listKeyFocuses({ date: dateStr, scope: 'weekly', frequency: 'weekly' }),
     enabled: scope === 'weekly',
   });
   const { data: allBlockers = [] } = useQuery({

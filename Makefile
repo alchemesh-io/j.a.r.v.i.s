@@ -18,7 +18,7 @@ DATA_MOUNT_TARGET   := /mnt/jarvis-data
 GHCR_ORG            := alchemesh-io
 
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update _tls-secret
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers db-backup db-restore test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update _tls-secret
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -391,6 +391,45 @@ sync-artifacts-servers:
 			echo "    Skipped local"; \
 	done
 	@echo "==> Done."
+
+# ---------------------------------------------------------------------------
+# Database backup / restore
+# ---------------------------------------------------------------------------
+BACKUP_DIR := .backups
+DB_SOURCE  := $(DATA_DIR)/jarvis/jarvis.db
+
+## Backup the JARVIS SQLite database to .backups/ with a timestamp
+db-backup:
+	@mkdir -p $(BACKUP_DIR)
+	@if [ ! -f $(DB_SOURCE) ]; then \
+		echo "ERROR: Database not found at $(DB_SOURCE)"; exit 1; \
+	fi
+	$(eval TS := $(shell date +%Y%m%d-%H%M%S))
+	@echo "==> Backing up JARVIS database..."
+	cp $(DB_SOURCE) $(BACKUP_DIR)/jarvis-$(TS).db
+	@# Checkpoint WAL into the backup so it's self-contained
+	@sqlite3 $(BACKUP_DIR)/jarvis-$(TS).db "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null || true
+	@echo "  Saved to $(BACKUP_DIR)/jarvis-$(TS).db"
+	@echo "  Backups:"
+	@ls -lh $(BACKUP_DIR)/jarvis-*.db 2>/dev/null
+
+## Restore the JARVIS SQLite database from the latest backup (or specify BACKUP=path)
+## Usage: make db-restore              (restores latest)
+##        make db-restore BACKUP=.backups/jarvis-20260407-221200.db
+db-restore:
+	@if [ -n "$(BACKUP)" ]; then \
+		RESTORE_FILE="$(BACKUP)"; \
+	else \
+		RESTORE_FILE=$$(ls -t $(BACKUP_DIR)/jarvis-*.db 2>/dev/null | head -1); \
+	fi; \
+	if [ -z "$$RESTORE_FILE" ] || [ ! -f "$$RESTORE_FILE" ]; then \
+		echo "ERROR: No backup found. Run 'make db-backup' first or specify BACKUP=path"; exit 1; \
+	fi; \
+	echo "==> Restoring JARVIS database from $$RESTORE_FILE..."; \
+	cp "$$RESTORE_FILE" $(DB_SOURCE); \
+	rm -f $(DB_SOURCE)-shm $(DB_SOURCE)-wal; \
+	echo "  Restored. Restart the backend pod to pick up changes:"; \
+	echo "    kubectl rollout restart deployment jarvis-backend -n jarvis"
 
 # ---------------------------------------------------------------------------
 # Tests

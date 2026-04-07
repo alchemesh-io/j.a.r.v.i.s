@@ -35,7 +35,7 @@ def _task_to_response(task: Task) -> TaskResponse:
         dates=dates,
         note_count=len(task.notes),
         key_focuses=key_focuses,
-        blocker_count=len(task.blockers),
+        blocker_count=sum(1 for b in task.blockers if b.status.value == "opened"),
     )
 
 

@@ -44,7 +44,7 @@ def _kf_to_response(kf: KeyFocus) -> KeyFocusResponse:
         frequency=kf.frequency,
         weekly_id=kf.weekly_id,
         task_count=len(kf.tasks),
-        blocker_count=len(kf.blockers),
+        blocker_count=sum(1 for b in kf.blockers if b.status.value == "opened"),
     )
 
 
