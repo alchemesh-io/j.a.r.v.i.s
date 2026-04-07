@@ -15,6 +15,7 @@
 .note-panel {
   width: 100%;
   max-width: 560px;
+  min-height: 60%;
   max-height: calc(100% - 64px);
   margin-bottom: 32px;
   background-color: var(--color-surface, #111827);
