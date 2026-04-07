@@ -130,3 +130,124 @@ class BackendClient:
             f"/api/v1/dailies/{daily_id}/tasks/reorder",
             json={"items": items},
         )
+
+    # --- Key Focuses ---
+
+    async def create_key_focus(
+        self,
+        title: str,
+        kind: str,
+        frequency: str,
+        weekly_id: int,
+        description: Optional[str] = None,
+        status: str = "in_progress",
+    ) -> dict:
+        body: dict[str, Any] = {
+            "title": title,
+            "kind": kind,
+            "frequency": frequency,
+            "weekly_id": weekly_id,
+            "status": status,
+        }
+        if description:
+            body["description"] = description
+        return await self._request("POST", "/api/v1/key-focuses", json=body)
+
+    async def get_key_focus(self, key_focus_id: int) -> dict:
+        return await self._request("GET", f"/api/v1/key-focuses/{key_focus_id}")
+
+    async def list_key_focuses(
+        self,
+        weekly_id: Optional[int] = None,
+        frequency: Optional[str] = None,
+        date: Optional[str] = None,
+        scope: str = "all",
+    ) -> list[dict]:
+        params: dict[str, str] = {"scope": scope}
+        if weekly_id is not None:
+            params["weekly_id"] = str(weekly_id)
+        if frequency:
+            params["frequency"] = frequency
+        if date:
+            params["date"] = date
+        return await self._request("GET", "/api/v1/key-focuses", params=params)
+
+    async def update_key_focus(self, key_focus_id: int, **fields) -> dict:
+        return await self._request(
+            "PATCH", f"/api/v1/key-focuses/{key_focus_id}", json=fields
+        )
+
+    async def delete_key_focus(self, key_focus_id: int) -> None:
+        await self._request("DELETE", f"/api/v1/key-focuses/{key_focus_id}")
+
+    # --- Key Focus - Task Associations ---
+
+    async def add_task_to_key_focus(
+        self, key_focus_id: int, task_id: int
+    ) -> dict:
+        return await self._request(
+            "POST",
+            f"/api/v1/key-focuses/{key_focus_id}/tasks",
+            json={"task_id": task_id},
+        )
+
+    async def remove_task_from_key_focus(
+        self, key_focus_id: int, task_id: int
+    ) -> None:
+        await self._request(
+            "DELETE", f"/api/v1/key-focuses/{key_focus_id}/tasks/{task_id}"
+        )
+
+    async def list_key_focus_tasks(self, key_focus_id: int) -> list[dict]:
+        return await self._request(
+            "GET", f"/api/v1/key-focuses/{key_focus_id}/tasks"
+        )
+
+    # --- Key Focus - Blockers ---
+
+    async def list_key_focus_blockers(self, key_focus_id: int) -> list[dict]:
+        return await self._request(
+            "GET", f"/api/v1/key-focuses/{key_focus_id}/blockers"
+        )
+
+    # --- Blockers ---
+
+    async def create_blocker(
+        self,
+        title: str,
+        task_id: Optional[int] = None,
+        key_focus_id: Optional[int] = None,
+        description: Optional[str] = None,
+    ) -> dict:
+        body: dict[str, Any] = {"title": title}
+        if task_id is not None:
+            body["task_id"] = task_id
+        if key_focus_id is not None:
+            body["key_focus_id"] = key_focus_id
+        if description:
+            body["description"] = description
+        return await self._request("POST", "/api/v1/blockers", json=body)
+
+    async def get_blocker(self, blocker_id: int) -> dict:
+        return await self._request("GET", f"/api/v1/blockers/{blocker_id}")
+
+    async def list_blockers(
+        self, status: Optional[str] = None
+    ) -> list[dict]:
+        params: dict[str, str] = {}
+        if status:
+            params["status"] = status
+        return await self._request("GET", "/api/v1/blockers", params=params)
+
+    async def update_blocker(self, blocker_id: int, **fields) -> dict:
+        return await self._request(
+            "PATCH", f"/api/v1/blockers/{blocker_id}", json=fields
+        )
+
+    async def delete_blocker(self, blocker_id: int) -> None:
+        await self._request("DELETE", f"/api/v1/blockers/{blocker_id}")
+
+    # --- Task Blockers ---
+
+    async def list_task_blockers(self, task_id: int) -> list[dict]:
+        return await self._request("GET", f"/api/v1/tasks/{task_id}/blockers")

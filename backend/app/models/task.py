@@ -23,3 +23,9 @@ class Task(Base):
     notes: Mapped[list["TaskNote"]] = relationship(
         "TaskNote", back_populates="task", cascade="all, delete-orphan"
     )
+    key_focuses: Mapped[list["KeyFocus"]] = relationship(
+        "KeyFocus", secondary="task_key_focus", back_populates="tasks"
+    )
+    blockers: Mapped[list["Blocker"]] = relationship(
+        "Blocker", back_populates="task", cascade="all, delete-orphan"
+    )

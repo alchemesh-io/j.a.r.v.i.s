@@ -45,6 +45,7 @@ import {
   type CalendarEvent,
 } from '../../api/client';
 import { NotePanel } from './NotePanel';
+import { BlockerPanel } from './BlockerPanel';
 import { EmptyState } from './EmptyState';
 import './TaskBoard.css';
 
@@ -246,6 +247,7 @@ function SortableTaskCard({
   onToggleStatus,
   onExpand,
   onNotes,
+  onBlockers,
 }: {
   task: Task;
   jiraProjectUrl?: string;
@@ -255,6 +257,7 @@ function SortableTaskCard({
   onToggleStatus: () => void;
   onExpand: () => void;
   onNotes: () => void;
+  onBlockers: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
@@ -284,6 +287,9 @@ function SortableTaskCard({
         onExpand={task.source_type ? onExpand : undefined}
         onNotes={onNotes}
         noteCount={task.note_count}
+        onBlockers={onBlockers}
+        blockerCount={task.blocker_count}
+        keyFocuses={task.key_focuses}
         dragListeners={listeners}
       />
     </div>
@@ -331,6 +337,7 @@ export default function TaskBoard() {
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
 
   const [notePanelTask, setNotePanelTask] = useState<Task | null>(null);
+  const [blockerPanelTask, setBlockerPanelTask] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
 
   const [showCalendar, setShowCalendar] = useState(false);
@@ -1455,6 +1462,7 @@ export default function TaskBoard() {
                   onToggleStatus={() => toggleStatusMutation.mutate(task)}
                   onExpand={() => handleExpandBoardTask(task)}
                   onNotes={() => setNotePanelTask(task)}
+                  onBlockers={() => setBlockerPanelTask(task)}
                 />
               ))}
               {visibleTasks.length === 0 && (
@@ -1476,6 +1484,12 @@ export default function TaskBoard() {
             onCreate={(content) => createNoteMutation.mutate({ taskId: notePanelTask.id, content })}
             onUpdate={(noteId, content) => updateNoteMutation.mutate({ taskId: notePanelTask.id, noteId, content })}
             onDelete={(noteId) => deleteNoteMutation.mutate({ taskId: notePanelTask.id, noteId })}
+          />
+        )}
+        {blockerPanelTask && (
+          <BlockerPanel
+            task={blockerPanelTask}
+            onClose={() => setBlockerPanelTask(null)}
           />
         )}
       </section>

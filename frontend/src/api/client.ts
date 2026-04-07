@@ -17,6 +17,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export type TaskType = 'refinement' | 'implementation' | 'review';
 export type TaskStatus = 'created' | 'done';
 export type SourceType = 'jira' | 'gcal';
+export type KeyFocusKind = 'delivery' | 'learning' | 'support' | 'operational' | 'side_quest';
+export type KeyFocusStatus = 'in_progress' | 'succeed' | 'failed';
+export type KeyFocusFrequency = 'weekly' | 'quarterly';
+export type BlockerStatus = 'opened' | 'resolved';
+
+export interface TaskKeyFocusSummary {
+  id: number;
+  title: string;
+  kind: KeyFocusKind;
+}
 
 export interface Task {
   id: number;
@@ -27,6 +37,29 @@ export interface Task {
   status: TaskStatus;
   dates?: string[];
   note_count: number;
+  key_focuses: TaskKeyFocusSummary[];
+  blocker_count: number;
+}
+
+export interface KeyFocus {
+  id: number;
+  title: string;
+  description: string | null;
+  kind: KeyFocusKind;
+  status: KeyFocusStatus;
+  frequency: KeyFocusFrequency;
+  weekly_id: number;
+  task_count: number;
+  blocker_count: number;
+}
+
+export interface Blocker {
+  id: number;
+  title: string;
+  description: string | null;
+  status: BlockerStatus;
+  task_id: number | null;
+  key_focus_id: number | null;
 }
 
 export interface TaskNote {
@@ -265,6 +298,124 @@ export function listGcalEvents(
   view: 'daily' | 'weekly' = 'daily',
 ): Promise<CalendarGroup[]> {
   return request(`/gcal/events?date=${date}&view=${view}`);
+}
+
+// --- Key Focus API ---
+
+export function createKeyFocus(body: {
+  title: string;
+  kind: KeyFocusKind;
+  frequency: KeyFocusFrequency;
+  weekly_id: number;
+  description?: string;
+  status?: KeyFocusStatus;
+}): Promise<KeyFocus> {
+  return request('/key-focuses', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function listKeyFocuses(params?: {
+  weekly_id?: number;
+  frequency?: KeyFocusFrequency;
+  date?: string;
+  scope?: 'weekly' | 'quarterly' | 'all';
+}): Promise<KeyFocus[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.weekly_id != null) searchParams.set('weekly_id', String(params.weekly_id));
+  if (params?.frequency) searchParams.set('frequency', params.frequency);
+  if (params?.date) searchParams.set('date', params.date);
+  if (params?.scope) searchParams.set('scope', params.scope);
+  const qs = searchParams.toString();
+  return request(`/key-focuses${qs ? `?${qs}` : ''}`);
+}
+
+export function getKeyFocus(id: number): Promise<KeyFocus> {
+  return request(`/key-focuses/${id}`);
+}
+
+export function updateKeyFocus(
+  id: number,
+  body: Partial<Pick<KeyFocus, 'title' | 'description' | 'kind' | 'status' | 'frequency' | 'weekly_id'>>,
+): Promise<KeyFocus> {
+  return request(`/key-focuses/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+export function deleteKeyFocus(id: number): Promise<void> {
+  return request(`/key-focuses/${id}`, { method: 'DELETE' });
+}
+
+// --- Task-KeyFocus Association API ---
+
+export function addTaskToKeyFocus(keyFocusId: number, taskId: number): Promise<{ task_id: number; key_focus_id: number }> {
+  return request(`/key-focuses/${keyFocusId}/tasks`, { method: 'POST', body: JSON.stringify({ task_id: taskId }) });
+}
+
+export function removeTaskFromKeyFocus(keyFocusId: number, taskId: number): Promise<void> {
+  return request(`/key-focuses/${keyFocusId}/tasks/${taskId}`, { method: 'DELETE' });
+}
+
+export function listKeyFocusTasks(keyFocusId: number): Promise<Task[]> {
+  return request(`/key-focuses/${keyFocusId}/tasks`);
+}
+
+export function addKeyFocusToTask(taskId: number, keyFocusId: number): Promise<{ task_id: number; key_focus_id: number }> {
+  return request(`/tasks/${taskId}/key-focuses`, { method: 'POST', body: JSON.stringify({ key_focus_id: keyFocusId }) });
+}
+
+export function removeKeyFocusFromTask(taskId: number, keyFocusId: number): Promise<void> {
+  return request(`/tasks/${taskId}/key-focuses/${keyFocusId}`, { method: 'DELETE' });
+}
+
+export function listTaskKeyFocuses(taskId: number): Promise<KeyFocus[]> {
+  return request(`/tasks/${taskId}/key-focuses`);
+}
+
+// --- Blocker API ---
+
+export function createBlocker(body: {
+  title: string;
+  description?: string;
+  task_id?: number;
+  key_focus_id?: number;
+}): Promise<Blocker> {
+  return request('/blockers', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function listBlockers(params?: { status?: BlockerStatus }): Promise<Blocker[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.set('status', params.status);
+  const qs = searchParams.toString();
+  return request(`/blockers${qs ? `?${qs}` : ''}`);
+}
+
+export function getBlocker(id: number): Promise<Blocker> {
+  return request(`/blockers/${id}`);
+}
+
+export function updateBlocker(
+  id: number,
+  body: Partial<Pick<Blocker, 'title' | 'description' | 'status'>>,
+): Promise<Blocker> {
+  return request(`/blockers/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+export function deleteBlocker(id: number): Promise<void> {
+  return request(`/blockers/${id}`, { method: 'DELETE' });
+}
+
+export function listTaskBlockers(taskId: number): Promise<Blocker[]> {
+  return request(`/tasks/${taskId}/blockers`);
+}
+
+export function createTaskBlocker(taskId: number, body: { title: string; description?: string }): Promise<Blocker> {
+  return request(`/tasks/${taskId}/blockers`, { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function listKeyFocusBlockers(keyFocusId: number): Promise<Blocker[]> {
+  return request(`/key-focuses/${keyFocusId}/blockers`);
+}
+
+export function createKeyFocusBlocker(keyFocusId: number, body: { title: string; description?: string }): Promise<Blocker> {
+  return request(`/key-focuses/${keyFocusId}/blockers`, { method: 'POST', body: JSON.stringify(body) });
 }
 
 // --- Helpers ---
