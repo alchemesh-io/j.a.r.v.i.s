@@ -88,19 +88,19 @@ The system SHALL define a `Daily` SQLAlchemy model with columns: `id` (integer, 
 - **THEN** all associated dailies are cascade-deleted
 
 ### Requirement: Task ORM model
-The system SHALL define a `Task` SQLAlchemy model with columns: `id` (integer, primary key, auto-increment), `jira_ticket_id` (String(20), nullable), `title` (Text, not nullable), `type` (Enum(TaskType), not nullable), `status` (Enum(TaskStatus), not nullable). It SHALL have a relationship `daily_entries` navigating to `DailyTask`.
+The system SHALL define a `Task` SQLAlchemy model with columns: `id` (integer, primary key, auto-increment), `source_type` (Enum(SourceType), nullable), `source_id` (String(255), nullable), `title` (Text, not nullable), `type` (Enum(TaskType), not nullable), `status` (Enum(TaskStatus), not nullable, default `created`). It SHALL have relationships: `daily_entries` navigating to `DailyTask` with cascade delete-orphan, `notes` navigating to `TaskNote` with cascade all and delete-orphan.
 
-#### Scenario: Task created with JIRA ticket
-- **WHEN** a task is created with `jira_ticket_id = "JAR-123"`, `title = "Implement login"`, `type = "implementation"`, `status = "created"`
+#### Scenario: Task created with source info
+- **WHEN** a task is created with `source_type = "jira"`, `source_id = "JAR-123"`, `title = "Implement login"`, `type = "implementation"`, `status = "created"`
 - **THEN** the task is persisted with all fields set
 
-#### Scenario: Task created without JIRA ticket
-- **WHEN** a task is created with `jira_ticket_id = null`
-- **THEN** the task is persisted with `jira_ticket_id` as null
+#### Scenario: Task created without source info
+- **WHEN** a task is created with `source_type = null` and `source_id = null`
+- **THEN** the task is persisted with those fields as null
 
-#### Scenario: JIRA ticket ID format validated
-- **WHEN** a task is created with `jira_ticket_id` matching the pattern `XXX-YYY` (project short name + number)
-- **THEN** the value is accepted and stored
+#### Scenario: Task deletion cascades to notes
+- **WHEN** a task with 3 associated notes is deleted
+- **THEN** all 3 TaskNote rows are cascade-deleted
 
 ### Requirement: DailyTask association model
 The system SHALL define a `DailyTask` SQLAlchemy model as an association table with columns: `daily_id` (integer, foreign key to `daily.id`, on delete cascade), `task_id` (integer, foreign key to `task.id`, on delete cascade), `priority` (integer, not nullable). The combination of `daily_id + priority` SHALL be unique. It SHALL have relationships: `daily` navigating to `Daily`, `task` navigating to `Task`.
@@ -127,6 +127,17 @@ The `TaskResponse` schema SHALL include a `dates` field containing a sorted list
 #### Scenario: Task with no associations
 - **WHEN** a task with no daily associations is retrieved
 - **THEN** the response includes `"dates": []`
+
+### Requirement: Task response includes note count
+The `TaskResponse` schema SHALL include a `note_count` field (integer) representing the number of notes attached to the task.
+
+#### Scenario: Task with notes
+- **WHEN** a task with 5 notes is retrieved
+- **THEN** the response includes `"note_count": 5`
+
+#### Scenario: Task without notes
+- **WHEN** a task with no notes is retrieved
+- **THEN** the response includes `"note_count": 0`
 
 ### Requirement: CRUD endpoints for Tasks
 The API SHALL expose RESTful endpoints for task management under `/api/v1/tasks`. All task responses SHALL include the `dates` field.
