@@ -27,6 +27,7 @@ import {
   getDailyByDate,
   assignTaskToDates,
   removeTaskFromDaily,
+  ensureDaily,
   getJiraConfig,
   listJiraTickets,
   getGcalAuthStatus,
@@ -381,7 +382,6 @@ export default function TaskBoard() {
   const { data: daily } = useQuery({
     queryKey: ['daily', dateStr],
     queryFn: () => getDailyByDate(dateStr).catch(() => null),
-    enabled: scope === 'daily',
   });
 
   const toggleStatusMutation = useMutation({
@@ -618,7 +618,7 @@ export default function TaskBoard() {
   }
 
   const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
+    async (event: DragEndEvent) => {
       const { active, over } = event;
       if (!over || active.id === over.id) return;
 
@@ -629,11 +629,15 @@ export default function TaskBoard() {
       const reordered = arrayMove(visibleTasks, oldIndex, newIndex);
       queryClient.setQueryData(['tasks', dateStr, scope], reordered);
 
-      if (daily) {
-        reorderMutation.mutate({
-          dailyId: daily.id,
+      try {
+        const d = daily ?? await ensureDaily(dateStr);
+        await reorderMutation.mutateAsync({
+          dailyId: d.id,
           items: reordered.map((t, i) => ({ task_id: t.id, priority: i + 1 })),
         });
+      } catch {
+        // Revert optimistic update on failure
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
       }
     },
     [visibleTasks, daily, dateStr, scope, reorderMutation, queryClient],
