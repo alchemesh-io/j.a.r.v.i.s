@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Calendar, Select, Button, Input } from '@jarvis/jads';
 import {
@@ -11,12 +11,13 @@ import {
   createKeyFocusBlocker,
   listKeyFocusBlockers,
   updateBlocker,
+  deleteBlocker,
   type KeyFocus,
   type KeyFocusKind,
   type KeyFocusStatus,
   type KeyFocusFrequency,
-  type Blocker,
 } from '../../api/client';
+import { BlockerPanel } from '../TaskBoard/BlockerPanel';
 import './KeyFocusBoard.css';
 
 // --- helpers ---
@@ -39,6 +40,34 @@ function getWeekStart(date: string): string {
   return formatDate(d);
 }
 
+function getQuarterStartWeek(date: string): string {
+  const d = new Date(date + 'T00:00:00');
+  const quarterMonth = Math.floor(d.getMonth() / 3) * 3;
+  const quarterStart = new Date(d.getFullYear(), quarterMonth, 1);
+  // Find the Sunday (week start) on or before the quarter start
+  const dow = quarterStart.getDay();
+  quarterStart.setDate(quarterStart.getDate() - dow);
+  return formatDate(quarterStart);
+}
+
+function formatWeekLabel(weekStart: string): string {
+  const d = new Date(weekStart + 'T00:00:00');
+  return `W${getISOWeek(d)} — ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
+
+function getISOWeek(d: Date): number {
+  const tmp = new Date(d.getTime());
+  tmp.setDate(tmp.getDate() + 4 - (tmp.getDay() || 7));
+  const yearStart = new Date(tmp.getFullYear(), 0, 1);
+  return Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+function formatQuarterLabel(weekStart: string): string {
+  const d = new Date(weekStart + 'T00:00:00');
+  const quarter = Math.floor(d.getMonth() / 3) + 1;
+  return `Q${quarter} ${d.getFullYear()}`;
+}
+
 const KIND_OPTIONS: { value: KeyFocusKind; label: string }[] = [
   { value: 'delivery', label: 'Delivery' },
   { value: 'learning', label: 'Learning' },
@@ -58,6 +87,14 @@ const FREQUENCY_OPTIONS: { value: KeyFocusFrequency; label: string }[] = [
   { value: 'quarterly', label: 'Quarterly' },
 ];
 
+type FrequencyFilter = KeyFocusFrequency | 'all';
+
+const FREQUENCY_FILTER_OPTIONS: { value: FrequencyFilter; label: string }[] = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'all', label: 'All' },
+];
+
 const KIND_COLORS: Record<KeyFocusKind, string> = {
   delivery: '#3b82f6',
   learning: '#22c55e',
@@ -69,7 +106,7 @@ const KIND_COLORS: Record<KeyFocusKind, string> = {
 const STORAGE_KEY = 'jarvis-keyfocusboard';
 
 interface BoardPrefs {
-  frequency: KeyFocusFrequency;
+  frequency: FrequencyFilter;
   selectedDate: string;
 }
 
@@ -90,7 +127,7 @@ export default function KeyFocusBoard() {
   const [prefs] = useState(loadPrefs);
 
   const [selectedDate, setSelectedDate] = useState(() => new Date(prefs.selectedDate + 'T00:00:00'));
-  const [frequency, setFrequency] = useState<KeyFocusFrequency>(prefs.frequency);
+  const [frequency, setFrequency] = useState<FrequencyFilter>(prefs.frequency);
   const [showCalendar, setShowCalendar] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
 
@@ -101,10 +138,10 @@ export default function KeyFocusBoard() {
   const [formKind, setFormKind] = useState<KeyFocusKind>('delivery');
   const [formFrequency, setFormFrequency] = useState<KeyFocusFrequency>('weekly');
   const [formStatus, setFormStatus] = useState<KeyFocusStatus>('in_progress');
+  const [formDate, setFormDate] = useState(() => formatDate(selectedDate));
 
   const [deletingKF, setDeletingKF] = useState<KeyFocus | null>(null);
   const [blockerPanelKF, setBlockerPanelKF] = useState<KeyFocus | null>(null);
-  const [blockerTitle, setBlockerTitle] = useState('');
 
   const dateStr = formatDate(selectedDate);
 
@@ -123,9 +160,24 @@ export default function KeyFocusBoard() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showCalendar]);
 
+  const { data: weeklies = [] } = useQuery({
+    queryKey: ['weeklies'],
+    queryFn: listWeeklies,
+  });
+
+  const weeklyMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const w of weeklies) map.set(w.id, w.week_start);
+    return map;
+  }, [weeklies]);
+
   const { data: keyFocuses = [] } = useQuery({
     queryKey: ['key-focuses', dateStr, frequency],
-    queryFn: () => listKeyFocuses({ date: dateStr, scope: frequency }),
+    queryFn: () => listKeyFocuses(
+      frequency === 'all'
+        ? { scope: 'all' }
+        : { date: dateStr, scope: frequency, frequency: frequency }
+    ),
   });
 
   const { data: blockers = [] } = useQuery({
@@ -169,7 +221,6 @@ export default function KeyFocusBoard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['key-focus-blockers'] });
       queryClient.invalidateQueries({ queryKey: ['key-focuses'] });
-      setBlockerTitle('');
     },
   });
 
@@ -177,6 +228,14 @@ export default function KeyFocusBoard() {
     mutationFn: async (blockerId: number) => {
       return updateBlocker(blockerId, { status: 'resolved' });
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['key-focus-blockers'] });
+      queryClient.invalidateQueries({ queryKey: ['key-focuses'] });
+    },
+  });
+
+  const deleteBlockerMutation = useMutation({
+    mutationFn: deleteBlocker,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['key-focus-blockers'] });
       queryClient.invalidateQueries({ queryKey: ['key-focuses'] });
@@ -191,20 +250,36 @@ export default function KeyFocusBoard() {
     setFormKind('delivery');
     setFormFrequency('weekly');
     setFormStatus('in_progress');
+    setFormDate(dateStr);
   }
 
-  function openEditForm(kf: KeyFocus) {
+  async function openEditForm(kf: KeyFocus) {
     setEditingKF(kf);
     setFormTitle(kf.title);
     setFormDescription(kf.description ?? '');
     setFormKind(kf.kind);
     setFormFrequency(kf.frequency);
     setFormStatus(kf.status);
+    // Resolve the weekly's week_start to pre-fill date
+    const weeklies = await listWeeklies();
+    const weekly = weeklies.find((w) => w.id === kf.weekly_id);
+    setFormDate(weekly?.week_start ?? dateStr);
     setShowForm(true);
   }
 
   const handleSubmit = useCallback(async () => {
     if (!formTitle.trim()) return;
+
+    // Resolve weekly from formDate
+    const weekStart = formFrequency === 'quarterly'
+      ? getQuarterStartWeek(formDate)
+      : getWeekStart(formDate);
+    let weeklies = await listWeeklies();
+    let weekly = weeklies.find((w) => w.week_start === weekStart);
+    if (!weekly) {
+      weekly = await createWeekly({ week_start: weekStart });
+    }
+
     if (editingKF) {
       updateMutation.mutate({
         id: editingKF.id,
@@ -214,16 +289,10 @@ export default function KeyFocusBoard() {
           kind: formKind,
           status: formStatus,
           frequency: formFrequency,
+          weekly_id: weekly.id,
         },
       });
     } else {
-      // Find or create weekly for the selected date
-      const weekStart = getWeekStart(dateStr);
-      let weeklies = await listWeeklies();
-      let weekly = weeklies.find((w) => w.week_start === weekStart);
-      if (!weekly) {
-        weekly = await createWeekly({ week_start: weekStart });
-      }
       createMutation.mutate({
         title: formTitle.trim(),
         description: formDescription.trim() || undefined,
@@ -232,7 +301,7 @@ export default function KeyFocusBoard() {
         weekly_id: weekly.id,
       });
     }
-  }, [formTitle, formDescription, formKind, formFrequency, formStatus, editingKF, dateStr]);
+  }, [formTitle, formDescription, formKind, formFrequency, formStatus, formDate, editingKF]);
 
   return (
     <div className="kf-board">
@@ -279,7 +348,7 @@ export default function KeyFocusBoard() {
         </div>
         <div className="kf-board__toolbar-right">
           <div className="kf-board__frequency-tabs" role="tablist" aria-label="Frequency filter">
-            {FREQUENCY_OPTIONS.map((opt) => (
+            {FREQUENCY_FILTER_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
@@ -324,6 +393,13 @@ export default function KeyFocusBoard() {
             )}
             <div className="kf-card__meta">
               <span className="kf-card__freq-badge">{kf.frequency}</span>
+              {weeklyMap.has(kf.weekly_id) && (
+                <span className="kf-card__period">
+                  {kf.frequency === 'quarterly'
+                    ? formatQuarterLabel(weeklyMap.get(kf.weekly_id)!)
+                    : formatWeekLabel(weeklyMap.get(kf.weekly_id)!)}
+                </span>
+              )}
               <span className="kf-card__task-count">{kf.task_count} task{kf.task_count !== 1 ? 's' : ''}</span>
             </div>
             <div className="kf-card__actions">
@@ -344,42 +420,21 @@ export default function KeyFocusBoard() {
               </button>
             </div>
 
-            {/* Blocker panel */}
-            {blockerPanelKF?.id === kf.id && (
-              <div className="kf-card__blocker-panel">
-                <h5>Blockers</h5>
-                {blockers.length === 0 && <p className="kf-card__blocker-empty">No blockers</p>}
-                {blockers.map((b: Blocker) => (
-                  <div key={b.id} className={`kf-card__blocker kf-card__blocker--${b.status}`}>
-                    <span>{b.title}</span>
-                    {b.status === 'opened' && (
-                      <button
-                        type="button"
-                        className="kf-card__blocker-resolve"
-                        onClick={() => resolveBlockerMutation.mutate(b.id)}
-                      >
-                        Resolve
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <div className="kf-card__blocker-form">
-                  <Input
-                    value={blockerTitle}
-                    onChange={(e) => setBlockerTitle(e.target.value)}
-                    placeholder="New blocker..."
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && blockerTitle.trim()) {
-                        createBlockerMutation.mutate({ kfId: kf.id, title: blockerTitle.trim() });
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-            )}
           </article>
         ))}
       </div>
+
+      {/* Blocker panel overlay */}
+      {blockerPanelKF && (
+        <BlockerPanel
+          title={blockerPanelKF.title}
+          blockers={blockers}
+          onClose={() => setBlockerPanelKF(null)}
+          onCreate={(title) => createBlockerMutation.mutate({ kfId: blockerPanelKF.id, title })}
+          onResolve={(blockerId) => resolveBlockerMutation.mutate(blockerId)}
+          onDelete={(blockerId) => deleteBlockerMutation.mutate(blockerId)}
+        />
+      )}
 
       {/* Create/Edit form overlay */}
       {showForm && (
@@ -403,20 +458,29 @@ export default function KeyFocusBoard() {
               label="Kind"
               options={KIND_OPTIONS}
               value={formKind}
-              onChange={(v) => setFormKind(v as KeyFocusKind)}
+              onChange={(e) => setFormKind(e.target.value as KeyFocusKind)}
             />
             <Select
               label="Frequency"
               options={FREQUENCY_OPTIONS}
               value={formFrequency}
-              onChange={(v) => setFormFrequency(v as KeyFocusFrequency)}
+              onChange={(e) => setFormFrequency(e.target.value as KeyFocusFrequency)}
             />
+            <div className="kf-board__form-field">
+              <label className="kf-board__form-label">Date</label>
+              <input
+                type="date"
+                className="kf-board__form-date-input"
+                value={formDate}
+                onChange={(e) => setFormDate(e.target.value)}
+              />
+            </div>
             {editingKF && (
               <Select
                 label="Status"
                 options={STATUS_OPTIONS}
                 value={formStatus}
-                onChange={(v) => setFormStatus(v as KeyFocusStatus)}
+                onChange={(e) => setFormStatus(e.target.value as KeyFocusStatus)}
               />
             )}
             <div className="kf-board__form-actions">
@@ -437,7 +501,7 @@ export default function KeyFocusBoard() {
             <p>Are you sure you want to delete "<strong>{deletingKF.title}</strong>"? This will also remove all associated blockers and task links.</p>
             <div className="kf-board__form-actions">
               <Button variant="ghost" onClick={() => setDeletingKF(null)}>Cancel</Button>
-              <Button variant="danger" onClick={() => deleteMutation.mutate(deletingKF.id)}>Delete</Button>
+              <Button variant="primary" className="kf-board__delete-btn" onClick={() => deleteMutation.mutate(deletingKF.id)}>Delete</Button>
             </div>
           </div>
         </div>

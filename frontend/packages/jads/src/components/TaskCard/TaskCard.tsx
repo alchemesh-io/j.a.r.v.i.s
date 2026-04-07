@@ -187,7 +187,7 @@ export function TaskCard({
         <div className="jads-task-card__kf-badges">
           {keyFocuses.map((kf) => (
             <span key={kf.id} className="jads-task-card__kf-badge" style={{ backgroundColor: KIND_COLORS[kf.kind] }}>
-              {kf.kind.replace('_', ' ')}
+              {kf.title}
             </span>
           ))}
         </div>

@@ -1,13 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar, Button } from '@jarvis/jads';
+import { Calendar } from '@jarvis/jads';
 import {
   listKeyFocuses,
   listTasks,
   listBlockers,
-  type KeyFocus,
-  type Task,
-  type Blocker,
 } from '../../api/client';
 import './Reports.css';
 

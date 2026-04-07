@@ -208,6 +208,11 @@
   color: var(--jads-color-text-muted, #64748b);
 }
 
+.kf-card__period {
+  color: var(--jads-color-accent-cyan, #00d4ff);
+  font-weight: 500;
+}
+
 .kf-card__task-count {
   color: var(--jads-color-text-muted, #64748b);
 }
@@ -299,6 +304,29 @@
   background: rgba(34, 197, 94, 0.1);
 }
 
+.kf-card__blocker-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.kf-card__blocker-delete {
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  background: transparent;
+  border: none;
+  color: var(--jads-color-text-muted, #64748b);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.kf-card__blocker-delete:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
 .kf-card__blocker-form { margin-top: 4px; }
 
 /* Overlay & Form */
@@ -338,8 +366,43 @@
   line-height: 1.5;
 }
 
+.kf-board__form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kf-board__form-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--jads-color-text-muted, #64748b);
+}
+
+.kf-board__form-date-input {
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  color: var(--color-text, #e2e8f0);
+  background-color: var(--color-bg, #0a0e1a);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 6px;
+  color-scheme: dark;
+}
+
+.kf-board__form-date-input:focus {
+  outline: 2px solid var(--jads-color-accent-cyan, #00d4ff);
+  outline-offset: 1px;
+}
+
 .kf-board__form-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.kf-board__delete-btn {
+  --jads-color-accent-cyan: #ef4444;
+  border-color: #ef4444;
 }
