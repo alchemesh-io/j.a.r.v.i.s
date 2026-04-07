@@ -33,3 +33,4 @@ class TaskResponse(BaseModel):
     type: TaskType
     status: TaskStatus
     dates: list[datetime.date] = []
+    note_count: int = 0

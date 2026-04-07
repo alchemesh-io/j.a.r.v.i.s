@@ -26,6 +26,15 @@ export interface Task {
   type: TaskType;
   status: TaskStatus;
   dates?: string[];
+  note_count: number;
+}
+
+export interface TaskNote {
+  id: number;
+  task_id: number;
+  content: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DailyTask {
@@ -84,6 +93,28 @@ export function updateTask(
 
 export function deleteTask(id: number): Promise<void> {
   return request(`/tasks/${id}`, { method: 'DELETE' });
+}
+
+// --- Task Notes API ---
+
+export function listTaskNotes(taskId: number): Promise<TaskNote[]> {
+  return request(`/tasks/${taskId}/notes`);
+}
+
+export function createTaskNote(taskId: number, body: { content: string }): Promise<TaskNote> {
+  return request(`/tasks/${taskId}/notes`, { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function updateTaskNote(
+  taskId: number,
+  noteId: number,
+  body: { content: string },
+): Promise<TaskNote> {
+  return request(`/tasks/${taskId}/notes/${noteId}`, { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+export function deleteTaskNote(taskId: number, noteId: number): Promise<void> {
+  return request(`/tasks/${taskId}/notes/${noteId}`, { method: 'DELETE' });
 }
 
 // --- Weekly API ---

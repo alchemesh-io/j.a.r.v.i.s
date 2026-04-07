@@ -60,6 +60,28 @@ class BackendClient:
     async def delete_task(self, task_id: int) -> None:
         await self._request("DELETE", f"/api/v1/tasks/{task_id}")
 
+    # --- Task Notes ---
+
+    async def create_task_note(self, task_id: int, content: str) -> dict:
+        return await self._request(
+            "POST", f"/api/v1/tasks/{task_id}/notes", json={"content": content}
+        )
+
+    async def list_task_notes(self, task_id: int) -> list[dict]:
+        return await self._request("GET", f"/api/v1/tasks/{task_id}/notes")
+
+    async def update_task_note(
+        self, task_id: int, note_id: int, content: str
+    ) -> dict:
+        return await self._request(
+            "PATCH",
+            f"/api/v1/tasks/{task_id}/notes/{note_id}",
+            json={"content": content},
+        )
+
+    async def delete_task_note(self, task_id: int, note_id: int) -> None:
+        await self._request("DELETE", f"/api/v1/tasks/{task_id}/notes/{note_id}")
+
     # --- Weeklies ---
 
     async def create_weekly(self, week_start: str) -> dict:

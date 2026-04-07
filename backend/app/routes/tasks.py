@@ -29,6 +29,7 @@ def _task_to_response(task: Task) -> TaskResponse:
         type=task.type,
         status=task.status,
         dates=dates,
+        note_count=len(task.notes),
     )
 
 
@@ -36,7 +37,10 @@ def _load_task(db: Session, task_id: int) -> Task:
     stmt = (
         select(Task)
         .where(Task.id == task_id)
-        .options(selectinload(Task.daily_entries).selectinload(DailyTask.daily))
+        .options(
+            selectinload(Task.daily_entries).selectinload(DailyTask.daily),
+            selectinload(Task.notes),
+        )
     )
     task = db.scalars(stmt).first()
     if not task:
@@ -61,7 +65,8 @@ def list_tasks(
 ):
     if scope == "all" or date is None:
         stmt = select(Task).options(
-            selectinload(Task.daily_entries).selectinload(DailyTask.daily)
+            selectinload(Task.daily_entries).selectinload(DailyTask.daily),
+            selectinload(Task.notes),
         )
         tasks = db.scalars(stmt).all()
     else:
@@ -76,7 +81,10 @@ def list_tasks(
             .join(Daily, Daily.id == DailyTask.daily_id)
             .where(Daily.date >= start, Daily.date <= end)
             .distinct()
-            .options(selectinload(Task.daily_entries).selectinload(DailyTask.daily))
+            .options(
+                selectinload(Task.daily_entries).selectinload(DailyTask.daily),
+                selectinload(Task.notes),
+            )
         )
         tasks = db.scalars(stmt).unique().all()
 
