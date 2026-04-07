@@ -9,7 +9,7 @@ JARVIS currently supports task management (backlog, daily/weekly planning) but l
 - **New: Blocker data model and API** -- A `Blocker` entity that can be linked to either a task or a key focus (exclusive, not both). States: opened/resolved.
 - **New: Navigation and views restructuring** -- The current task board view becomes one of three views (Tasks, Key Focuses, Reports) accessible via a left-side navigation within the same page shell.
 - **New: Key Focuses view** -- Card-based rendering similar to the task board, with calendar/frequency selection header, adapted to key focus fields.
-- **New: Reports view** -- Aggregated progress reporting across tasks and key focuses for a given time period.
+- **New: Reports view** -- Structured recap comparing previous period with current: weekly scope shows previous/current week key focuses and remaining blockers; daily scope shows previous/current day tasks and remaining blockers.
 - **New: MCP tools for key focuses and blockers** -- Expose all new CRUD operations through the MCP server.
 
 ## Capabilities
@@ -18,7 +18,7 @@ JARVIS currently supports task management (backlog, daily/weekly planning) but l
 - `key-focus-api`: Backend data model, schemas, and CRUD endpoints for key focuses including the many-to-many relation with tasks
 - `blocker-api`: Backend data model, schemas, and CRUD endpoints for blockers (linked to task or key focus)
 - `key-focus-ui`: Frontend views for key focus management -- card rendering, creation/editing forms, navigation restructuring with Tasks/Key Focuses/Reports tabs
-- `report-ui`: Frontend reporting view with aggregated progress across tasks and key focuses
+- `report-ui`: Frontend reporting view with previous/current period comparison (weekly: key focuses + blockers, daily: tasks + blockers)
 - `key-focus-mcp`: MCP server tools for key focus and blocker CRUD operations
 
 ### Modified Capabilities

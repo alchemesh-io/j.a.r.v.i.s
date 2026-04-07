@@ -12,7 +12,7 @@ This design adds key focuses (strategic goals), task-to-key-focus linking, block
 - Introduce blockers as impediments attachable to either a task or a key focus (exclusive)
 - Restructure the frontend navigation to support three views under one page shell
 - Provide a key focuses card view mirroring the task board UX
-- Provide a basic reporting view aggregating progress
+- Provide a structured reporting view with previous/current period comparison (daily: tasks, weekly: key focuses)
 - Expose all new operations through MCP tools
 
 **Non-Goals:**
@@ -78,7 +78,7 @@ This design adds key focuses (strategic goals), task-to-key-focus linking, block
 
 - **SQLite CHECK constraint for blocker XOR** — SQLite supports CHECK constraints but some ORMs struggle with them. Mitigation: validate at the Pydantic schema level too, so invalid data is caught before hitting the DB.
 - **Frontend complexity growth** — Three views in one page shell increases component count. Mitigation: extract shared toolbar/calendar into reusable components; keep view-specific code isolated.
-- **Reporting without a charting library** — The reports view will be text/badge-based initially. Mitigation: design the data aggregation API to support future visualization needs.
+- **Reporting relies on previous period data** — The reports view compares previous vs. current period (previous day's tasks for daily, previous week's key focuses for weekly). Mitigation: API filtering by date/scope already supports fetching both periods; the frontend makes two queries.
 - **Quarterly frequency UX** — Quarterly key focuses linked to a single weekly may confuse users about their scope. Mitigation: the UI can display "Q2 2026" label derived from the week_start date; filtering logic handles the quarterly range.
 
 ## Migration Plan

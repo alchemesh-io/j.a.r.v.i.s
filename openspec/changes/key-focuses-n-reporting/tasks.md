@@ -76,11 +76,16 @@
 
 ## 11. Frontend Reports View
 
-- [ ] 11.1 Create Reports page component with task completion summary section
-- [ ] 11.2 Add key focus status summary section with kind breakdown
-- [ ] 11.3 Add blocker overview section (opened/resolved counts)
-- [ ] 11.4 Wire up calendar/scope selector to update report data
-- [ ] 11.5 Add empty state for periods with no data
+- [ ] 11.1 Create Reports page component with scope toggle (daily/weekly) and calendar integration
+- [ ] 11.2 Implement weekly report: previous week key focuses done section
+- [ ] 11.3 Implement weekly report: previous week key focuses not done section (in_progress + failed)
+- [ ] 11.4 Implement weekly report: remaining opened blockers from previous week key focuses section
+- [ ] 11.5 Implement weekly report: current week key focuses section
+- [ ] 11.6 Implement daily report: previous day tasks done section
+- [ ] 11.7 Implement daily report: previous day tasks not done section
+- [ ] 11.8 Implement daily report: remaining opened blockers from previous day tasks section
+- [ ] 11.9 Implement daily report: current day tasks section
+- [ ] 11.10 Add empty states for each section and for the overall report when no data exists
 
 ## 12. MCP Server Key Focus Tools
 
