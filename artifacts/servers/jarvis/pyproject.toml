@@ -1,6 +1,6 @@
 [project]
 name = "jarvis"
-version = "0.1.0"
+version = "0.2.0"
 description = "jarvis MCP server built with FastMCP"
 authors = [
     {name = "Alexandre Guitton", email = "guittonalexandre@outlook.fr"}

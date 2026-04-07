@@ -20,3 +20,6 @@ class Task(Base):
     daily_entries: Mapped[list["DailyTask"]] = relationship(
         "DailyTask", back_populates="task", cascade="all, delete-orphan"
     )
+    notes: Mapped[list["TaskNote"]] = relationship(
+        "TaskNote", back_populates="task", cascade="all, delete-orphan"
+    )

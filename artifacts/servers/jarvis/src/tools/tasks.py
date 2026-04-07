@@ -30,8 +30,10 @@ async def create_task(
 
 @mcp.tool()
 async def get_task(task_id: int) -> dict:
-    """Get a single task by ID, including its assigned dates."""
-    return await client.get_task(task_id)
+    """Get a single task by ID, including its assigned dates and notes."""
+    task = await client.get_task(task_id)
+    task["notes"] = await client.list_task_notes(task_id)
+    return task
 
 
 @mcp.tool()
@@ -78,6 +80,6 @@ async def update_task(
 
 @mcp.tool()
 async def delete_task(task_id: int) -> str:
-    """Delete a task by ID."""
+    """Delete a task by ID. All associated notes are also deleted."""
     await client.delete_task(task_id)
-    return f"Task {task_id} deleted"
+    return f"Task {task_id} and all its notes have been deleted"

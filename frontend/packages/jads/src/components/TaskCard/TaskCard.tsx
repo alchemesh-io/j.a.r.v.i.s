@@ -15,6 +15,8 @@ export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   onDelete?: () => void;
   onToggleStatus?: () => void;
   onExpand?: () => void;
+  onNotes?: () => void;
+  noteCount?: number;
   dragListeners?: Record<string, Function>;
 }
 
@@ -61,6 +63,13 @@ const GCalIcon = () => (
   </svg>
 );
 
+const NoteIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M4 2H12C12.5523 2 13 2.44772 13 3V13C13 13.5523 12.5523 14 12 14H4C3.44772 14 3 13.5523 3 13V3C3 2.44772 3.44772 2 4 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M6 5H10M6 8H10M6 11H8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+);
+
 const UndoIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M4 6L2 8L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -86,6 +95,8 @@ export function TaskCard({
   onDelete,
   onToggleStatus,
   onExpand,
+  onNotes,
+  noteCount,
   dragListeners,
   className = '',
   ...props
@@ -165,6 +176,20 @@ export function TaskCard({
               onClick={onDelete}
             >
               <DeleteIcon />
+            </IconButton>
+          )}
+          {onNotes && (
+            <IconButton
+              aria-label={`Notes: ${title}`}
+              variant="ghost"
+              size="sm"
+              onClick={onNotes}
+              className="jads-task-card__notes-btn"
+            >
+              <NoteIcon />
+              {(noteCount ?? 0) > 0 && (
+                <span className="jads-task-card__note-badge">{noteCount}</span>
+              )}
             </IconButton>
           )}
           {onExpand && (

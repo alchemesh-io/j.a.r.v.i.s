@@ -189,6 +189,50 @@ async def test_reorder_daily_tasks(mock_backend, client):
     assert result[0]["task_id"] == 2
 
 
+# --- Task Notes ---
+
+
+@pytest.mark.asyncio
+async def test_create_task_note(mock_backend, client):
+    mock_backend.post("/api/v1/tasks/1/notes").respond(
+        201,
+        json={"id": 1, "task_id": 1, "content": "## Notes", "created_at": "2026-04-07T10:00:00", "updated_at": "2026-04-07T10:00:00"},
+    )
+    result = await client.create_task_note(task_id=1, content="## Notes")
+    assert result["id"] == 1
+    assert result["content"] == "## Notes"
+
+
+@pytest.mark.asyncio
+async def test_list_task_notes(mock_backend, client):
+    mock_backend.get("/api/v1/tasks/1/notes").respond(
+        200,
+        json=[
+            {"id": 2, "task_id": 1, "content": "Note 2", "created_at": "2026-04-07T11:00:00", "updated_at": "2026-04-07T11:00:00"},
+            {"id": 1, "task_id": 1, "content": "Note 1", "created_at": "2026-04-07T10:00:00", "updated_at": "2026-04-07T10:00:00"},
+        ],
+    )
+    result = await client.list_task_notes(task_id=1)
+    assert len(result) == 2
+
+
+@pytest.mark.asyncio
+async def test_update_task_note(mock_backend, client):
+    mock_backend.patch("/api/v1/tasks/1/notes/1").respond(
+        200,
+        json={"id": 1, "task_id": 1, "content": "Updated", "created_at": "2026-04-07T10:00:00", "updated_at": "2026-04-07T12:00:00"},
+    )
+    result = await client.update_task_note(task_id=1, note_id=1, content="Updated")
+    assert result["content"] == "Updated"
+
+
+@pytest.mark.asyncio
+async def test_delete_task_note(mock_backend, client):
+    mock_backend.delete("/api/v1/tasks/1/notes/1").respond(204)
+    result = await client.delete_task_note(task_id=1, note_id=1)
+    assert result is None
+
+
 # --- Error handling ---
 
 

@@ -1339,6 +1339,45 @@
   grid-column: 1 / -1;
 }
 
+/* Task deletion confirmation dialog */
+.task-board__confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.task-board__confirm-dialog {
+  background: var(--jads-color-surface, #0f1729);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: var(--jads-radius-lg, 8px);
+  padding: 24px;
+  max-width: 380px;
+  width: 90vw;
+  text-align: center;
+}
+
+.task-board__confirm-dialog p {
+  color: var(--jads-color-text, #e2e8f0);
+  font-size: var(--jads-font-size-sm, 12px);
+  margin: 0 0 8px;
+}
+
+.task-board__confirm-warn {
+  color: var(--jads-color-text-muted, #64748b);
+  font-size: 11px !important;
+}
+
+.task-board__confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
 @media (max-width: 768px) {
   .task-board {
     grid-template-rows: auto 1fr;

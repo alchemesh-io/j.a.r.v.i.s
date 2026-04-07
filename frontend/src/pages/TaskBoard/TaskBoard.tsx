@@ -35,11 +35,17 @@ import {
   listGcalEvents,
   getJiraTicket,
   getGcalEvent,
+  listTaskNotes,
+  createTaskNote,
+  updateTaskNote,
+  deleteTaskNote,
   type Task,
   type TaskType,
+  type TaskNote,
   type JiraTicket,
   type CalendarEvent,
 } from '../../api/client';
+import { NotePanel } from './NotePanel';
 import { EmptyState } from './EmptyState';
 import './TaskBoard.css';
 
@@ -240,6 +246,7 @@ function SortableTaskCard({
   onDelete,
   onToggleStatus,
   onExpand,
+  onNotes,
 }: {
   task: Task;
   jiraProjectUrl?: string;
@@ -248,6 +255,7 @@ function SortableTaskCard({
   onDelete: () => void;
   onToggleStatus: () => void;
   onExpand: () => void;
+  onNotes: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
@@ -275,6 +283,8 @@ function SortableTaskCard({
         onDelete={onDelete}
         onToggleStatus={onToggleStatus}
         onExpand={task.source_type ? onExpand : undefined}
+        onNotes={onNotes}
+        noteCount={task.note_count}
         dragListeners={listeners}
       />
     </div>
@@ -320,6 +330,9 @@ export default function TaskBoard() {
   const [fullscreenEvent, setFullscreenEvent] = useState<CalendarEvent | null>(null);
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
+
+  const [notePanelTask, setNotePanelTask] = useState<Task | null>(null);
+  const [deletingTask, setDeletingTask] = useState<Task | null>(null);
 
   const [showCalendar, setShowCalendar] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -406,7 +419,42 @@ export default function TaskBoard() {
 
   const deleteMutation = useMutation({
     mutationFn: deleteTask,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setDeletingTask(null);
+    },
+  });
+
+  const { data: taskNotes = [] } = useQuery({
+    queryKey: ['task-notes', notePanelTask?.id],
+    queryFn: () => listTaskNotes(notePanelTask!.id),
+    enabled: !!notePanelTask,
+  });
+
+  const createNoteMutation = useMutation({
+    mutationFn: ({ taskId, content }: { taskId: number; content: string }) =>
+      createTaskNote(taskId, { content }),
+    onSuccess: (_, { taskId }) => {
+      queryClient.invalidateQueries({ queryKey: ['task-notes', taskId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+
+  const updateNoteMutation = useMutation({
+    mutationFn: ({ taskId, noteId, content }: { taskId: number; noteId: number; content: string }) =>
+      updateTaskNote(taskId, noteId, { content }),
+    onSuccess: (_, { taskId }) => {
+      queryClient.invalidateQueries({ queryKey: ['task-notes', taskId] });
+    },
+  });
+
+  const deleteNoteMutation = useMutation({
+    mutationFn: ({ taskId, noteId }: { taskId: number; noteId: number }) =>
+      deleteTaskNote(taskId, noteId),
+    onSuccess: (_, { taskId }) => {
+      queryClient.invalidateQueries({ queryKey: ['task-notes', taskId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
   });
 
   const reorderMutation = useMutation({
@@ -1404,9 +1452,10 @@ export default function TaskBoard() {
                   jiraProjectUrl={jiraConfig?.projectUrl ?? undefined}
                   gcalCalendarEmail={gcalAuthStatus?.calendarEmail ?? undefined}
                   onEdit={() => startEdit(task)}
-                  onDelete={() => deleteMutation.mutate(task.id)}
+                  onDelete={() => setDeletingTask(task)}
                   onToggleStatus={() => toggleStatusMutation.mutate(task)}
                   onExpand={() => handleExpandBoardTask(task)}
+                  onNotes={() => setNotePanelTask(task)}
                 />
               ))}
               {visibleTasks.length === 0 && (
@@ -1419,6 +1468,40 @@ export default function TaskBoard() {
           </SortableContext>
         </DndContext>
       </section>
+
+      {/* Task deletion confirmation */}
+      {deletingTask && (
+        <div className="task-board__confirm-overlay" onClick={() => setDeletingTask(null)}>
+          <div className="task-board__confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <p>Delete <strong>{deletingTask.title}</strong>?</p>
+            {deletingTask.note_count > 0 && (
+              <p className="task-board__confirm-warn">
+                This will also delete {deletingTask.note_count} note{deletingTask.note_count > 1 ? 's' : ''}.
+              </p>
+            )}
+            <div className="task-board__confirm-actions">
+              <Button size="sm" onClick={() => deleteMutation.mutate(deletingTask.id)}>
+                Delete
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setDeletingTask(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notes panel */}
+      {notePanelTask && (
+        <NotePanel
+          taskTitle={notePanelTask.title}
+          notes={taskNotes}
+          onClose={() => setNotePanelTask(null)}
+          onCreate={(content) => createNoteMutation.mutate({ taskId: notePanelTask.id, content })}
+          onUpdate={(noteId, content) => updateNoteMutation.mutate({ taskId: notePanelTask.id, noteId, content })}
+          onDelete={(noteId) => deleteNoteMutation.mutate({ taskId: notePanelTask.id, noteId })}
+        />
+      )}
     </div>
   );
 }

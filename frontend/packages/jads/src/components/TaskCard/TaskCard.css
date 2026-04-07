@@ -281,3 +281,24 @@
 .jads-task-card:focus-within .jads-task-card__actions {
   opacity: 1;
 }
+
+/* Notes button + badge */
+.jads-task-card__notes-btn {
+  position: relative;
+}
+
+.jads-task-card__note-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  color: #fff;
+  background: var(--jads-color-accent-cyan, #00d4ff);
+  border-radius: 7px;
+}
