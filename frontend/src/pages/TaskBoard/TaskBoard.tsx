@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -372,12 +372,26 @@ export default function TaskBoard() {
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks', dateStr, scope],
     queryFn: () => listTasks({ date: dateStr, scope }),
-    select: (data) => [...data].sort((a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9)),
   });
 
+  const [manualOrder, setManualOrder] = useState<number[] | null>(null);
+
+  // Reset manual order when date/scope changes
+  useEffect(() => {
+    setManualOrder(null);
+  }, [dateStr, scope]);
+
+  const sortedTasks = useMemo(() => {
+    if (manualOrder) {
+      const byId = new Map(tasks.map((t) => [t.id, t]));
+      return manualOrder.map((id) => byId.get(id)).filter(Boolean) as Task[];
+    }
+    return [...tasks].sort((a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9));
+  }, [tasks, manualOrder]);
+
   const visibleTasks = doneMode === 'hide'
-    ? tasks.filter((t) => t.status !== 'done')
-    : tasks;
+    ? sortedTasks.filter((t) => t.status !== 'done')
+    : sortedTasks;
 
   const { data: daily } = useQuery({
     queryKey: ['daily', dateStr],
@@ -627,7 +641,7 @@ export default function TaskBoard() {
       if (oldIndex === -1 || newIndex === -1) return;
 
       const reordered = arrayMove(visibleTasks, oldIndex, newIndex);
-      queryClient.setQueryData(['tasks', dateStr, scope], reordered);
+      setManualOrder(reordered.map((t) => t.id));
 
       try {
         const d = daily ?? await ensureDaily(dateStr);
@@ -636,11 +650,10 @@ export default function TaskBoard() {
           items: reordered.map((t, i) => ({ task_id: t.id, priority: i + 1 })),
         });
       } catch {
-        // Revert optimistic update on failure
-        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        setManualOrder(null);
       }
     },
-    [visibleTasks, daily, dateStr, scope, reorderMutation, queryClient],
+    [visibleTasks, daily, dateStr, reorderMutation],
   );
 
   const closeForm = () => { setShowCreateForm(false); setEditingTask(null); resetForm(); };
