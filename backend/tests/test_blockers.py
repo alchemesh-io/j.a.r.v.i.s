@@ -212,3 +212,11 @@ def test_remove_key_focus_from_task(client):
     )
     r = client.delete(f"/api/v1/tasks/{task['id']}/key-focuses/{kf['id']}")
     assert r.status_code == 204
+
+
+# --- S2: Blocker 404 ---
+
+
+def test_get_nonexistent_blocker(client):
+    r = client.get("/api/v1/blockers/999")
+    assert r.status_code == 404

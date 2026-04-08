@@ -42,7 +42,7 @@ def list_task_key_focuses(task_id: int, db: Session = Depends(get_db)):
             frequency=kf.frequency,
             weekly_id=kf.weekly_id,
             task_count=len(kf.tasks),
-            blocker_count=len(kf.blockers),
+            blocker_count=sum(1 for b in kf.blockers if b.status.value == "opened"),
         )
         for kf in key_focuses
     ]

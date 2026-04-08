@@ -251,3 +251,6 @@ class BackendClient:
 
     async def list_task_blockers(self, task_id: int) -> list[dict]:
         return await self._request("GET", f"/api/v1/tasks/{task_id}/blockers")
+
+    async def list_task_key_focuses(self, task_id: int) -> list[dict]:
+        return await self._request("GET", f"/api/v1/tasks/{task_id}/key-focuses")

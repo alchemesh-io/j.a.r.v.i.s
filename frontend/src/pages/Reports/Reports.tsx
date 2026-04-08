@@ -137,6 +137,10 @@ export default function Reports() {
   const prevDayTaskIds = new Set(prevDayTasks.map((t) => t.id));
   const prevDayBlockers = allBlockersDaily.filter((b) => b.task_id && prevDayTaskIds.has(b.task_id));
 
+  // Lookup maps for blocker parent context
+  const kfNameMap = new Map(prevWeekKFs.map((kf) => [kf.id, kf.title]));
+  const taskNameMap = new Map(prevDayTasks.map((t) => [t.id, t.title]));
+
   const hasWeeklyData = prevWeekKFs.length > 0 || currentWeekKFs.length > 0;
   const hasDailyData = prevDayTasks.length > 0 || currentDayTasks.length > 0;
 
@@ -205,7 +209,10 @@ export default function Reports() {
                   {prevWeekDone.map((kf) => (
                     <div key={kf.id} className="reports__kf-item reports__kf-item--succeed">
                       <span className="reports__kind-badge" style={{ backgroundColor: KIND_COLORS[kf.kind] }}>{kf.kind.replace('_', ' ')}</span>
-                      <span className="reports__item-title">{kf.title}</span>
+                      <div className="reports__item-body">
+                        <span className="reports__item-title">{kf.title}</span>
+                        {kf.description && <span className="reports__item-desc">{kf.description}</span>}
+                      </div>
                       <span className="reports__status-icon">✓</span>
                     </div>
                   ))}
@@ -222,7 +229,10 @@ export default function Reports() {
                   {prevWeekNotDone.map((kf) => (
                     <div key={kf.id} className={`reports__kf-item reports__kf-item--${kf.status}`}>
                       <span className="reports__kind-badge" style={{ backgroundColor: KIND_COLORS[kf.kind] }}>{kf.kind.replace('_', ' ')}</span>
-                      <span className="reports__item-title">{kf.title}</span>
+                      <div className="reports__item-body">
+                        <span className="reports__item-title">{kf.title}</span>
+                        {kf.description && <span className="reports__item-desc">{kf.description}</span>}
+                      </div>
                       <span className={`reports__status-label reports__status-label--${kf.status}`}>{kf.status.replace('_', ' ')}</span>
                     </div>
                   ))}
@@ -240,6 +250,9 @@ export default function Reports() {
                     <div key={b.id} className="reports__blocker-item">
                       <span className="reports__blocker-icon">!</span>
                       <span className="reports__item-title">{b.title}</span>
+                      {b.key_focus_id && kfNameMap.has(b.key_focus_id) && (
+                        <span className="reports__blocker-parent">{kfNameMap.get(b.key_focus_id)}</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -255,7 +268,10 @@ export default function Reports() {
                   {currentWeekKFs.map((kf) => (
                     <div key={kf.id} className={`reports__kf-item reports__kf-item--${kf.status}`}>
                       <span className="reports__kind-badge" style={{ backgroundColor: KIND_COLORS[kf.kind] }}>{kf.kind.replace('_', ' ')}</span>
-                      <span className="reports__item-title">{kf.title}</span>
+                      <div className="reports__item-body">
+                        <span className="reports__item-title">{kf.title}</span>
+                        {kf.description && <span className="reports__item-desc">{kf.description}</span>}
+                      </div>
                       <span className={`reports__status-label reports__status-label--${kf.status}`}>{kf.status.replace('_', ' ')}</span>
                     </div>
                   ))}
@@ -320,6 +336,9 @@ export default function Reports() {
                     <div key={b.id} className="reports__blocker-item">
                       <span className="reports__blocker-icon">!</span>
                       <span className="reports__item-title">{b.title}</span>
+                      {b.task_id && taskNameMap.has(b.task_id) && (
+                        <span className="reports__blocker-parent">{taskNameMap.get(b.task_id)}</span>
+                      )}
                     </div>
                   ))}
                 </div>

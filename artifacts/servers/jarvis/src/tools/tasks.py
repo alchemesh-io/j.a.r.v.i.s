@@ -33,6 +33,7 @@ async def get_task(task_id: int) -> dict:
     """Get a single task by ID, including its assigned dates, notes, key focuses, and blockers."""
     task = await client.get_task(task_id)
     task["notes"] = await client.list_task_notes(task_id)
+    task["key_focuses"] = await client.list_task_key_focuses(task_id)
     task["blockers"] = await client.list_task_blockers(task_id)
     return task
 

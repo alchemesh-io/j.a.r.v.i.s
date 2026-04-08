@@ -192,12 +192,6 @@ export function TaskCard({
           ))}
         </div>
       )}
-      {(blockerCount ?? 0) > 0 && (
-        <div className="jads-task-card__blocker-indicator">
-          <BlockerIcon />
-          <span>{blockerCount}</span>
-        </div>
-      )}
       <div className="jads-task-card__footer">
         <div className="jads-task-card__actions">
           {onEdit && (

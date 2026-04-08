@@ -382,6 +382,28 @@ async def test_list_task_blockers(mock_backend, client):
     assert len(result) == 1
 
 
+@pytest.mark.asyncio
+async def test_list_task_key_focuses(mock_backend, client):
+    mock_backend.get("/api/v1/tasks/1/key-focuses").respond(
+        200,
+        json=[{"id": 1, "title": "KF1", "kind": "delivery", "status": "in_progress", "frequency": "weekly", "weekly_id": 1, "description": None, "task_count": 1, "blocker_count": 0}],
+    )
+    result = await client.list_task_key_focuses(1)
+    assert len(result) == 1
+    assert result[0]["title"] == "KF1"
+
+
+@pytest.mark.asyncio
+async def test_list_key_focus_blockers(mock_backend, client):
+    mock_backend.get("/api/v1/key-focuses/1/blockers").respond(
+        200,
+        json=[{"id": 1, "title": "B1", "description": None, "status": "opened", "task_id": None, "key_focus_id": 1}],
+    )
+    result = await client.list_key_focus_blockers(1)
+    assert len(result) == 1
+    assert result[0]["key_focus_id"] == 1
+
+
 # --- Error handling ---
 
 

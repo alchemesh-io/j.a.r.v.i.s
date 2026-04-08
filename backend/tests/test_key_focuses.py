@@ -234,3 +234,37 @@ def test_task_response_empty_key_focuses_and_blockers(client):
     r = client.get(f"/api/v1/tasks/{task['id']}")
     assert r.json()["key_focuses"] == []
     assert r.json()["blocker_count"] == 0
+
+
+# --- S1: Quarterly scope filtering ---
+
+
+def test_filter_key_focuses_by_quarterly_scope(client):
+    # Q2 2026 starts April 1. Week containing April 1 starts March 29 (Sunday).
+    w_q2 = _create_weekly(client, "2026-03-29")
+    w_q1 = _create_weekly(client, "2026-03-22")
+    _create_key_focus(client, w_q2["id"], title="Q2 KF", frequency="quarterly")
+    _create_key_focus(client, w_q1["id"], title="Q1 KF", frequency="quarterly")
+    r = client.get("/api/v1/key-focuses?date=2026-04-07&scope=quarterly")
+    data = r.json()
+    titles = [kf["title"] for kf in data]
+    assert "Q2 KF" in titles
+    assert "Q1 KF" not in titles
+
+
+# --- S3: Cascade delete task removes TaskKeyFocus associations ---
+
+
+def test_cascade_delete_task_removes_key_focus_associations(client):
+    weekly = _create_weekly(client)
+    kf = _create_key_focus(client, weekly["id"])
+    task = _create_task(client)
+    client.post(f"/api/v1/key-focuses/{kf['id']}/tasks", json={"task_id": task["id"]})
+    # Verify association exists
+    r = client.get(f"/api/v1/key-focuses/{kf['id']}/tasks")
+    assert len(r.json()) == 1
+    # Delete the task
+    client.delete(f"/api/v1/tasks/{task['id']}")
+    # Association should be gone
+    r = client.get(f"/api/v1/key-focuses/{kf['id']}/tasks")
+    assert len(r.json()) == 0
