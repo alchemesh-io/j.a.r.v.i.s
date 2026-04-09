@@ -2,6 +2,12 @@ import type { HTMLAttributes } from 'react';
 import { IconButton } from '../IconButton/IconButton';
 import './TaskCard.css';
 
+export interface KeyFocusBadge {
+  id: number;
+  title: string;
+  kind: 'delivery' | 'learning' | 'support' | 'operational' | 'side_quest';
+}
+
 export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   title: string;
   type: 'refinement' | 'implementation' | 'review';
@@ -17,6 +23,9 @@ export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   onExpand?: () => void;
   onNotes?: () => void;
   noteCount?: number;
+  onBlockers?: () => void;
+  blockerCount?: number;
+  keyFocuses?: KeyFocusBadge[];
   dragListeners?: Record<string, Function>;
 }
 
@@ -70,6 +79,21 @@ const NoteIcon = () => (
   </svg>
 );
 
+const BlockerIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M8 5V9M8 11V11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
+const KIND_COLORS: Record<string, string> = {
+  delivery: '#3b82f6',
+  learning: '#22c55e',
+  support: '#a855f7',
+  operational: '#f97316',
+  side_quest: '#06b6d4',
+};
+
 const UndoIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M4 6L2 8L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -97,6 +121,9 @@ export function TaskCard({
   onExpand,
   onNotes,
   noteCount,
+  onBlockers,
+  blockerCount,
+  keyFocuses,
   dragListeners,
   className = '',
   ...props
@@ -156,6 +183,15 @@ export function TaskCard({
           ))}
         </div>
       )}
+      {keyFocuses && keyFocuses.length > 0 && (
+        <div className="jads-task-card__kf-badges">
+          {keyFocuses.map((kf) => (
+            <span key={kf.id} className="jads-task-card__kf-badge" style={{ backgroundColor: KIND_COLORS[kf.kind] }}>
+              {kf.title}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="jads-task-card__footer">
         <div className="jads-task-card__actions">
           {onEdit && (
@@ -189,6 +225,20 @@ export function TaskCard({
               <NoteIcon />
               {(noteCount ?? 0) > 0 && (
                 <span className="jads-task-card__note-badge">{noteCount}</span>
+              )}
+            </IconButton>
+          )}
+          {onBlockers && (
+            <IconButton
+              aria-label={`Blockers: ${title}`}
+              variant="ghost"
+              size="sm"
+              onClick={onBlockers}
+              className="jads-task-card__blockers-btn"
+            >
+              <BlockerIcon />
+              {(blockerCount ?? 0) > 0 && (
+                <span className="jads-task-card__blocker-badge">{blockerCount}</span>
               )}
             </IconButton>
           )}

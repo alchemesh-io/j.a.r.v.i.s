@@ -18,7 +18,7 @@ DATA_MOUNT_TARGET   := /mnt/jarvis-data
 GHCR_ORG            := alchemesh-io
 
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update _tls-secret
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update _tls-secret
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -56,7 +56,7 @@ cluster-up: _check-prereqs
 	@echo "==> Cluster ready. Run 'make argocd-ui' to open the ArgoCD dashboard."
 
 ## Stop the Minikube cluster and clean up background processes (data in .data/ is preserved)
-cluster-down: _check-prereqs
+cluster-down: _check-prereqs _db-backup-safe
 	@echo "==> Stopping minikube mount processes..."
 	@for pidfile in $(MOUNT_PID_FILE) $(DATA_MOUNT_PID_FILE); do \
 		if [ -f $$pidfile ]; then \
@@ -102,7 +102,7 @@ cluster-status: _check-prereqs
 # ---------------------------------------------------------------------------
 
 ## Pull latest published images from GHCR, load into Minikube, apply ArgoCD App CRs, hard sync
-deploy: _check-prereqs _deploy-secrets _deploy-jaar-secrets _helm-dep-update
+deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaar-secrets _helm-dep-update
 	@echo "==> Pulling latest images from GHCR..."
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
@@ -119,7 +119,7 @@ deploy: _check-prereqs _deploy-secrets _deploy-jaar-secrets _helm-dep-update
 	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
 ## Build images locally, load into Minikube, apply ArgoCD App CRs, hard sync
-deploy-local: _check-prereqs _deploy-secrets _deploy-jaar-secrets _helm-dep-update
+deploy-local: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaar-secrets _helm-dep-update
 	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
 	@echo "==> Building Docker images locally (tag: $(LOCAL_TAG))..."
 	docker build -t jarvis-backend:$(LOCAL_TAG) ./backend
@@ -139,7 +139,7 @@ deploy-local: _check-prereqs _deploy-secrets _deploy-jaar-secrets _helm-dep-upda
 	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
 ## Delete the ArgoCD Application CRs (cascade deletes all managed resources)
-undeploy: _check-prereqs
+undeploy: _check-prereqs _db-backup-safe
 	@echo "==> Deleting ArgoCD Application CRs (cascade)..."
 	kubectl delete -f argocd/jarvis-app.yaml --ignore-not-found=true
 	kubectl delete -f argocd/jaar-app.yaml --ignore-not-found=true
@@ -391,6 +391,65 @@ sync-artifacts-servers:
 			echo "    Skipped local"; \
 	done
 	@echo "==> Done."
+
+# ---------------------------------------------------------------------------
+# Database backup / restore
+# ---------------------------------------------------------------------------
+BACKUP_DIR := .backups
+DB_SOURCE  := $(DATA_DIR)/jarvis/jarvis.db
+
+BACKEND_POD = $(shell kubectl get pod -n jarvis -l app=jarvis-backend -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+DB_POD_PATH = /data/jarvis.db
+
+## Auto-backup before destructive operations — silently skips if no pod is available
+_db-backup-safe:
+	@if [ -n "$(BACKEND_POD)" ]; then \
+		$(MAKE) db-backup || echo "  WARNING: Auto-backup failed, continuing anyway."; \
+	else \
+		echo "  (No backend pod found — skipping auto-backup)"; \
+	fi
+
+## Backup the JARVIS SQLite database from the running pod to .backups/
+## Uses sqlite3 .backup inside the pod for a consistent snapshot
+db-backup:
+	@mkdir -p $(BACKUP_DIR)
+	$(eval TS := $(shell date +%Y%m%d-%H%M%S))
+	@if [ -z "$(BACKEND_POD)" ]; then \
+		echo "ERROR: No backend pod found. Is the cluster running?"; exit 1; \
+	fi
+	@echo "==> Creating consistent backup inside pod $(BACKEND_POD)..."
+	kubectl exec -n jarvis $(BACKEND_POD) -- python -c "import sqlite3; src=sqlite3.connect('$(DB_POD_PATH)'); dst=sqlite3.connect('/tmp/jarvis-backup.db'); src.backup(dst); dst.close(); src.close()"
+	@echo "==> Copying backup to local..."
+	kubectl cp jarvis/$(BACKEND_POD):/tmp/jarvis-backup.db $(BACKUP_DIR)/jarvis-$(TS).db
+	kubectl exec -n jarvis $(BACKEND_POD) -- rm -f /tmp/jarvis-backup.db
+	@echo "  Saved to $(BACKUP_DIR)/jarvis-$(TS).db ($$(du -h $(BACKUP_DIR)/jarvis-$(TS).db | cut -f1))"
+	@echo "  Backups:"
+	@ls -lh $(BACKUP_DIR)/jarvis-*.db 2>/dev/null
+
+## Restore the JARVIS SQLite database from a local backup into the running pod
+## Usage: make db-restore              (restores latest backup)
+##        make db-restore BACKUP=.backups/jarvis-20260408-001500.db
+db-restore:
+	@if [ -n "$(BACKUP)" ]; then \
+		RESTORE_FILE="$(BACKUP)"; \
+	else \
+		RESTORE_FILE=$$(ls -t $(BACKUP_DIR)/jarvis-*.db 2>/dev/null | head -1); \
+	fi; \
+	if [ -z "$$RESTORE_FILE" ] || [ ! -f "$$RESTORE_FILE" ]; then \
+		echo "ERROR: No backup found. Run 'make db-backup' first or specify BACKUP=path"; exit 1; \
+	fi; \
+	if [ -z "$(BACKEND_POD)" ]; then \
+		echo "ERROR: No backend pod found. Is the cluster running?"; exit 1; \
+	fi; \
+	echo "==> Uploading $$RESTORE_FILE to pod $(BACKEND_POD)..."; \
+	kubectl cp "$$RESTORE_FILE" jarvis/$(BACKEND_POD):/tmp/jarvis-restore.db; \
+	echo "==> Replacing database inside pod..."; \
+	kubectl exec -n jarvis $(BACKEND_POD) -- sh -c "cp /tmp/jarvis-restore.db $(DB_POD_PATH) && rm -f $(DB_POD_PATH)-shm $(DB_POD_PATH)-wal /tmp/jarvis-restore.db"; \
+	echo "  Database replaced."
+	@echo "==> Restarting backend pod to pick up changes..."
+	@kubectl rollout restart deployment jarvis-backend -n jarvis && \
+		kubectl rollout status deployment/jarvis-backend -n jarvis --timeout=60s && \
+		echo "  Backend restarted. Restore complete."
 
 # ---------------------------------------------------------------------------
 # Tests

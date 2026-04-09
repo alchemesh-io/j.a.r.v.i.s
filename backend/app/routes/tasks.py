@@ -20,17 +20,7 @@ def _get_week_bounds(date: datetime.date) -> tuple[datetime.date, datetime.date]
 
 
 def _task_to_response(task: Task) -> TaskResponse:
-    dates = sorted(entry.daily.date for entry in task.daily_entries)
-    return TaskResponse(
-        id=task.id,
-        source_type=task.source_type,
-        source_id=task.source_id,
-        title=task.title,
-        type=task.type,
-        status=task.status,
-        dates=dates,
-        note_count=len(task.notes),
-    )
+    return TaskResponse.model_validate(task)
 
 
 def _load_task(db: Session, task_id: int) -> Task:
@@ -40,6 +30,8 @@ def _load_task(db: Session, task_id: int) -> Task:
         .options(
             selectinload(Task.daily_entries).selectinload(DailyTask.daily),
             selectinload(Task.notes),
+            selectinload(Task.key_focuses),
+            selectinload(Task.blockers),
         )
     )
     task = db.scalars(stmt).first()
@@ -67,6 +59,8 @@ def list_tasks(
         stmt = select(Task).options(
             selectinload(Task.daily_entries).selectinload(DailyTask.daily),
             selectinload(Task.notes),
+            selectinload(Task.key_focuses),
+            selectinload(Task.blockers),
         )
         tasks = db.scalars(stmt).all()
     else:
@@ -84,6 +78,8 @@ def list_tasks(
             .options(
                 selectinload(Task.daily_entries).selectinload(DailyTask.daily),
                 selectinload(Task.notes),
+                selectinload(Task.key_focuses),
+                selectinload(Task.blockers),
             )
         )
         tasks = db.scalars(stmt).unique().all()

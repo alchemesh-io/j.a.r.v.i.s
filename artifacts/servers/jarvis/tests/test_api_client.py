@@ -233,6 +233,177 @@ async def test_delete_task_note(mock_backend, client):
     assert result is None
 
 
+# --- Key Focuses ---
+
+
+@pytest.mark.asyncio
+async def test_create_key_focus(mock_backend, client):
+    mock_backend.post("/api/v1/key-focuses").respond(
+        201,
+        json={"id": 1, "title": "Ship feature", "kind": "delivery", "status": "in_progress", "frequency": "weekly", "weekly_id": 1, "description": None, "task_count": 0, "blocker_count": 0},
+    )
+    result = await client.create_key_focus(title="Ship feature", kind="delivery", frequency="weekly", weekly_id=1)
+    assert result["id"] == 1
+    assert result["kind"] == "delivery"
+
+
+@pytest.mark.asyncio
+async def test_get_key_focus(mock_backend, client):
+    mock_backend.get("/api/v1/key-focuses/1").respond(
+        200,
+        json={"id": 1, "title": "Ship feature", "kind": "delivery", "status": "in_progress", "frequency": "weekly", "weekly_id": 1, "description": None, "task_count": 0, "blocker_count": 0},
+    )
+    result = await client.get_key_focus(1)
+    assert result["title"] == "Ship feature"
+
+
+@pytest.mark.asyncio
+async def test_list_key_focuses(mock_backend, client):
+    mock_backend.get("/api/v1/key-focuses").respond(
+        200,
+        json=[{"id": 1, "title": "KF1", "kind": "delivery", "status": "in_progress", "frequency": "weekly", "weekly_id": 1, "description": None, "task_count": 0, "blocker_count": 0}],
+    )
+    result = await client.list_key_focuses()
+    assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_update_key_focus(mock_backend, client):
+    mock_backend.patch("/api/v1/key-focuses/1").respond(
+        200,
+        json={"id": 1, "title": "Updated", "kind": "delivery", "status": "succeed", "frequency": "weekly", "weekly_id": 1, "description": None, "task_count": 0, "blocker_count": 0},
+    )
+    result = await client.update_key_focus(1, status="succeed")
+    assert result["status"] == "succeed"
+
+
+@pytest.mark.asyncio
+async def test_delete_key_focus(mock_backend, client):
+    mock_backend.delete("/api/v1/key-focuses/1").respond(204)
+    result = await client.delete_key_focus(1)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_add_task_to_key_focus(mock_backend, client):
+    mock_backend.post("/api/v1/key-focuses/1/tasks").respond(
+        201,
+        json={"task_id": 1, "key_focus_id": 1},
+    )
+    result = await client.add_task_to_key_focus(key_focus_id=1, task_id=1)
+    assert result["task_id"] == 1
+
+
+@pytest.mark.asyncio
+async def test_remove_task_from_key_focus(mock_backend, client):
+    mock_backend.delete("/api/v1/key-focuses/1/tasks/1").respond(204)
+    result = await client.remove_task_from_key_focus(key_focus_id=1, task_id=1)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_list_key_focus_tasks(mock_backend, client):
+    mock_backend.get("/api/v1/key-focuses/1/tasks").respond(
+        200,
+        json=[{"id": 1, "title": "T1", "type": "review", "status": "created"}],
+    )
+    result = await client.list_key_focus_tasks(1)
+    assert len(result) == 1
+
+
+# --- Blockers ---
+
+
+@pytest.mark.asyncio
+async def test_create_blocker(mock_backend, client):
+    mock_backend.post("/api/v1/blockers").respond(
+        201,
+        json={"id": 1, "title": "Blocked", "description": None, "status": "opened", "task_id": 1, "key_focus_id": None},
+    )
+    result = await client.create_blocker(title="Blocked", task_id=1)
+    assert result["id"] == 1
+    assert result["task_id"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_blocker(mock_backend, client):
+    mock_backend.get("/api/v1/blockers/1").respond(
+        200,
+        json={"id": 1, "title": "Blocked", "description": None, "status": "opened", "task_id": 1, "key_focus_id": None},
+    )
+    result = await client.get_blocker(1)
+    assert result["title"] == "Blocked"
+
+
+@pytest.mark.asyncio
+async def test_list_blockers(mock_backend, client):
+    mock_backend.get("/api/v1/blockers").respond(
+        200,
+        json=[{"id": 1, "title": "B1", "description": None, "status": "opened", "task_id": 1, "key_focus_id": None}],
+    )
+    result = await client.list_blockers()
+    assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_blockers_filtered(mock_backend, client):
+    mock_backend.get("/api/v1/blockers").respond(
+        200,
+        json=[],
+    )
+    result = await client.list_blockers(status="resolved")
+    assert len(result) == 0
+
+
+@pytest.mark.asyncio
+async def test_update_blocker(mock_backend, client):
+    mock_backend.patch("/api/v1/blockers/1").respond(
+        200,
+        json={"id": 1, "title": "Blocked", "description": None, "status": "resolved", "task_id": 1, "key_focus_id": None},
+    )
+    result = await client.update_blocker(1, status="resolved")
+    assert result["status"] == "resolved"
+
+
+@pytest.mark.asyncio
+async def test_delete_blocker(mock_backend, client):
+    mock_backend.delete("/api/v1/blockers/1").respond(204)
+    result = await client.delete_blocker(1)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_list_task_blockers(mock_backend, client):
+    mock_backend.get("/api/v1/tasks/1/blockers").respond(
+        200,
+        json=[{"id": 1, "title": "B1", "description": None, "status": "opened", "task_id": 1, "key_focus_id": None}],
+    )
+    result = await client.list_task_blockers(1)
+    assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_task_key_focuses(mock_backend, client):
+    mock_backend.get("/api/v1/tasks/1/key-focuses").respond(
+        200,
+        json=[{"id": 1, "title": "KF1", "kind": "delivery", "status": "in_progress", "frequency": "weekly", "weekly_id": 1, "description": None, "task_count": 1, "blocker_count": 0}],
+    )
+    result = await client.list_task_key_focuses(1)
+    assert len(result) == 1
+    assert result[0]["title"] == "KF1"
+
+
+@pytest.mark.asyncio
+async def test_list_key_focus_blockers(mock_backend, client):
+    mock_backend.get("/api/v1/key-focuses/1/blockers").respond(
+        200,
+        json=[{"id": 1, "title": "B1", "description": None, "status": "opened", "task_id": None, "key_focus_id": 1}],
+    )
+    result = await client.list_key_focus_blockers(1)
+    assert len(result) == 1
+    assert result[0]["key_focus_id"] == 1
+
+
 # --- Error handling ---
 
 
