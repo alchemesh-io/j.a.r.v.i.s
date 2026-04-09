@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.models import Daily, DailyTask, Task
-from app.schemas.task import TaskCreate, TaskKeyFocusSummary, TaskResponse, TaskUpdate
+from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -20,23 +20,7 @@ def _get_week_bounds(date: datetime.date) -> tuple[datetime.date, datetime.date]
 
 
 def _task_to_response(task: Task) -> TaskResponse:
-    dates = sorted(entry.daily.date for entry in task.daily_entries)
-    key_focuses = [
-        TaskKeyFocusSummary(id=kf.id, title=kf.title, kind=kf.kind)
-        for kf in task.key_focuses
-    ]
-    return TaskResponse(
-        id=task.id,
-        source_type=task.source_type,
-        source_id=task.source_id,
-        title=task.title,
-        type=task.type,
-        status=task.status,
-        dates=dates,
-        note_count=len(task.notes),
-        key_focuses=key_focuses,
-        blocker_count=sum(1 for b in task.blockers if b.status.value == "opened"),
-    )
+    return TaskResponse.model_validate(task)
 
 
 def _load_task(db: Session, task_id: int) -> Task:

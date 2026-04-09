@@ -29,3 +29,15 @@ class Task(Base):
     blockers: Mapped[list["Blocker"]] = relationship(
         "Blocker", back_populates="task", cascade="all, delete-orphan"
     )
+
+    @property
+    def note_count(self) -> int:
+        return len(self.notes)
+
+    @property
+    def dates(self) -> list:
+        return sorted(entry.daily.date for entry in self.daily_entries)
+
+    @property
+    def blocker_count(self) -> int:
+        return sum(1 for b in self.blockers if b.status.value == "opened")
