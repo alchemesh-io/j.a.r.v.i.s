@@ -13,3 +13,6 @@ class Weekly(Base):
     dailies: Mapped[list["Daily"]] = relationship(
         "Daily", back_populates="weekly", cascade="all, delete-orphan"
     )
+    key_focuses: Mapped[list["KeyFocus"]] = relationship(
+        "KeyFocus", back_populates="weekly", cascade="all, delete-orphan"
+    )

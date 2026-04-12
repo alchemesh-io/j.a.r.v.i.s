@@ -16,6 +16,7 @@
     box-shadow var(--jads-transition-fast),
     transform var(--jads-transition-fast);
   min-height: 120px;
+  overflow: hidden;
 }
 
 .jads-task-card:hover {
@@ -217,6 +218,8 @@
   letter-spacing: 0.05em;
   border-radius: var(--jads-radius-sm);
   margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .jads-task-card--refinement .jads-task-card__type {
@@ -240,6 +243,8 @@
   align-items: center;
   gap: var(--jads-space-2);
   margin-top: var(--jads-space-2);
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 /* Actions area */
@@ -301,4 +306,54 @@
   color: #fff;
   background: var(--jads-color-accent-cyan, #00d4ff);
   border-radius: 7px;
+}
+
+/* Blocker button + badge */
+.jads-task-card__blockers-btn {
+  position: relative;
+}
+
+.jads-task-card__blocker-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  color: #fff;
+  background: #ef4444;
+  border-radius: 7px;
+}
+
+/* Key focus badges */
+.jads-task-card__kf-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0;
+  min-width: 0;
+}
+
+.jads-task-card__kf-badge {
+  font-size: 0.55rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 2px;
+  color: #fff;
+}
+
+/* Blocker indicator */
+.jads-task-card__blocker-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  font-size: 0.7rem;
+  color: #ef4444;
 }

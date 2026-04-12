@@ -4,7 +4,19 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 
-from app.routes import dailies, daily_tasks, gcal, jira, task_notes, tasks, weeklies
+from app.routes import (
+    blockers,
+    dailies,
+    daily_tasks,
+    gcal,
+    jira,
+    key_focuses,
+    task_blockers,
+    task_key_focuses,
+    task_notes,
+    tasks,
+    weeklies,
+)
 
 
 @asynccontextmanager
@@ -27,6 +39,10 @@ app.include_router(dailies.router, prefix="/api/v1")
 app.include_router(daily_tasks.router, prefix="/api/v1")
 app.include_router(jira.router, prefix="/api/v1")
 app.include_router(gcal.router, prefix="/api/v1")
+app.include_router(key_focuses.router, prefix="/api/v1")
+app.include_router(blockers.router, prefix="/api/v1")
+app.include_router(task_blockers.router, prefix="/api/v1")
+app.include_router(task_key_focuses.router, prefix="/api/v1")
 
 
 @app.get("/")

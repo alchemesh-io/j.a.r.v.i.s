@@ -39,12 +39,21 @@ import {
   createTaskNote,
   updateTaskNote,
   deleteTaskNote,
+  listTaskBlockers,
+  createTaskBlocker,
+  updateBlocker,
+  deleteBlocker,
+  listKeyFocuses,
+  addKeyFocusToTask,
+  removeKeyFocusFromTask,
   type Task,
   type TaskType,
   type JiraTicket,
   type CalendarEvent,
+  type KeyFocus,
 } from '../../api/client';
 import { NotePanel } from './NotePanel';
+import { BlockerPanel } from './BlockerPanel';
 import { EmptyState } from './EmptyState';
 import './TaskBoard.css';
 
@@ -246,6 +255,7 @@ function SortableTaskCard({
   onToggleStatus,
   onExpand,
   onNotes,
+  onBlockers,
 }: {
   task: Task;
   jiraProjectUrl?: string;
@@ -255,6 +265,7 @@ function SortableTaskCard({
   onToggleStatus: () => void;
   onExpand: () => void;
   onNotes: () => void;
+  onBlockers: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
@@ -284,6 +295,9 @@ function SortableTaskCard({
         onExpand={task.source_type ? onExpand : undefined}
         onNotes={onNotes}
         noteCount={task.note_count}
+        onBlockers={onBlockers}
+        blockerCount={task.blocker_count}
+        keyFocuses={task.key_focuses}
         dragListeners={listeners}
       />
     </div>
@@ -308,6 +322,7 @@ export default function TaskBoard() {
   const [formJira, setFormJira] = useState('');
   const [formDates, setFormDates] = useState<string[]>([]);
   const [formDateInput, setFormDateInput] = useState('');
+  const [formKeyFocusIds, setFormKeyFocusIds] = useState<Set<number>>(new Set());
 
   // Batch creation: list of items queued for creation
   interface PendingItem {
@@ -331,6 +346,7 @@ export default function TaskBoard() {
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
 
   const [notePanelTask, setNotePanelTask] = useState<Task | null>(null);
+  const [blockerPanelTask, setBlockerPanelTask] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
 
   const [showCalendar, setShowCalendar] = useState(false);
@@ -410,6 +426,18 @@ export default function TaskBoard() {
     queryFn: () => getDailyByDate(dateStr).catch(() => null),
   });
 
+  const { data: weeklyKeyFocuses = [] } = useQuery({
+    queryKey: ['key-focuses-weekly', dateStr],
+    queryFn: () => listKeyFocuses({ date: dateStr, scope: 'weekly', frequency: 'weekly' }),
+  });
+
+  const { data: quarterlyKeyFocuses = [] } = useQuery({
+    queryKey: ['key-focuses-quarterly', dateStr],
+    queryFn: () => listKeyFocuses({ date: dateStr, scope: 'quarterly', frequency: 'quarterly' }),
+  });
+
+  const relevantKeyFocuses = [...weeklyKeyFocuses, ...quarterlyKeyFocuses];
+
   const toggleStatusMutation = useMutation({
     mutationFn: (task: Task) =>
       updateTask(task.id, { status: task.status === 'done' ? 'created' : 'done' }),
@@ -456,6 +484,38 @@ export default function TaskBoard() {
     },
   });
 
+  // --- Blocker queries/mutations ---
+  const { data: taskBlockers = [] } = useQuery({
+    queryKey: ['task-blockers', blockerPanelTask?.id],
+    queryFn: () => listTaskBlockers(blockerPanelTask!.id),
+    enabled: !!blockerPanelTask,
+  });
+
+  const createBlockerMutation = useMutation({
+    mutationFn: ({ taskId, title }: { taskId: number; title: string }) =>
+      createTaskBlocker(taskId, { title }),
+    onSuccess: (_, { taskId }) => {
+      queryClient.invalidateQueries({ queryKey: ['task-blockers', taskId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+
+  const resolveBlockerMutation = useMutation({
+    mutationFn: (blockerId: number) => updateBlocker(blockerId, { status: 'resolved' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['task-blockers'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+
+  const deleteBlockerMutation = useMutation({
+    mutationFn: deleteBlocker,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['task-blockers'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+
   const reorderMutation = useMutation({
     mutationFn: ({
       dailyId,
@@ -480,6 +540,7 @@ export default function TaskBoard() {
     setFormJira('');
     setFormDates([]);
     setFormDateInput('');
+    setFormKeyFocusIds(new Set());
     setImportSource('manual');
     setJiraSearch('');
     setJiraProjectFilter('all');
@@ -625,6 +686,9 @@ export default function TaskBoard() {
       if (formDates.length > 0) {
         await assignTaskToDates(task.id, formDates);
       }
+      for (const kfId of formKeyFocusIds) {
+        await addKeyFocusToTask(task.id, kfId);
+      }
     }
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
     queryClient.invalidateQueries({ queryKey: ['daily'] });
@@ -658,8 +722,20 @@ export default function TaskBoard() {
       } catch { /* ignore */ }
     }
 
+    // Sync key focus associations
+    const oldKFIds = new Set(editingTask.key_focuses?.map((kf) => kf.id) ?? []);
+    const kfToAdd = [...formKeyFocusIds].filter((id) => !oldKFIds.has(id));
+    const kfToRemove = [...oldKFIds].filter((id) => !formKeyFocusIds.has(id));
+    for (const kfId of kfToAdd) {
+      await addKeyFocusToTask(editingTask.id, kfId);
+    }
+    for (const kfId of kfToRemove) {
+      await removeKeyFocusFromTask(editingTask.id, kfId);
+    }
+
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
     queryClient.invalidateQueries({ queryKey: ['daily'] });
+    queryClient.invalidateQueries({ queryKey: ['key-focuses'] });
     setEditingTask(null);
     resetForm();
   }
@@ -671,6 +747,7 @@ export default function TaskBoard() {
     setFormJira(task.source_id ?? '');
     setFormDates(task.dates ?? []);
     setFormDateInput('');
+    setFormKeyFocusIds(new Set(task.key_focuses?.map((kf) => kf.id) ?? []));
     setShowCreateForm(false);
   }
 
@@ -1252,6 +1329,60 @@ export default function TaskBoard() {
                     )}
                   </div>
 
+                  {relevantKeyFocuses.length > 0 && (
+                    <div className="task-board__form-key-focuses">
+                      <label className="task-board__form-label">Key Focuses</label>
+                      <div className="task-board__form-kf-list">
+                        {weeklyKeyFocuses.length > 0 && (
+                          <>
+                            <div className="task-board__form-kf-group">Weekly</div>
+                            {weeklyKeyFocuses.map((kf: KeyFocus) => (
+                              <label key={kf.id} className="task-board__form-kf-item">
+                                <input
+                                  type="checkbox"
+                                  checked={formKeyFocusIds.has(kf.id)}
+                                  onChange={() => {
+                                    setFormKeyFocusIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(kf.id)) next.delete(kf.id);
+                                      else next.add(kf.id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <span className="task-board__form-kf-kind" style={{ backgroundColor: { delivery: '#3b82f6', learning: '#22c55e', support: '#a855f7', operational: '#f97316', side_quest: '#06b6d4' }[kf.kind] }} />
+                                <span>{kf.title}</span>
+                              </label>
+                            ))}
+                          </>
+                        )}
+                        {quarterlyKeyFocuses.length > 0 && (
+                          <>
+                            <div className="task-board__form-kf-group">Quarterly</div>
+                            {quarterlyKeyFocuses.map((kf: KeyFocus) => (
+                              <label key={kf.id} className="task-board__form-kf-item">
+                                <input
+                                  type="checkbox"
+                                  checked={formKeyFocusIds.has(kf.id)}
+                                  onChange={() => {
+                                    setFormKeyFocusIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(kf.id)) next.delete(kf.id);
+                                      else next.add(kf.id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <span className="task-board__form-kf-kind" style={{ backgroundColor: { delivery: '#3b82f6', learning: '#22c55e', support: '#a855f7', operational: '#f97316', side_quest: '#06b6d4' }[kf.kind] }} />
+                                <span>{kf.title}</span>
+                              </label>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="task-board__form-actions">
                     {editingTask ? (
                       <Button onClick={handleSaveEdit}>Save</Button>
@@ -1455,6 +1586,7 @@ export default function TaskBoard() {
                   onToggleStatus={() => toggleStatusMutation.mutate(task)}
                   onExpand={() => handleExpandBoardTask(task)}
                   onNotes={() => setNotePanelTask(task)}
+                  onBlockers={() => setBlockerPanelTask(task)}
                 />
               ))}
               {visibleTasks.length === 0 && (
@@ -1476,6 +1608,16 @@ export default function TaskBoard() {
             onCreate={(content) => createNoteMutation.mutate({ taskId: notePanelTask.id, content })}
             onUpdate={(noteId, content) => updateNoteMutation.mutate({ taskId: notePanelTask.id, noteId, content })}
             onDelete={(noteId) => deleteNoteMutation.mutate({ taskId: notePanelTask.id, noteId })}
+          />
+        )}
+        {blockerPanelTask && (
+          <BlockerPanel
+            title={blockerPanelTask.title}
+            blockers={taskBlockers}
+            onClose={() => setBlockerPanelTask(null)}
+            onCreate={(title) => createBlockerMutation.mutate({ taskId: blockerPanelTask.id, title })}
+            onResolve={(blockerId) => resolveBlockerMutation.mutate(blockerId)}
+            onDelete={(blockerId) => deleteBlockerMutation.mutate(blockerId)}
           />
         )}
       </section>
