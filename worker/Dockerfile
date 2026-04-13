@@ -53,4 +53,4 @@ WORKDIR /home/node/jarvis
 
 EXPOSE 3000 8080
 
-ENTRYPOINT ["/home/worker/entrypoint.sh"]
+ENTRYPOINT ["/home/node/entrypoint.sh"]
