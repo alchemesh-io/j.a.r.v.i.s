@@ -165,6 +165,7 @@ def create_worker_service(worker_id: str) -> None:
                 "worker-id": worker_id,
             },
             ports=[
+                client.V1ServicePort(name="ssh", port=2222, target_port=2222),
                 client.V1ServicePort(name="ui", port=3000, target_port=3000),
                 client.V1ServicePort(name="status", port=8080, target_port=8080),
             ],

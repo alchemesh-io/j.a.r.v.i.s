@@ -481,17 +481,17 @@ setup-worker-ssh:
 	else \
 		mkdir -p $(HOME)/.ssh; \
 		echo "" >> $(HOME)/.ssh/config; \
-		echo "# JARVIS worker pods — tunnel via kubectl exec (requires remote.SSH.useExecServer=true in VSCode)" >> $(HOME)/.ssh/config; \
+		echo "# JARVIS worker pods — SSH via kubectl exec to sshd on port 2222" >> $(HOME)/.ssh/config; \
 		echo "Host jarvis-worker-*" >> $(HOME)/.ssh/config; \
-		echo "    ProxyCommand $(KUBECTL_PATH) exec -i -n jarvis %n -c worker -- /bin/cat" >> $(HOME)/.ssh/config; \
+		echo '    ProxyCommand $(KUBECTL_PATH) exec -i -n jarvis %n -c worker -- bash -c "exec 3<>/dev/tcp/127.0.0.1/2222 && cat <&3 & cat >&3"' >> $(HOME)/.ssh/config; \
 		echo "    User node" >> $(HOME)/.ssh/config; \
+		echo "    Port 2222" >> $(HOME)/.ssh/config; \
 		echo "    StrictHostKeyChecking no" >> $(HOME)/.ssh/config; \
 		echo "    UserKnownHostsFile /dev/null" >> $(HOME)/.ssh/config; \
 		echo "  Added jarvis-worker-* entry to ~/.ssh/config (kubectl: $(KUBECTL_PATH))"; \
 	fi
 	@echo ""
-	@echo "==> VSCode Remote-SSH will now route jarvis-worker-* through kubectl."
-	@echo "    Required VSCode setting: remote.SSH.useExecServer = true"
+	@echo "==> VSCode Remote-SSH will route jarvis-worker-* through kubectl + sshd."
 
 ## Build the worker Docker image
 build-worker:
@@ -500,14 +500,16 @@ build-worker:
 	docker build -t jarvis-worker:$(LOCAL_TAG) ./worker
 	@echo "==> Worker image built: jarvis-worker:$(LOCAL_TAG)"
 
-## Sync Claude config files from host to the jarvis-claude-config ConfigMap
+## Sync Claude config files and SSH public key to the jarvis-claude-config ConfigMap
 sync-claude-config: _check-prereqs
 	@echo "==> Syncing Claude config to jarvis-claude-config ConfigMap..."
+	$(eval SSH_KEY := $(shell [ -f $(HOME)/.ssh/id_ed25519.pub ] && echo "$(HOME)/.ssh/id_ed25519.pub" || echo "$(HOME)/.ssh/id_rsa.pub"))
 	kubectl create configmap jarvis-claude-config -n jarvis \
 		--from-file=policy-limits.json=$(HOME)/.claude/policy-limits.json \
 		--from-file=remote-settings.json=$(HOME)/.claude/remote-settings.json \
 		--from-file=claude.json=$(HOME)/.claude.json \
 		--from-file=settings.json=$(HOME)/.claude/settings.json \
+		$(if $(wildcard $(SSH_KEY)),--from-file=authorized_keys=$(SSH_KEY)) \
 		--dry-run=client -o yaml | kubectl apply -f -
 	@echo "==> ConfigMap updated. Note: running workers need restart to pick up changes."
 
@@ -520,6 +522,8 @@ _sync-claude-config:
 		[ -f "$(HOME)/.claude/remote-settings.json" ] && ARGS="$$ARGS --from-file=remote-settings.json=$(HOME)/.claude/remote-settings.json"; \
 		[ -f "$(HOME)/.claude.json" ] && ARGS="$$ARGS --from-file=claude.json=$(HOME)/.claude.json"; \
 		[ -f "$(HOME)/.claude/settings.json" ] && ARGS="$$ARGS --from-file=settings.json=$(HOME)/.claude/settings.json"; \
+		[ -f "$(HOME)/.ssh/id_ed25519.pub" ] && ARGS="$$ARGS --from-file=authorized_keys=$(HOME)/.ssh/id_ed25519.pub" || \
+		[ -f "$(HOME)/.ssh/id_rsa.pub" ] && ARGS="$$ARGS --from-file=authorized_keys=$(HOME)/.ssh/id_rsa.pub"; \
 		kubectl create namespace jarvis --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null; \
 		kubectl create configmap jarvis-claude-config -n jarvis $$ARGS --dry-run=client -o yaml | kubectl apply -f -; \
 	else \
