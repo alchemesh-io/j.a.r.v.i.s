@@ -64,8 +64,10 @@ echo "[worker] Starting status server on port 8080..."
 node ~/status-server/index.js &
 STATUS_PID=$!
 
-echo "[worker] Starting Claude Code session (ID: ${WORKER_ID})..."
-claude --session-id "$WORKER_ID" --resume &
+# Convert 32-char hex worker ID to UUID format (8-4-4-4-12) for --session-id
+SESSION_UUID="${WORKER_ID:0:8}-${WORKER_ID:8:4}-${WORKER_ID:12:4}-${WORKER_ID:16:4}-${WORKER_ID:20:12}"
+echo "[worker] Starting Claude Code session (UUID: ${SESSION_UUID})..."
+claude --resume "$SESSION_UUID" &
 CLAUDE_PID=$!
 
 # Export PIDs for status server
