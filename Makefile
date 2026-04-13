@@ -522,8 +522,8 @@ _sync-claude-config:
 		[ -f "$(HOME)/.claude/remote-settings.json" ] && ARGS="$$ARGS --from-file=remote-settings.json=$(HOME)/.claude/remote-settings.json"; \
 		[ -f "$(HOME)/.claude.json" ] && ARGS="$$ARGS --from-file=claude.json=$(HOME)/.claude.json"; \
 		[ -f "$(HOME)/.claude/settings.json" ] && ARGS="$$ARGS --from-file=settings.json=$(HOME)/.claude/settings.json"; \
-		[ -f "$(HOME)/.ssh/id_ed25519.pub" ] && ARGS="$$ARGS --from-file=authorized_keys=$(HOME)/.ssh/id_ed25519.pub" || \
-		[ -f "$(HOME)/.ssh/id_rsa.pub" ] && ARGS="$$ARGS --from-file=authorized_keys=$(HOME)/.ssh/id_rsa.pub"; \
+		if [ -f "$(HOME)/.ssh/id_ed25519.pub" ]; then ARGS="$$ARGS --from-file=authorized_keys=$(HOME)/.ssh/id_ed25519.pub"; \
+		elif [ -f "$(HOME)/.ssh/id_rsa.pub" ]; then ARGS="$$ARGS --from-file=authorized_keys=$(HOME)/.ssh/id_rsa.pub"; fi; \
 		kubectl create namespace jarvis --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null; \
 		kubectl create configmap jarvis-claude-config -n jarvis $$ARGS --dry-run=client -o yaml | kubectl apply -f -; \
 	else \
