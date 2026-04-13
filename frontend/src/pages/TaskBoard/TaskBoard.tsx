@@ -1621,7 +1621,7 @@ export default function TaskBoard() {
                   onBlockers={() => setBlockerPanelTask(task)}
                   onPlayClick={!task.worker ? () => setWorkerCreateTask(task) : undefined}
                   onWorkerClick={task.worker ? () => window.open(`http://jaw.jarvis.io/${task.worker!.id}`, '_blank') : undefined}
-                  onVscodeClick={task.worker && task.worker.effective_state !== 'archived' ? () => window.open(`vscode://vscode-remote/k8s-container+jarvis-worker-${task.worker!.id}/jarvis/home/worker/jarvis`, '_blank') : undefined}
+                  onVscodeClick={task.worker && task.worker.effective_state !== 'archived' ? () => window.location.href = `vscode://ms-kubernetes-tools.vscode-kubernetes-tools/attach?pod=jarvis-worker-${task.worker!.id}&namespace=jarvis&container=worker` : undefined}
                 />
               ))}
               {visibleTasks.length === 0 && (
