@@ -29,30 +29,27 @@ RUN npm install -g @anthropic-ai/claude-code@1.0.3
 RUN curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry/main/scripts/get-arctl | bash \
     || echo "arctl install failed — continuing without it"
 
-# Create non-root user
-RUN groupadd -g 1000 worker && \
-    useradd -u 1000 -g worker -m -s /bin/bash worker
-
-# Create directories
-RUN mkdir -p /home/worker/jarvis /home/worker/.claude && \
-    chown -R worker:worker /home/worker
+# Reuse the existing node user (UID 1000) from node:22-slim
+# Create working directories under its home
+RUN mkdir -p /home/node/jarvis /home/node/.claude && \
+    chown -R node:node /home/node
 
 # Copy worker UI built assets
-COPY --from=worker-ui-build --chown=worker:worker /app/dist/ /home/worker/worker-ui/
+COPY --from=worker-ui-build --chown=node:node /app/dist/ /home/node/worker-ui/
 
 # Install serve for static file hosting
 RUN npm install -g serve
 
 # Copy status server
-COPY --chown=worker:worker status-server/ /home/worker/status-server/
+COPY --chown=node:node status-server/ /home/node/status-server/
 
 # Copy entrypoint
-COPY --chown=worker:worker entrypoint.sh /home/worker/entrypoint.sh
-RUN chmod +x /home/worker/entrypoint.sh
+COPY --chown=node:node entrypoint.sh /home/node/entrypoint.sh
+RUN chmod +x /home/node/entrypoint.sh
 
-# Switch to non-root user
-USER worker
-WORKDIR /home/worker/jarvis
+# Switch to non-root user (UID 1000)
+USER node
+WORKDIR /home/node/jarvis
 
 EXPOSE 3000 8080
 

@@ -529,6 +529,7 @@ dependencies = [
     { name = "google-api-python-client" },
     { name = "google-auth" },
     { name = "google-auth-oauthlib" },
+    { name = "httpx" },
     { name = "jira" },
     { name = "kubernetes" },
     { name = "pydantic" },
@@ -539,7 +540,6 @@ dependencies = [
 
 [package.dependency-groups]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
@@ -551,6 +551,7 @@ requires-dist = [
     { name = "google-api-python-client", specifier = ">=2.193.0" },
     { name = "google-auth", specifier = ">=2.49.1" },
     { name = "google-auth-oauthlib", specifier = ">=1.3.1" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "jira", specifier = ">=3.10.5" },
     { name = "kubernetes", specifier = ">=31.0.0" },
     { name = "pydantic", specifier = "==2.12.5" },
@@ -561,7 +562,6 @@ requires-dist = [
 
 [package.metadata.dependency-groups]
 dev = [
-    { name = "httpx", specifier = ">=0.27.0" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
 ]
