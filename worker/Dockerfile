@@ -23,7 +23,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
 # Install Claude Code (pinned version)
-RUN npm install -g @anthropic-ai/claude-code@1.0.3
+RUN npm install -g @anthropic-ai/claude-code@2.1.104
 
 # Install arctl
 RUN curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry/main/scripts/get-arctl | bash \

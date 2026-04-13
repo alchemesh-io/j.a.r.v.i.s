@@ -18,7 +18,7 @@ DATA_MOUNT_TARGET   := /mnt/jarvis-data
 GHCR_ORG            := alchemesh-io
 
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp build-worker sync-claude-config _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update _tls-secret
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp build-worker sync-claude-config _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update _tls-secret
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -102,7 +102,7 @@ cluster-status: _check-prereqs
 # ---------------------------------------------------------------------------
 
 ## Pull latest published images from GHCR, load into Minikube, apply ArgoCD App CRs, hard sync
-deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaar-secrets _helm-dep-update
+deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update
 	@echo "==> Pulling latest images from GHCR..."
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
@@ -119,7 +119,7 @@ deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaar-secrets _hel
 	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
 ## Build images locally, load into Minikube, apply ArgoCD App CRs, hard sync
-deploy-local: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaar-secrets _helm-dep-update
+deploy-local: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update
 	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
 	@echo "==> Building Docker images locally (tag: $(LOCAL_TAG))..."
 	docker build -t jarvis-backend:$(LOCAL_TAG) ./backend
@@ -214,6 +214,19 @@ _deploy-secrets:
 	else \
 		echo "==> No $(SECRETS_FILE) found — skipping secrets deployment."; \
 		echo "    Copy secrets/backend-secret.example.yaml to $(SECRETS_FILE) and fill in values."; \
+	fi
+
+JAW_SECRETS_FILE := secrets/jaw-secret.yaml
+
+## Apply the local JAW (worker) secret manifest (gitignored, not managed by ArgoCD)
+_deploy-jaw-secrets:
+	@if [ -f $(JAW_SECRETS_FILE) ]; then \
+		echo "==> Applying JAW secret from $(JAW_SECRETS_FILE)..."; \
+		kubectl create namespace jarvis --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null; \
+		kubectl apply -f $(JAW_SECRETS_FILE); \
+	else \
+		echo "==> No $(JAW_SECRETS_FILE) found — skipping JAW secrets deployment."; \
+		echo "    Copy secrets/jaw-secret.example.yaml to $(JAW_SECRETS_FILE) and fill in values."; \
 	fi
 
 _mount-start:
@@ -475,6 +488,22 @@ sync-claude-config: _check-prereqs
 		--from-file=settings.json=$(HOME)/.claude/settings.json \
 		--dry-run=client -o yaml | kubectl apply -f -
 	@echo "==> ConfigMap updated. Note: running workers need restart to pick up changes."
+
+## Auto-sync Claude config during deploy — skips silently if files are missing
+_sync-claude-config:
+	@if [ -f "$(HOME)/.claude/settings.json" ] && [ -f "$(HOME)/.claude.json" ]; then \
+		echo "==> Syncing Claude config to jarvis-claude-config ConfigMap..."; \
+		ARGS=""; \
+		[ -f "$(HOME)/.claude/policy-limits.json" ] && ARGS="$$ARGS --from-file=policy-limits.json=$(HOME)/.claude/policy-limits.json"; \
+		[ -f "$(HOME)/.claude/remote-settings.json" ] && ARGS="$$ARGS --from-file=remote-settings.json=$(HOME)/.claude/remote-settings.json"; \
+		[ -f "$(HOME)/.claude.json" ] && ARGS="$$ARGS --from-file=claude.json=$(HOME)/.claude.json"; \
+		[ -f "$(HOME)/.claude/settings.json" ] && ARGS="$$ARGS --from-file=settings.json=$(HOME)/.claude/settings.json"; \
+		kubectl create namespace jarvis --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null; \
+		kubectl create configmap jarvis-claude-config -n jarvis $$ARGS --dry-run=client -o yaml | kubectl apply -f -; \
+	else \
+		echo "==> No Claude config files found at ~/.claude/ — skipping ConfigMap sync."; \
+		echo "    Run 'make sync-claude-config' manually after setting up Claude Code."; \
+	fi
 
 # ---------------------------------------------------------------------------
 # Tests

@@ -90,8 +90,18 @@ def create_worker_pod(
                             name="ANTHROPIC_API_KEY",
                             value_from=client.V1EnvVarSource(
                                 secret_key_ref=client.V1SecretKeySelector(
-                                    name="jarvis-backend-secret",
+                                    name="jarvis-jaw-secret",
                                     key="ANTHROPIC_API_KEY",
+                                    optional=True,
+                                )
+                            ),
+                        ),
+                        client.V1EnvVar(
+                            name="CLAUDE_CODE_OAUTH_TOKEN",
+                            value_from=client.V1EnvVarSource(
+                                secret_key_ref=client.V1SecretKeySelector(
+                                    name="jarvis-jaw-secret",
+                                    key="CLAUDE_CODE_OAUTH_TOKEN",
                                     optional=True,
                                 )
                             ),
@@ -100,7 +110,7 @@ def create_worker_pod(
                             name="GITHUB_TOKEN",
                             value_from=client.V1EnvVarSource(
                                 secret_key_ref=client.V1SecretKeySelector(
-                                    name="jarvis-backend-secret",
+                                    name="jarvis-jaw-secret",
                                     key="GITHUB_TOKEN",
                                     optional=True,
                                 )
