@@ -16,9 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
     ca-certificates \
-    openssh-server \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /run/sshd
+    && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -31,18 +29,10 @@ RUN npm install -g @anthropic-ai/claude-code@2.1.104
 RUN curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry/main/scripts/get-arctl | bash \
     || echo "arctl install failed — continuing without it"
 
-# Configure sshd for non-root on port 2222
-RUN sed -i 's/#Port 22/Port 2222/' /etc/ssh/sshd_config && \
-    sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config && \
-    sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config && \
-    sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config && \
-    echo "HostKey /home/node/.ssh/ssh_host_ed25519_key" >> /etc/ssh/sshd_config
-
 # Reuse the existing node user (UID 1000) from node:22-slim
-# Create working directories and SSH setup
-RUN mkdir -p /home/node/jarvis /home/node/.claude /home/node/.ssh && \
-    chown -R node:node /home/node && \
-    passwd -d node
+# Create working directories under its home
+RUN mkdir -p /home/node/jarvis /home/node/.claude && \
+    chown -R node:node /home/node
 
 # Copy worker UI built assets
 COPY --from=worker-ui-build --chown=node:node /app/dist/ /home/node/worker-ui/
@@ -61,6 +51,6 @@ RUN chmod +x /home/node/entrypoint.sh
 USER node
 WORKDIR /home/node/jarvis
 
-EXPOSE 2222 3000 8080
+EXPOSE 3000 8080
 
 ENTRYPOINT ["/home/node/entrypoint.sh"]

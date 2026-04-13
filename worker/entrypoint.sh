@@ -36,7 +36,7 @@ if [ -n "$BACKEND_URL" ]; then
     fi
 fi
 
-# Step 3: Clone repositories
+# Step 4: Clone repositories
 if [ -n "$REPOSITORIES" ]; then
     echo "[worker] Cloning repositories..."
     IFS=',' read -ra REPOS <<< "$REPOSITORIES"
@@ -58,26 +58,12 @@ if [ -n "$REPOSITORIES" ]; then
     done
 fi
 
-# Step 4: Pull skills from JAAR
+# Step 5: Pull skills from JAAR
 if [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
     echo "[worker] Pulling skills from JAAR..."
     arctl skill pull --all --registry "$JAAR_URL" 2>&1 || \
         echo "[worker] WARNING: Failed to pull skills from JAAR"
 fi
-
-# Step 5: Start SSH server for VSCode Remote-SSH
-echo "[worker] Starting SSH server on port 2222..."
-# Generate host key if not present
-if [ ! -f ~/.ssh/ssh_host_ed25519_key ]; then
-    ssh-keygen -t ed25519 -f ~/.ssh/ssh_host_ed25519_key -N "" -q
-fi
-# Inject authorized keys from ConfigMap if available
-if [ -f /init-claude-config/authorized_keys ]; then
-    cp /init-claude-config/authorized_keys ~/.ssh/authorized_keys
-    chmod 600 ~/.ssh/authorized_keys
-fi
-/usr/sbin/sshd -f /etc/ssh/sshd_config -D -e &
-SSHD_PID=$!
 
 # Step 6: Start all processes
 echo "[worker] Starting worker UI on port 3000..."
@@ -107,10 +93,10 @@ CLAUDE_PID=$!
 # Write PID for status server
 echo "$CLAUDE_PID" > /tmp/claude.pid
 
-echo "[worker] All processes started. SSHD PID=$SSHD_PID, Claude PID=$CLAUDE_PID, Status PID=$STATUS_PID, UI PID=$UI_PID"
+echo "[worker] All processes started. Claude PID=$CLAUDE_PID, Status PID=$STATUS_PID, UI PID=$UI_PID"
 
 # Keep the pod alive — wait for UI or status server to exit
 wait $UI_PID $STATUS_PID
 echo "[worker] A process exited, shutting down..."
-kill $SSHD_PID $STATUS_PID $CLAUDE_PID $UI_PID 2>/dev/null || true
+kill $STATUS_PID $CLAUDE_PID $UI_PID 2>/dev/null || true
 wait
