@@ -18,7 +18,7 @@ DATA_MOUNT_TARGET   := /mnt/jarvis-data
 GHCR_ORG            := alchemesh-io
 
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp build-worker sync-claude-config _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update _tls-secret
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp build-worker setup-worker-ssh sync-claude-config _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update _tls-secret
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -102,7 +102,7 @@ cluster-status: _check-prereqs
 # ---------------------------------------------------------------------------
 
 ## Pull latest published images from GHCR, load into Minikube, apply ArgoCD App CRs, hard sync
-deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update
+deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config setup-worker-ssh _helm-dep-update
 	@echo "==> Pulling latest images from GHCR..."
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
@@ -119,7 +119,7 @@ deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _depl
 	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
 ## Build images locally, load into Minikube, apply ArgoCD App CRs, hard sync
-deploy-local: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update
+deploy-local: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config setup-worker-ssh _helm-dep-update
 	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
 	@echo "==> Building Docker images locally (tag: $(LOCAL_TAG))..."
 	docker build -t jarvis-backend:$(LOCAL_TAG) ./backend
@@ -470,6 +470,26 @@ db-restore:
 # ---------------------------------------------------------------------------
 # Worker
 # ---------------------------------------------------------------------------
+
+## Configure SSH for VSCode Remote-SSH to worker pods via kubectl
+setup-worker-ssh:
+	@echo "==> Configuring SSH for JARVIS worker pods..."
+	@if grep -q "Host jarvis-worker-\*" $(HOME)/.ssh/config 2>/dev/null; then \
+		echo "  SSH config for jarvis-worker-* already exists, skipping."; \
+	else \
+		mkdir -p $(HOME)/.ssh; \
+		echo "" >> $(HOME)/.ssh/config; \
+		echo "# JARVIS worker pods — tunnel via kubectl exec" >> $(HOME)/.ssh/config; \
+		echo "Host jarvis-worker-*" >> $(HOME)/.ssh/config; \
+		echo "    ProxyCommand kubectl exec -i -n jarvis %n -c worker -- /bin/sh" >> $(HOME)/.ssh/config; \
+		echo "    User node" >> $(HOME)/.ssh/config; \
+		echo "    StrictHostKeyChecking no" >> $(HOME)/.ssh/config; \
+		echo "    UserKnownHostsFile /dev/null" >> $(HOME)/.ssh/config; \
+		echo "  Added jarvis-worker-* entry to ~/.ssh/config"; \
+	fi
+	@echo ""
+	@echo "==> VSCode Remote-SSH will now route jarvis-worker-* through kubectl."
+	@echo "    Note: VSCode setting 'remote.SSH.useExecServer' must be enabled."
 
 ## Build the worker Docker image
 build-worker:

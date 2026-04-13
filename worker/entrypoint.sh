@@ -15,7 +15,17 @@ else
     echo "[worker] No Claude config volume found, skipping config copy"
 fi
 
-# Step 2: Configure JARVIS MCP server in Claude Code settings
+# Step 2: Pre-trust the workspace so Claude Code skips the trust dialog
+WORKSPACE="$HOME/jarvis"
+CLAUDE_JSON="$HOME/.claude.json"
+if [ -f "$CLAUDE_JSON" ]; then
+    jq --arg ws "$WORKSPACE" '.projects[$ws].hasTrustDialogAccepted = true' "$CLAUDE_JSON" > /tmp/claude.json && mv /tmp/claude.json "$CLAUDE_JSON"
+else
+    echo "{\"projects\":{\"$WORKSPACE\":{\"hasTrustDialogAccepted\":true}}}" > "$CLAUDE_JSON"
+fi
+echo "[worker] Workspace $WORKSPACE pre-trusted"
+
+# Step 3: Configure JARVIS MCP server in Claude Code settings
 if [ -n "$BACKEND_URL" ]; then
     echo "[worker] Configuring JARVIS MCP server..."
     MCP_CONFIG="{\"mcpServers\":{\"jarvis\":{\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-fetch\"],\"env\":{\"BACKEND_URL\":\"$BACKEND_URL\"}}}}"
@@ -73,6 +83,7 @@ CLAUDE_FIFO="/tmp/claude-input"
 mkfifo "$CLAUDE_FIFO"
 echo "[worker] Starting Claude Code session (UUID: ${SESSION_UUID}) in stream mode..."
 cat "$CLAUDE_FIFO" | claude --resume "$SESSION_UUID" \
+    --dangerously-skip-permissions \
     --print \
     --input-format stream-json \
     --output-format stream-json \

@@ -1621,7 +1621,7 @@ export default function TaskBoard() {
                   onBlockers={() => setBlockerPanelTask(task)}
                   onPlayClick={!task.worker ? () => setWorkerCreateTask(task) : undefined}
                   onWorkerClick={task.worker ? () => window.open(`http://jaw.jarvis.io/${task.worker!.id}`, '_blank') : undefined}
-                  onVscodeClick={task.worker && task.worker.effective_state !== 'archived' ? () => window.location.href = `vscode://vscode-remote/ssh-remote+jarvis-worker-${task.worker!.id}.jarvis.svc/home/node/jarvis` : undefined}
+                  onVscodeClick={task.worker && task.worker.effective_state !== 'archived' ? () => window.location.href = `vscode://vscode-remote/ssh-remote+jarvis-worker-${task.worker!.id}/home/node/jarvis` : undefined}
                 />
               ))}
               {visibleTasks.length === 0 && (
