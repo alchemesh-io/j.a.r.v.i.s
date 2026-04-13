@@ -9,6 +9,8 @@ data:
   DATABASE_URL: {{ .Values.backend.config.databaseUrl | default "sqlite:////data/jarvis.db" | quote }}
   APP_TITLE: {{ .Values.backend.config.appTitle | default "J.A.R.V.I.S" | quote }}
   DEBUG: {{ .Values.backend.config.debug | default "false" | quote }}
+  WORKER_IMAGE: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
+  WORKER_IMAGE_PULL_POLICY: {{ .Values.worker.image.pullPolicy | default "IfNotPresent" | quote }}
   {{- if .Values.backend.config.jiraProjectUrl }}
   JIRA_PROJECT_URL: {{ .Values.backend.config.jiraProjectUrl | quote }}
   {{- end }}

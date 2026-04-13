@@ -51,6 +51,7 @@ def create_worker_pod(
     repositories: list[dict[str, str]],
     resource_requests: dict[str, str] | None = None,
     resource_limits: dict[str, str] | None = None,
+    image_pull_policy: str = "IfNotPresent",
 ) -> None:
     """Create a worker pod in the jarvis namespace."""
     if not _init_client():
@@ -76,6 +77,7 @@ def create_worker_pod(
                 client.V1Container(
                     name="worker",
                     image=worker_image,
+                    image_pull_policy=image_pull_policy,
                     ports=[
                         client.V1ContainerPort(container_port=3000, name="ui"),
                         client.V1ContainerPort(container_port=8080, name="status"),

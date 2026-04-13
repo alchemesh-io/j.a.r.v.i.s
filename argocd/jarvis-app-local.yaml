@@ -29,6 +29,11 @@ spec:
             repository: jarvis
             tag: local
             pullPolicy: Never
+        worker:
+          image:
+            repository: jarvis-worker
+            tag: local
+            pullPolicy: Never
   destination:
     server: https://kubernetes.default.svc
     namespace: jarvis
