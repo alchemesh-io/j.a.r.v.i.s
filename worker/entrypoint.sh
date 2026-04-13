@@ -64,20 +64,28 @@ echo "[worker] Starting status server on port 8080..."
 node ~/status-server/index.js &
 STATUS_PID=$!
 
-# Convert 32-char hex worker ID to UUID format (8-4-4-4-12) for --session-id
+# Convert 32-char hex worker ID to UUID format (8-4-4-4-12)
 SESSION_UUID="${WORKER_ID:0:8}-${WORKER_ID:8:4}-${WORKER_ID:12:4}-${WORKER_ID:16:4}-${WORKER_ID:20:12}"
-echo "[worker] Starting Claude Code session (UUID: ${SESSION_UUID})..."
-claude --resume "$SESSION_UUID" &
+
+# Start Claude Code in non-interactive streaming mode via a named pipe.
+# The chat UI (or any client) can write JSON messages to the pipe to drive the session.
+CLAUDE_FIFO="/tmp/claude-input"
+mkfifo "$CLAUDE_FIFO"
+echo "[worker] Starting Claude Code session (UUID: ${SESSION_UUID}) in stream mode..."
+cat "$CLAUDE_FIFO" | claude --resume "$SESSION_UUID" \
+    --print \
+    --input-format stream-json \
+    --output-format stream-json \
+    > /tmp/claude-output.log 2>&1 &
 CLAUDE_PID=$!
 
-# Export PIDs for status server
-export CLAUDE_PID
+# Write PID for status server
 echo "$CLAUDE_PID" > /tmp/claude.pid
 
 echo "[worker] All processes started. Claude PID=$CLAUDE_PID, Status PID=$STATUS_PID, UI PID=$UI_PID"
 
-# Wait for any process to exit
-wait -n
+# Keep the pod alive — wait for UI or status server to exit
+wait $UI_PID $STATUS_PID
 echo "[worker] A process exited, shutting down..."
 kill $STATUS_PID $CLAUDE_PID $UI_PID 2>/dev/null || true
 wait
