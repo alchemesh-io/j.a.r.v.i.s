@@ -5,6 +5,8 @@ from app.models.enums import (
     KeyFocusStatus,
     TaskStatus,
     TaskType,
+    WorkerState,
+    WorkerType,
 )
 from app.models.weekly import Weekly
 from app.models.daily import Daily
@@ -14,6 +16,9 @@ from app.models.task_note import TaskNote
 from app.models.key_focus import KeyFocus
 from app.models.task_key_focus import TaskKeyFocus
 from app.models.blocker import Blocker
+from app.models.repository import Repository
+from app.models.worker_repository import worker_repository
+from app.models.worker import Worker
 
 __all__ = [
     "BlockerStatus",
@@ -22,6 +27,8 @@ __all__ = [
     "KeyFocusStatus",
     "TaskStatus",
     "TaskType",
+    "WorkerState",
+    "WorkerType",
     "Weekly",
     "Daily",
     "Task",
@@ -30,4 +37,7 @@ __all__ = [
     "KeyFocus",
     "TaskKeyFocus",
     "Blocker",
+    "Repository",
+    "worker_repository",
+    "Worker",
 ]

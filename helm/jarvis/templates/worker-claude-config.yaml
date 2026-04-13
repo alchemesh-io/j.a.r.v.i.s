@@ -1,0 +1,22 @@
+{{- if .Values.worker.claudeConfig.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jarvis-claude-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-worker
+data:
+  {{- if .Values.worker.claudeConfig.policyLimits }}
+  policy-limits.json: {{ .Values.worker.claudeConfig.policyLimits | quote }}
+  {{- end }}
+  {{- if .Values.worker.claudeConfig.remoteSettings }}
+  remote-settings.json: {{ .Values.worker.claudeConfig.remoteSettings | quote }}
+  {{- end }}
+  {{- if .Values.worker.claudeConfig.claudeJson }}
+  claude.json: {{ .Values.worker.claudeConfig.claudeJson | quote }}
+  {{- end }}
+  {{- if .Values.worker.claudeConfig.settings }}
+  settings.json: {{ .Values.worker.claudeConfig.settings | quote }}
+  {{- end }}
+{{- end }}

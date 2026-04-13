@@ -46,11 +46,14 @@ import {
   listKeyFocuses,
   addKeyFocusToTask,
   removeKeyFocusFromTask,
+  createWorker,
+  listRepositories,
   type Task,
   type TaskType,
   type JiraTicket,
   type CalendarEvent,
   type KeyFocus,
+  type Repository,
 } from '../../api/client';
 import { NotePanel } from './NotePanel';
 import { BlockerPanel } from './BlockerPanel';
@@ -256,6 +259,9 @@ function SortableTaskCard({
   onExpand,
   onNotes,
   onBlockers,
+  onPlayClick,
+  onWorkerClick,
+  onVscodeClick,
 }: {
   task: Task;
   jiraProjectUrl?: string;
@@ -266,6 +272,9 @@ function SortableTaskCard({
   onExpand: () => void;
   onNotes: () => void;
   onBlockers: () => void;
+  onPlayClick?: () => void;
+  onWorkerClick?: () => void;
+  onVscodeClick?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
@@ -299,6 +308,10 @@ function SortableTaskCard({
         blockerCount={task.blocker_count}
         keyFocuses={task.key_focuses}
         dragListeners={listeners}
+        worker={task.worker ?? undefined}
+        onPlayClick={onPlayClick}
+        onWorkerClick={onWorkerClick}
+        onVscodeClick={onVscodeClick}
       />
     </div>
   );
@@ -348,6 +361,25 @@ export default function TaskBoard() {
   const [notePanelTask, setNotePanelTask] = useState<Task | null>(null);
   const [blockerPanelTask, setBlockerPanelTask] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+
+  // Worker creation from task card
+  const [workerCreateTask, setWorkerCreateTask] = useState<Task | null>(null);
+  const [workerRepoIds, setWorkerRepoIds] = useState<number[]>([]);
+
+  const { data: repositories = [] } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: listRepositories,
+    enabled: workerCreateTask !== null,
+  });
+
+  const createWorkerMutation = useMutation({
+    mutationFn: createWorker,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setWorkerCreateTask(null);
+      setWorkerRepoIds([]);
+    },
+  });
 
   const [showCalendar, setShowCalendar] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -1587,6 +1619,9 @@ export default function TaskBoard() {
                   onExpand={() => handleExpandBoardTask(task)}
                   onNotes={() => setNotePanelTask(task)}
                   onBlockers={() => setBlockerPanelTask(task)}
+                  onPlayClick={!task.worker ? () => setWorkerCreateTask(task) : undefined}
+                  onWorkerClick={task.worker ? () => window.open(`http://jaw.jarvis.io/${task.worker!.id}`, '_blank') : undefined}
+                  onVscodeClick={task.worker && task.worker.effective_state !== 'archived' ? () => window.open(`vscode://vscode-remote/k8s-container+jarvis-worker-${task.worker!.id}/jarvis/home/worker/jarvis`, '_blank') : undefined}
                 />
               ))}
               {visibleTasks.length === 0 && (
@@ -1621,6 +1656,38 @@ export default function TaskBoard() {
           />
         )}
       </section>
+
+      {/* Worker creation dialog from task card */}
+      {workerCreateTask && (
+        <div className="task-board__confirm-overlay" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); }}>
+          <div className="task-board__confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <p>Create worker for <strong>{workerCreateTask.title}</strong>?</p>
+            {repositories.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: 6 }}>Repositories:</p>
+                {repositories.map((repo: Repository) => (
+                  <label key={repo.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: '#e2e8f0', marginBottom: 4 }}>
+                    <input
+                      type="checkbox"
+                      checked={workerRepoIds.includes(repo.id)}
+                      onChange={() => setWorkerRepoIds(prev => prev.includes(repo.id) ? prev.filter(r => r !== repo.id) : [...prev, repo.id])}
+                    />
+                    {repo.git_url} @{repo.branch}
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="task-board__confirm-actions">
+              <Button onClick={() => createWorkerMutation.mutate({ task_id: workerCreateTask.id, repository_ids: workerRepoIds })}>
+                Create Worker
+              </Button>
+              <Button variant="ghost" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); }}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Task deletion confirmation */}
       {deletingTask && (

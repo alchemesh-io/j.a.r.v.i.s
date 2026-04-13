@@ -35,21 +35,30 @@ j.a.r.v.i.s/
 │   │   │   ├── session.py    # SessionLocal + get_db() FastAPI dependency
 │   │   │   └── base.py       # Declarative Base class
 │   │   ├── models/
-│   │   │   ├── enums.py      # TaskType, TaskStatus (str, Enum)
+│   │   │   ├── enums.py      # TaskType, TaskStatus, WorkerState, WorkerType (str, Enum)
 │   │   │   ├── weekly.py     # Weekly ORM model
 │   │   │   ├── daily.py      # Daily ORM model
-│   │   │   ├── task.py       # Task ORM model
-│   │   │   └── daily_task.py # DailyTask association model
+│   │   │   ├── task.py       # Task ORM model (+ worker one-to-one)
+│   │   │   ├── daily_task.py # DailyTask association model
+│   │   │   ├── worker.py     # Worker ORM model (linked to Task, many-to-many Repository)
+│   │   │   ├── repository.py # Repository ORM model (git_url + branch, unique)
+│   │   │   └── worker_repository.py # WorkerRepository association table
 │   │   ├── schemas/
-│   │   │   ├── task.py       # Task Pydantic schemas (Create, Update, Response)
+│   │   │   ├── task.py       # Task Pydantic schemas (Create, Update, Response + WorkerSummary)
 │   │   │   ├── daily.py      # Daily Pydantic schemas
 │   │   │   ├── weekly.py     # Weekly Pydantic schemas
-│   │   │   └── daily_task.py # DailyTask schemas + reorder batch
+│   │   │   ├── daily_task.py # DailyTask schemas + reorder batch
+│   │   │   ├── worker.py     # Worker Pydantic schemas (Create, Update, Response, Summary)
+│   │   │   └── repository.py # Repository Pydantic schemas (Create, Response)
+│   │   ├── services/
+│   │   │   └── k8s.py        # Kubernetes client — create/delete worker pods, services, httproutes
 │   │   └── routes/
 │   │       ├── tasks.py      # /api/v1/tasks — CRUD + date/scope filtering
 │   │       ├── weeklies.py   # /api/v1/weeklies — CRUD with nested dailies
 │   │       ├── dailies.py    # /api/v1/dailies — CRUD + date query
-│   │       └── daily_tasks.py # /api/v1/dailies/{id}/tasks — add/remove/reorder
+│   │       ├── daily_tasks.py # /api/v1/dailies/{id}/tasks — add/remove/reorder
+│   │       ├── workers.py    # /api/v1/workers — CRUD + K8s pod lifecycle
+│   │       └── repositories.py # /api/v1/repositories — CRUD with conflict detection
 │   ├── alembic/              # Alembic migrations
 │   │   ├── env.py
 │   │   └── versions/
@@ -70,7 +79,8 @@ j.a.r.v.i.s/
 │   │   ├── api/client.ts     # Typed fetch functions for /api/v1/ endpoints
 │   │   ├── pages/
 │   │   │   ├── Dashboard/    # Dashboard with metric blocks, brain animation, chat
-│   │   │   └── TaskBoard/    # Task board with calendar, DnD, CRUD
+│   │   │   ├── TaskBoard/    # Task board with calendar, DnD, CRUD
+│   │   │   └── Workers/      # Worker management page (repository panel + worker cards)
 │   │   ├── App.css           # App shell styles
 │   │   └── index.css         # Global styles, CSS variables
 │   ├── e2e/                  # Playwright E2E tests
@@ -92,6 +102,11 @@ j.a.r.v.i.s/
 │   ├── agents/                 # Agent artifacts (add via arctl)
 │   ├── skills/                 # Skill artifacts (add via arctl)
 │   └── prompts/                # Prompt artifacts (add via arctl)
+├── worker/
+│   ├── Dockerfile            # Worker Docker image (node:22-slim + Claude Code + tools)
+│   ├── entrypoint.sh         # Init sequence: config copy, repo clone, skill pull, start
+│   └── status-server/
+│       └── index.js          # Minimal HTTP status endpoint (port 8080)
 ├── helm/
 │   ├── istio/                # Istio service mesh (deployed via ArgoCD)
 │   │   ├── Chart.yaml        # Sub-chart deps: base, istiod, gateway
@@ -119,7 +134,11 @@ j.a.r.v.i.s/
 │           ├── mcp-httproute.yaml      # mcp.jarvis.io → MCP server
 │           ├── mcp-deployment.yaml     # Standalone MCP pod with BACKEND_URL
 │           ├── mcp-service.yaml
-│           └── sqlite-pvc.yaml
+│           ├── sqlite-pvc.yaml
+│           ├── worker-serviceaccount.yaml   # ServiceAccount for backend K8s access
+│           ├── worker-role.yaml             # Role for pod/service/httproute management
+│           ├── worker-rolebinding.yaml      # RoleBinding for the ServiceAccount
+│           └── worker-claude-config.yaml    # ConfigMap for Claude config files
 └── .github/
     └── workflows/
         └── docker-publish.yml  # Build + push to GHCR on push to main
@@ -131,6 +150,7 @@ All traffic enters through the Istio ingress gateway via host-based routing on p
 
 - `main.jarvis.io` — JARVIS: `/api/*` → backend, `/*` → frontend SPA (HTTP)
 - `mcp.jarvis.io` — MCP server: `/*` → FastMCP HTTP transport (HTTP)
+- `jaw.jarvis.io` — Worker UIs: `/<worker_id>/*` → worker pod chat UI (HTTP, dynamic HTTPRoutes)
 - `jaar.jarvis.io` — AgentRegistry: `/*` → Next.js UI + API (HTTP)
 - `jaac.jarvis.io` — ArgoCD UI (HTTPS — self-signed wildcard cert)
 
@@ -138,7 +158,7 @@ The gateway has two listeners: HTTP (:80) and HTTPS (:443) both matching `*.jarv
 
 For local dev, add entries to `/etc/hosts` (or use dnsmasq for wildcard):
 ```
-<GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaar.jarvis.io jaac.jarvis.io
+<GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaw.jarvis.io jaar.jarvis.io jaac.jarvis.io
 ```
 
 Backend task management endpoints are under `/api/v1/`. OpenAPI docs at `main.jarvis.io/docs`.
@@ -193,6 +213,7 @@ kubectl get svc istio-ingressgateway -n istio-system   # Shows EXTERNAL-IP for t
 All traffic enters through the Istio ingress gateway via host-based routing (`*.jarvis.io`):
 - `main.jarvis.io`: `/api/*`, `/docs`, `/health` → backend; `/*` → frontend SPA
 - `mcp.jarvis.io`: `/*` → MCP server (FastMCP HTTP transport)
+- `jaw.jarvis.io`: `/<worker_id>/*` → worker pod chat UI (dynamic HTTPRoutes)
 - `jaar.jarvis.io`: `/*` → AgentRegistry
 - `jaac.jarvis.io`: `/*` → ArgoCD UI (HTTPS)
 
@@ -300,4 +321,6 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
 | **MCP server depends on backend** | MCP tools fail if backend is down | httpx with retry logic; K8s readiness probes check backend connectivity |
 | **JAAR + PostgreSQL add ~512 MB RAM** | May require more Minikube memory | Bump with `MINIKUBE_MEMORY=12288` |
 | **Data persistence requires mount** | `minikube mount` for `.data/` must stay running | `make cluster-status` shows mount health; data survives `minikube delete` |
-| **Host-based routing requires `/etc/hosts`** | `*.jarvis.io` must resolve to gateway IP | Add entries for `main.jarvis.io`, `mcp.jarvis.io`, `jaar.jarvis.io`, `jaac.jarvis.io` (or use dnsmasq for wildcard) |
+| **Host-based routing requires `/etc/hosts`** | `*.jarvis.io` must resolve to gateway IP | Add entries for `main.jarvis.io`, `mcp.jarvis.io`, `jaw.jarvis.io`, `jaar.jarvis.io`, `jaac.jarvis.io` (or use dnsmasq for wildcard) |
+| **Worker pods consume significant resources** | Each worker pod runs Claude Code + UI + status server (~512MB–1GB RAM) | Set resource requests/limits via Helm values; limit concurrent workers |
+| **Dynamic HTTPRoutes managed outside ArgoCD** | Worker HTTPRoutes aren't managed by ArgoCD sync | Worker deletion explicitly removes HTTPRoutes; orphan cleanup can be added later |

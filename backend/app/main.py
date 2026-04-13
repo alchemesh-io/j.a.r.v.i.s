@@ -11,11 +11,13 @@ from app.routes import (
     gcal,
     jira,
     key_focuses,
+    repositories,
     task_blockers,
     task_key_focuses,
     task_notes,
     tasks,
     weeklies,
+    workers,
 )
 
 
@@ -43,6 +45,8 @@ app.include_router(key_focuses.router, prefix="/api/v1")
 app.include_router(blockers.router, prefix="/api/v1")
 app.include_router(task_blockers.router, prefix="/api/v1")
 app.include_router(task_key_focuses.router, prefix="/api/v1")
+app.include_router(repositories.router, prefix="/api/v1")
+app.include_router(workers.router, prefix="/api/v1")
 
 
 @app.get("/")

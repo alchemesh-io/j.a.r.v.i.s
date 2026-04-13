@@ -48,3 +48,12 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.ORG }}/jarvis-frontend:${{ steps.meta.outputs.sha }}
             ${{ env.REGISTRY }}/${{ env.ORG }}/jarvis-frontend:latest
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./worker
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.ORG }}/jarvis-worker:${{ steps.meta.outputs.sha }}
+            ${{ env.REGISTRY }}/${{ env.ORG }}/jarvis-worker:latest

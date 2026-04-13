@@ -18,7 +18,7 @@ DATA_MOUNT_TARGET   := /mnt/jarvis-data
 GHCR_ORG            := alchemesh-io
 
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update _tls-secret
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp build-worker sync-claude-config _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaar-secrets _helm-dep-update _tls-secret
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -125,10 +125,12 @@ deploy-local: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaar-secret
 	docker build -t jarvis-backend:$(LOCAL_TAG) ./backend
 	docker build -t jarvis-frontend:$(LOCAL_TAG) ./frontend
 	docker build -t jarvis:$(LOCAL_TAG) ./artifacts/servers/jarvis
+	docker build -t jarvis-worker:$(LOCAL_TAG) ./worker
 	@echo "==> Loading images into Minikube..."
 	minikube image load jarvis-backend:$(LOCAL_TAG)
 	minikube image load jarvis-frontend:$(LOCAL_TAG)
 	minikube image load jarvis:$(LOCAL_TAG)
+	minikube image load jarvis-worker:$(LOCAL_TAG)
 	@echo "==> Applying ArgoCD Application CRs (local images, tag: $(LOCAL_TAG))..."
 	@sed 's/tag: local/tag: "$(LOCAL_TAG)"/g' argocd/jarvis-app-local.yaml | kubectl apply -f -
 	kubectl apply -f argocd/jaar-app-local.yaml
@@ -166,11 +168,12 @@ jarvis-ui: _check-prereqs
 	@echo "==> Access via minikube tunnel:"
 	@echo "    http://main.jarvis.io    (JARVIS)"
 	@echo "    http://mcp.jarvis.io     (MCP Server)"
+	@echo "    http://jaw.jarvis.io     (Worker UIs)"
 	@echo "    http://jaar.jarvis.io    (Agent Registry)"
 	@echo "    http://jaac.jarvis.io    (ArgoCD)"
 	@echo ""
 	@echo "==> Ensure /etc/hosts contains:"
-	@echo "    <GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaar.jarvis.io jaac.jarvis.io"
+	@echo "    <GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaw.jarvis.io jaar.jarvis.io jaac.jarvis.io"
 	@echo ""
 	kubectl port-forward svc/jarvis-gateway-istio -n istio-system 7080:80
 
@@ -450,6 +453,28 @@ db-restore:
 	@kubectl rollout restart deployment jarvis-backend -n jarvis && \
 		kubectl rollout status deployment/jarvis-backend -n jarvis --timeout=60s && \
 		echo "  Backend restarted. Restore complete."
+
+# ---------------------------------------------------------------------------
+# Worker
+# ---------------------------------------------------------------------------
+
+## Build the worker Docker image
+build-worker:
+	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
+	@echo "==> Building worker Docker image (tag: $(LOCAL_TAG))..."
+	docker build -t jarvis-worker:$(LOCAL_TAG) ./worker
+	@echo "==> Worker image built: jarvis-worker:$(LOCAL_TAG)"
+
+## Sync Claude config files from host to the jarvis-claude-config ConfigMap
+sync-claude-config: _check-prereqs
+	@echo "==> Syncing Claude config to jarvis-claude-config ConfigMap..."
+	kubectl create configmap jarvis-claude-config -n jarvis \
+		--from-file=policy-limits.json=$(HOME)/.claude/policy-limits.json \
+		--from-file=remote-settings.json=$(HOME)/.claude/remote-settings.json \
+		--from-file=claude.json=$(HOME)/.claude.json \
+		--from-file=settings.json=$(HOME)/.claude/settings.json \
+		--dry-run=client -o yaml | kubectl apply -f -
+	@echo "==> ConfigMap updated. Note: running workers need restart to pick up changes."
 
 # ---------------------------------------------------------------------------
 # Tests

@@ -29,6 +29,9 @@ class Task(Base):
     blockers: Mapped[list["Blocker"]] = relationship(
         "Blocker", back_populates="task", cascade="all, delete-orphan"
     )
+    worker: Mapped["Worker | None"] = relationship(
+        "Worker", back_populates="task", uselist=False, cascade="all, delete-orphan"
+    )
 
     @property
     def note_count(self) -> int:

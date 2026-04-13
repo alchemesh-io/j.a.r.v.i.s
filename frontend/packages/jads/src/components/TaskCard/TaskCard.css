@@ -357,3 +357,32 @@
   font-size: 0.7rem;
   color: #ef4444;
 }
+
+/* Worker status dot */
+.jads-task-card__worker-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Play button - always visible (not hidden on hover) */
+.jads-task-card__play-btn {
+  opacity: 1 !important;
+  color: var(--jads-color-text-muted, #94a3b8);
+}
+
+.jads-task-card__play-btn:hover {
+  color: #10b981;
+}
+
+/* Worker button - always visible */
+.jads-task-card__worker-btn {
+  opacity: 1 !important;
+}
+
+/* VSCode button - always visible */
+.jads-task-card__vscode-btn {
+  opacity: 1 !important;
+  color: #007acc;
+}

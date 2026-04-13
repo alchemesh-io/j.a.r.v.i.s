@@ -8,6 +8,13 @@ export interface KeyFocusBadge {
   kind: 'delivery' | 'learning' | 'support' | 'operational' | 'side_quest';
 }
 
+export type WorkerEffectiveState = 'initialized' | 'working' | 'waiting_for_human' | 'done' | 'archived';
+
+export interface WorkerInfo {
+  id: string;
+  effective_state: WorkerEffectiveState;
+}
+
 export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   title: string;
   type: 'refinement' | 'implementation' | 'review';
@@ -27,6 +34,10 @@ export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   blockerCount?: number;
   keyFocuses?: KeyFocusBadge[];
   dragListeners?: Record<string, Function>;
+  worker?: WorkerInfo | null;
+  onPlayClick?: () => void;
+  onWorkerClick?: () => void;
+  onVscodeClick?: () => void;
 }
 
 const EditIcon = () => (
@@ -94,6 +105,26 @@ const KIND_COLORS: Record<string, string> = {
   side_quest: '#06b6d4',
 };
 
+const PlayIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M5 3L13 8L5 13V3Z" fill="currentColor" />
+  </svg>
+);
+
+const VscodeIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M11.5 1L6 6.5L3.5 4.5L1 6L5 10L1 14L3.5 15.5L6 13.5L11.5 19L15 17.5V2.5L11.5 1Z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" transform="scale(0.75) translate(2 1)" />
+  </svg>
+);
+
+const WORKER_STATE_COLORS: Record<string, string> = {
+  initialized: '#6b7280',
+  working: '#10b981',
+  waiting_for_human: '#00d4ff',
+  done: '#f59e0b',
+  archived: '#374151',
+};
+
 const UndoIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M4 6L2 8L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -125,6 +156,10 @@ export function TaskCard({
   blockerCount,
   keyFocuses,
   dragListeners,
+  worker,
+  onPlayClick,
+  onWorkerClick,
+  onVscodeClick,
   className = '',
   ...props
 }: TaskCardProps) {
@@ -252,6 +287,42 @@ export function TaskCard({
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M3 4H13M3 8H10M3 12H7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
+            </IconButton>
+          )}
+          {!worker && onPlayClick && (
+            <IconButton
+              aria-label={`Create worker for: ${title}`}
+              variant="ghost"
+              size="sm"
+              onClick={onPlayClick}
+              className="jads-task-card__play-btn"
+            >
+              <PlayIcon />
+            </IconButton>
+          )}
+          {worker && onWorkerClick && (
+            <IconButton
+              aria-label={`Open worker chat: ${title}`}
+              variant="ghost"
+              size="sm"
+              onClick={onWorkerClick}
+              className="jads-task-card__worker-btn"
+            >
+              <span
+                className="jads-task-card__worker-dot"
+                style={{ backgroundColor: WORKER_STATE_COLORS[worker.effective_state] }}
+              />
+            </IconButton>
+          )}
+          {worker && worker.effective_state !== 'archived' && onVscodeClick && (
+            <IconButton
+              aria-label={`Open VSCode for: ${title}`}
+              variant="ghost"
+              size="sm"
+              onClick={onVscodeClick}
+              className="jads-task-card__vscode-btn"
+            >
+              <VscodeIcon />
             </IconButton>
           )}
         </div>
