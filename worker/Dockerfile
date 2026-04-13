@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
-# Install Claude Code (pinned version)
+# Install Claude Code (pinned version — npm package still available for Docker/Linux)
 RUN npm install -g @anthropic-ai/claude-code@2.1.104
 
 # Install arctl

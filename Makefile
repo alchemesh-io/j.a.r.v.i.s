@@ -473,23 +473,25 @@ db-restore:
 
 ## Configure SSH for VSCode Remote-SSH to worker pods via kubectl
 setup-worker-ssh:
+	$(eval KUBECTL_PATH := $(shell which kubectl))
 	@echo "==> Configuring SSH for JARVIS worker pods..."
 	@if grep -q "Host jarvis-worker-\*" $(HOME)/.ssh/config 2>/dev/null; then \
-		echo "  SSH config for jarvis-worker-* already exists, skipping."; \
+		echo "  SSH config for jarvis-worker-* already exists."; \
+		echo "  To regenerate, remove the jarvis-worker-* block from ~/.ssh/config first."; \
 	else \
 		mkdir -p $(HOME)/.ssh; \
 		echo "" >> $(HOME)/.ssh/config; \
-		echo "# JARVIS worker pods — tunnel via kubectl exec" >> $(HOME)/.ssh/config; \
+		echo "# JARVIS worker pods — tunnel via kubectl exec (requires remote.SSH.useExecServer=true in VSCode)" >> $(HOME)/.ssh/config; \
 		echo "Host jarvis-worker-*" >> $(HOME)/.ssh/config; \
-		echo "    ProxyCommand kubectl exec -i -n jarvis %n -c worker -- /bin/sh" >> $(HOME)/.ssh/config; \
+		echo "    ProxyCommand $(KUBECTL_PATH) exec -i -n jarvis %n -c worker -- /bin/cat" >> $(HOME)/.ssh/config; \
 		echo "    User node" >> $(HOME)/.ssh/config; \
 		echo "    StrictHostKeyChecking no" >> $(HOME)/.ssh/config; \
 		echo "    UserKnownHostsFile /dev/null" >> $(HOME)/.ssh/config; \
-		echo "  Added jarvis-worker-* entry to ~/.ssh/config"; \
+		echo "  Added jarvis-worker-* entry to ~/.ssh/config (kubectl: $(KUBECTL_PATH))"; \
 	fi
 	@echo ""
 	@echo "==> VSCode Remote-SSH will now route jarvis-worker-* through kubectl."
-	@echo "    Note: VSCode setting 'remote.SSH.useExecServer' must be enabled."
+	@echo "    Required VSCode setting: remote.SSH.useExecServer = true"
 
 ## Build the worker Docker image
 build-worker:
