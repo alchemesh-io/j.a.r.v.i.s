@@ -43,9 +43,10 @@ RUN npm install -g serve
 # Copy status server
 COPY --chown=node:node status-server/ /home/node/status-server/
 
-# Copy entrypoint
+# Copy scripts
+COPY --chown=node:node setup-claude.sh /home/node/setup-claude.sh
 COPY --chown=node:node entrypoint.sh /home/node/entrypoint.sh
-RUN chmod +x /home/node/entrypoint.sh
+RUN chmod +x /home/node/entrypoint.sh /home/node/setup-claude.sh
 
 # Switch to non-root user (UID 1000)
 USER node

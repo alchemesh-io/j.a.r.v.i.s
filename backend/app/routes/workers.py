@@ -133,7 +133,7 @@ def get_worker_vscode_uri(worker_id: str, db: Session = Depends(get_db)):
         "name": "worker",
     })
     hex_config = config.encode().hex()
-    uri = f"vscode://vscode-remote/k8s-container+{hex_config}/home/node"
+    uri = f"vscode://vscode-remote/k8s-container+{hex_config}/home/node/jarvis"
     return {"uri": uri}
 
 

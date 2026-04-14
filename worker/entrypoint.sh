@@ -15,28 +15,10 @@ else
     echo "[worker] No Claude config volume found, skipping config copy"
 fi
 
-# Step 2: Pre-trust the workspace so Claude Code skips the trust dialog
-WORKSPACE="$HOME/jarvis"
-CLAUDE_JSON="$HOME/.claude.json"
-if [ -f "$CLAUDE_JSON" ]; then
-    jq --arg ws "$WORKSPACE" '.projects[$ws].hasTrustDialogAccepted = true' "$CLAUDE_JSON" > /tmp/claude.json && mv /tmp/claude.json "$CLAUDE_JSON"
-else
-    echo "{\"projects\":{\"$WORKSPACE\":{\"hasTrustDialogAccepted\":true}}}" > "$CLAUDE_JSON"
-fi
-echo "[worker] Workspace $WORKSPACE pre-trusted"
+# Step 2: Configure Claude Code (hooks, MCP, workspace trust)
+~/setup-claude.sh
 
-# Step 3: Configure JARVIS MCP server in Claude Code settings
-if [ -n "$BACKEND_URL" ]; then
-    echo "[worker] Configuring JARVIS MCP server..."
-    MCP_CONFIG="{\"mcpServers\":{\"jarvis\":{\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-fetch\"],\"env\":{\"BACKEND_URL\":\"$BACKEND_URL\"}}}}"
-    if [ -f ~/.claude/settings.json ]; then
-        jq --argjson mcp "$MCP_CONFIG" '. * $mcp' ~/.claude/settings.json > /tmp/settings.json && mv /tmp/settings.json ~/.claude/settings.json
-    else
-        echo "$MCP_CONFIG" > ~/.claude/settings.json
-    fi
-fi
-
-# Step 4: Clone repositories
+# Step 3: Clone repositories
 if [ -n "$REPOSITORIES" ]; then
     echo "[worker] Cloning repositories..."
     IFS=',' read -ra REPOS <<< "$REPOSITORIES"
@@ -46,7 +28,6 @@ if [ -n "$REPOSITORIES" ]; then
         repo_name=$(basename "$git_url" .git)
         echo "[worker] Cloning $git_url (branch: $branch) into ~/jarvis/$repo_name"
 
-        # Use GITHUB_TOKEN for auth if available
         if [ -n "$GITHUB_TOKEN" ]; then
             auth_url=$(echo "$git_url" | sed "s|https://|https://${GITHUB_TOKEN}@|")
         else
@@ -58,14 +39,14 @@ if [ -n "$REPOSITORIES" ]; then
     done
 fi
 
-# Step 5: Pull skills from JAAR
+# Step 4: Pull skills from JAAR
 if [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
     echo "[worker] Pulling skills from JAAR..."
     arctl skill pull --all --registry "$JAAR_URL" 2>&1 || \
         echo "[worker] WARNING: Failed to pull skills from JAAR"
 fi
 
-# Step 6: Start all processes
+# Step 5: Start all processes
 echo "[worker] Starting worker UI on port 3000..."
 serve -s ~/worker-ui -l 3000 &
 UI_PID=$!
@@ -77,8 +58,7 @@ STATUS_PID=$!
 # Convert 32-char hex worker ID to UUID format (8-4-4-4-12)
 SESSION_UUID="${WORKER_ID:0:8}-${WORKER_ID:8:4}-${WORKER_ID:12:4}-${WORKER_ID:16:4}-${WORKER_ID:20:12}"
 
-# Start Claude Code in non-interactive streaming mode via a named pipe.
-# The chat UI (or any client) can write JSON messages to the pipe to drive the session.
+# Start Claude Code in non-interactive streaming mode via a named pipe
 CLAUDE_FIFO="/tmp/claude-input"
 mkfifo "$CLAUDE_FIFO"
 echo "[worker] Starting Claude Code session (UUID: ${SESSION_UUID}) in stream mode..."
@@ -90,7 +70,6 @@ cat "$CLAUDE_FIFO" | claude --resume "$SESSION_UUID" \
     > /tmp/claude-output.log 2>&1 &
 CLAUDE_PID=$!
 
-# Write PID for status server
 echo "$CLAUDE_PID" > /tmp/claude.pid
 
 echo "[worker] All processes started. Claude PID=$CLAUDE_PID, Status PID=$STATUS_PID, UI PID=$UI_PID"

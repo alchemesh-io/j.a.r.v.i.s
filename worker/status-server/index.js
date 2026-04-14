@@ -1,47 +1,54 @@
 const http = require("http");
-const { execSync } = require("child_process");
 const fs = require("fs");
 
 const PORT = 8080;
+const STATE_FILE = "/tmp/claude-state";
+const BACKEND_URL = process.env.BACKEND_URL;
+const WORKER_ID = process.env.WORKER_ID;
 
-function getClaudeStatus() {
+let lastPushedState = null;
+
+function getClaudeState() {
   try {
-    const pidFile = "/tmp/claude.pid";
-    if (!fs.existsSync(pidFile)) {
-      return { state: "error", message: "Claude Code process not running" };
+    if (!fs.existsSync(STATE_FILE)) {
+      return "initialized";
     }
-
-    const pid = fs.readFileSync(pidFile, "utf-8").trim();
-
-    // Check if process is alive
-    try {
-      process.kill(parseInt(pid), 0);
-    } catch {
-      return { state: "error", message: "Claude Code process not running" };
-    }
-
-    // Check if Claude Code is actively writing (has recent fd activity)
-    // A simple heuristic: check if the process has been CPU-active recently
-    try {
-      const stat = execSync(`ps -o state= -p ${pid}`, { encoding: "utf-8" }).trim();
-      // S = sleeping (waiting for input), R = running (working)
-      if (stat.startsWith("R") || stat.startsWith("D")) {
-        return { state: "working" };
-      }
-      return { state: "waiting_for_human" };
-    } catch {
-      return { state: "waiting_for_human" };
-    }
-  } catch (err) {
-    return { state: "error", message: err.message };
+    return fs.readFileSync(STATE_FILE, "utf-8").trim() || "initialized";
+  } catch {
+    return "initialized";
   }
 }
 
+async function pushStateToBackend(state) {
+  if (!BACKEND_URL || !WORKER_ID) return;
+  if (state === lastPushedState) return;
+
+  try {
+    const url = `${BACKEND_URL}/api/v1/workers/${WORKER_ID}`;
+    const resp = await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state }),
+    });
+    if (resp.ok) {
+      lastPushedState = state;
+    }
+  } catch {
+    // Backend unreachable — ignore, will retry on next poll
+  }
+}
+
+// Poll state file and push changes to backend
+setInterval(() => {
+  const state = getClaudeState();
+  pushStateToBackend(state);
+}, 3000);
+
 const server = http.createServer((req, res) => {
   if (req.method === "GET" && req.url === "/status") {
-    const status = getClaudeStatus();
+    const state = getClaudeState();
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(status));
+    res.end(JSON.stringify({ state }));
   } else if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ status: "ok" }));
