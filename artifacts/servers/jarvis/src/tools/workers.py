@@ -62,7 +62,7 @@ async def update_worker(
 
 @mcp.tool()
 async def delete_worker(worker_id: str) -> str:
-    """Delete a worker and its Kubernetes resources (pod, service, httproute).
+    """Delete a worker and its Kubernetes resources (pod, service).
 
     Args:
         worker_id: The 32-character hex worker ID.

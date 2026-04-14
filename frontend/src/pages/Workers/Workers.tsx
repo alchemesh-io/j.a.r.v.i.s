@@ -12,7 +12,6 @@ import {
   type Worker,
   type Repository,
   type Task,
-  type WorkerState,
 } from '../../api/client';
 import './Workers.css';
 

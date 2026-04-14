@@ -224,7 +224,7 @@
 .task-board__worker-repo-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .task-board__worker-repo-name { font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .task-board__worker-repo-owner { font-size: 0.7rem; color: var(--color-text-muted, #94a3b8); }
-.task-board__worker-repo-branch { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; font-size: 0.65rem; font-weight: 500; color: var(--color-accent-cyan, #00d4ff); background: rgba(0, 212, 255, 0.08); border-radius: 4px; flex-shrink: 0; }
+.task-board__worker-repo-branch { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; font-size: 0.65rem; font-weight: 500; color: var(--color-accent-cyan, #00d4ff); background: rgba(0, 212, 255, 0.08); border-radius: 4px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-board__worker-repo-check { flex-shrink: 0; width: 18px; font-size: 0.85rem; color: var(--color-accent-cyan, #00d4ff); text-align: center; }
 
 /* Right column - task area */
