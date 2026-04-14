@@ -6,9 +6,7 @@ import {
   listRepositories,
   listTasks,
   createWorker,
-  createRepository,
   deleteWorker,
-  deleteRepository,
   type Worker,
   type Repository,
   type Task,
@@ -38,40 +36,14 @@ function formatTime(iso: string): string {
 export default function Workers() {
   const queryClient = useQueryClient();
 
-  // --- Data queries ---
-  const { data: workers = [] } = useQuery({ queryKey: ['workers'], queryFn: listWorkers });
+  const { data: workers = [] } = useQuery({ queryKey: ['workers'], queryFn: listWorkers, refetchInterval: 5000 });
   const { data: repos = [] } = useQuery({ queryKey: ['repositories'], queryFn: listRepositories });
   const { data: tasks = [] } = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks() });
 
-  // --- Repository panel state ---
-  const [repoOpen, setRepoOpen] = useState(false);
-  const [repoUrl, setRepoUrl] = useState('');
-  const [repoBranch, setRepoBranch] = useState('main');
-  const [repoError, setRepoError] = useState('');
-
-  // --- Create worker state ---
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<number | ''>('');
   const [selectedRepoIds, setSelectedRepoIds] = useState<number[]>([]);
   const [createError, setCreateError] = useState('');
-
-  // --- Mutations ---
-  const addRepoMutation = useMutation({
-    mutationFn: createRepository,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['repositories'] });
-      setRepoUrl('');
-      setRepoBranch('main');
-      setRepoError('');
-    },
-    onError: (err: Error) => setRepoError(err.message.includes('409') ? 'Repository already exists' : err.message),
-  });
-
-  const deleteRepoMutation = useMutation({
-    mutationFn: deleteRepository,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['repositories'] }),
-    onError: (err: Error) => setRepoError(err.message.includes('409') ? 'Repository in use by active worker' : err.message),
-  });
 
   const createWorkerMutation = useMutation({
     mutationFn: createWorker,
@@ -90,12 +62,6 @@ export default function Workers() {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
   });
-
-  // --- Handlers ---
-  const handleAddRepo = useCallback(() => {
-    if (!repoUrl.trim()) return;
-    addRepoMutation.mutate({ git_url: repoUrl.trim(), branch: repoBranch || 'main' });
-  }, [repoUrl, repoBranch, addRepoMutation]);
 
   const resetCreateForm = useCallback(() => {
     setShowCreate(false);
@@ -132,74 +98,15 @@ export default function Workers() {
     );
   }, []);
 
-  // Tasks without workers (for create form)
   const availableTasks = tasks.filter((t: Task) => !t.worker);
 
   return (
     <div className="workers">
-      {/* Header */}
       <div className="workers__header">
         <h2 className="workers__title">Workers</h2>
         <Button onClick={() => setShowCreate(true)}>+ New Worker</Button>
       </div>
 
-      {/* Repository Panel */}
-      <div className="workers__repo-panel">
-        <button
-          className={`workers__repo-toggle${repoOpen ? ' workers__repo-toggle--open' : ''}`}
-          onClick={() => setRepoOpen(!repoOpen)}
-        >
-          <span>Repositories ({repos.length})</span>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="2" fill="none" />
-          </svg>
-        </button>
-
-        {repoOpen && (
-          <div className="workers__repo-content">
-            <div className="workers__repo-form">
-              <div className="workers__repo-form-field">
-                <label>Git URL</label>
-                <input
-                  type="text"
-                  placeholder="https://github.com/org/repo"
-                  value={repoUrl}
-                  onChange={(e) => setRepoUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddRepo()}
-                />
-              </div>
-              <div className="workers__repo-form-field workers__repo-form-field--branch">
-                <label>Branch</label>
-                <input
-                  type="text"
-                  placeholder="main"
-                  value={repoBranch}
-                  onChange={(e) => setRepoBranch(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddRepo()}
-                />
-              </div>
-              <Button onClick={handleAddRepo}>Add</Button>
-            </div>
-            {repoError && <div className="workers__error">{repoError}</div>}
-
-            {repos.length === 0 ? (
-              <p className="workers__repo-empty">No repositories yet</p>
-            ) : (
-              <div className="workers__repo-list">
-                {repos.map((repo: Repository) => (
-                  <div key={repo.id} className="workers__repo-chip">
-                    <span>{repo.git_url}</span>
-                    <span className="workers__repo-chip-branch">@{repo.branch}</span>
-                    <button onClick={() => deleteRepoMutation.mutate(repo.id)} title="Delete">&times;</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Worker Grid */}
       {workers.length === 0 ? (
         <div className="workers__empty">No workers running. Create one to get started.</div>
       ) : (
@@ -244,7 +151,6 @@ export default function Workers() {
         </div>
       )}
 
-      {/* Create Worker Overlay */}
       {showCreate && (
         <div className="workers__overlay" onClick={resetCreateForm}>
           <div className="workers__create-form" onClick={(e) => e.stopPropagation()}>
@@ -268,7 +174,7 @@ export default function Workers() {
             <div className="workers__create-field">
               <label>Repositories</label>
               {repos.length === 0 ? (
-                <p className="workers__repo-empty">Add repositories above first</p>
+                <p className="workers__repo-empty">Add repositories in the Repositories tab first</p>
               ) : (
                 <div className="workers__repo-checkboxes">
                   {repos.map((repo: Repository) => (

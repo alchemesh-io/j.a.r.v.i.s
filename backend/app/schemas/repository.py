@@ -12,3 +12,5 @@ class RepositoryResponse(BaseModel):
     id: int
     git_url: str
     branch: str
+    worker_count: int = 0
+    active_worker_count: int = 0

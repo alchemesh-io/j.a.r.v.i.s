@@ -6,6 +6,7 @@ import {
   listTasks,
   listBlockers,
 } from '../../api/client';
+import { DateNavPrev, DateNavNext, DateNavToday } from '../../components/DateNav';
 import './Reports.css';
 
 function formatDate(d: Date): string {
@@ -148,6 +149,7 @@ export default function Reports() {
     <div className="reports">
       <div className="reports__toolbar">
         <div className="reports__toolbar-left">
+          <DateNavPrev selectedDate={selectedDate} onDateChange={(d) => setSelectedDate(d)} scope={scope} />
           <div className="reports__calendar-dropdown" ref={calendarRef}>
             <button
               type="button"
@@ -174,6 +176,8 @@ export default function Reports() {
               </div>
             )}
           </div>
+          <DateNavNext selectedDate={selectedDate} onDateChange={(d) => setSelectedDate(d)} scope={scope} />
+          <DateNavToday selectedDate={selectedDate} onDateChange={(d) => setSelectedDate(d)} />
         </div>
         <div className="reports__toolbar-right">
           <div className="reports__scope-tabs" role="tablist" aria-label="Report scope">

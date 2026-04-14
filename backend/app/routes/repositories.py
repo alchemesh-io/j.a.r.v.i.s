@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.models import Repository
@@ -13,6 +13,17 @@ from app.schemas.repository import RepositoryCreate, RepositoryResponse
 router = APIRouter(prefix="/repositories", tags=["repositories"])
 
 ACTIVE_STATES = {WorkerState.initialized, WorkerState.working, WorkerState.waiting_for_human, WorkerState.done}
+
+
+def _repo_to_response(repo: Repository) -> RepositoryResponse:
+    workers = repo.workers
+    return RepositoryResponse(
+        id=repo.id,
+        git_url=repo.git_url,
+        branch=repo.branch,
+        worker_count=len(workers),
+        active_worker_count=sum(1 for w in workers if w.state in ACTIVE_STATES),
+    )
 
 
 @router.post("", response_model=RepositoryResponse, status_code=201)
@@ -28,38 +39,40 @@ def create_repository(body: RepositoryCreate, db: Session = Depends(get_db)):
             detail=f"Repository with git_url '{body.git_url}' and branch '{body.branch}' already exists",
         )
     db.refresh(repo)
-    return RepositoryResponse.model_validate(repo)
+    return _repo_to_response(repo)
 
 
 @router.get("", response_model=list[RepositoryResponse])
 def list_repositories(db: Session = Depends(get_db)):
-    repos = db.scalars(select(Repository)).all()
-    return [RepositoryResponse.model_validate(r) for r in repos]
+    repos = db.scalars(
+        select(Repository).options(selectinload(Repository.workers))
+    ).all()
+    return [_repo_to_response(r) for r in repos]
 
 
 @router.get("/{repository_id}", response_model=RepositoryResponse)
 def get_repository(repository_id: int, db: Session = Depends(get_db)):
-    repo = db.get(Repository, repository_id)
+    repo = db.scalars(
+        select(Repository)
+        .where(Repository.id == repository_id)
+        .options(selectinload(Repository.workers))
+    ).first()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
-    return RepositoryResponse.model_validate(repo)
+    return _repo_to_response(repo)
 
 
 @router.delete("/{repository_id}", status_code=204)
 def delete_repository(repository_id: int, db: Session = Depends(get_db)):
-    repo = db.get(Repository, repository_id)
+    repo = db.scalars(
+        select(Repository)
+        .where(Repository.id == repository_id)
+        .options(selectinload(Repository.workers))
+    ).first()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
-    active_worker = db.scalars(
-        select(Worker)
-        .join(worker_repository, Worker.id == worker_repository.c.worker_id)
-        .where(
-            worker_repository.c.repository_id == repository_id,
-            Worker.state.in_(ACTIVE_STATES),
-        )
-    ).first()
-    if active_worker:
+    if any(w.state in ACTIVE_STATES for w in repo.workers):
         raise HTTPException(
             status_code=409,
             detail="Repository is in use by an active worker and cannot be deleted",

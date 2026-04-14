@@ -54,6 +54,8 @@ export interface Repository {
   id: number;
   git_url: string;
   branch: string;
+  worker_count: number;
+  active_worker_count: number;
 }
 
 export interface Worker {

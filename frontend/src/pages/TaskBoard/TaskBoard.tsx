@@ -47,6 +47,8 @@ import {
   addKeyFocusToTask,
   removeKeyFocusFromTask,
   createWorker,
+  updateWorker,
+  deleteWorker,
   listRepositories,
   getWorkerVscodeUri,
   type Task,
@@ -59,6 +61,7 @@ import {
 import { NotePanel } from './NotePanel';
 import { BlockerPanel } from './BlockerPanel';
 import { EmptyState } from './EmptyState';
+import { DateNavPrev, DateNavNext, DateNavToday } from '../../components/DateNav';
 import './TaskBoard.css';
 
 // --- localStorage helpers ---
@@ -262,7 +265,8 @@ function SortableTaskCard({
   onBlockers,
   onPlayClick,
   onWorkerClick,
-  onVscodeClick,
+  onWorkerArchive,
+  onWorkerDelete,
 }: {
   task: Task;
   jiraProjectUrl?: string;
@@ -275,7 +279,8 @@ function SortableTaskCard({
   onBlockers: () => void;
   onPlayClick?: () => void;
   onWorkerClick?: () => void;
-  onVscodeClick?: () => void;
+  onWorkerArchive?: () => void;
+  onWorkerDelete?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
@@ -312,7 +317,8 @@ function SortableTaskCard({
         worker={task.worker ?? undefined}
         onPlayClick={onPlayClick}
         onWorkerClick={onWorkerClick}
-        onVscodeClick={onVscodeClick}
+        onWorkerArchive={onWorkerArchive}
+        onWorkerDelete={onWorkerDelete}
       />
     </div>
   );
@@ -327,6 +333,10 @@ export default function TaskBoard() {
   const [selectedDate, setSelectedDate] = useState(() => new Date(prefs.selectedDate + 'T00:00:00'));
   const [scope, setScope] = useState<'daily' | 'weekly' | 'all'>(prefs.scope);
   const [doneMode, setDoneMode] = useState<DoneMode>(prefs.doneMode);
+
+  const [filterType, setFilterType] = useState<TaskType | 'all'>('all');
+  const [filterWorker, setFilterWorker] = useState<'all' | 'with' | 'without'>('all');
+  const [filterWorkerState, setFilterWorkerState] = useState<string>('all');
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -382,6 +392,16 @@ export default function TaskBoard() {
     },
   });
 
+  const archiveWorkerMutation = useMutation({
+    mutationFn: (workerId: string) => updateWorker(workerId, { state: 'archived' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+
+  const deleteWorkerMutation = useMutation({
+    mutationFn: deleteWorker,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+
   const [showCalendar, setShowCalendar] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
 
@@ -433,6 +453,7 @@ export default function TaskBoard() {
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks', dateStr, scope],
     queryFn: () => listTasks({ date: dateStr, scope }),
+    refetchInterval: 5000,
   });
 
   const [manualOrder, setManualOrder] = useState<number[] | null>(null);
@@ -450,9 +471,14 @@ export default function TaskBoard() {
     return [...tasks].sort((a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9));
   }, [tasks, manualOrder]);
 
-  const visibleTasks = doneMode === 'hide'
-    ? sortedTasks.filter((t) => t.status !== 'done')
-    : sortedTasks;
+  const visibleTasks = sortedTasks.filter((t) => {
+    if (doneMode === 'hide' && t.status === 'done') return false;
+    if (filterType !== 'all' && t.type !== filterType) return false;
+    if (filterWorker === 'with' && !t.worker) return false;
+    if (filterWorker === 'without' && t.worker) return false;
+    if (filterWorkerState !== 'all' && t.worker?.effective_state !== filterWorkerState) return false;
+    return true;
+  });
 
   const { data: daily } = useQuery({
     queryKey: ['daily', dateStr],
@@ -829,6 +855,7 @@ export default function TaskBoard() {
             </svg>
             Create
           </button>
+          <DateNavPrev selectedDate={selectedDate} onDateChange={handleDateChange} scope={scope} />
           <div className="task-board__calendar-dropdown" ref={calendarRef}>
             <button
               type="button"
@@ -857,8 +884,55 @@ export default function TaskBoard() {
               </div>
             )}
           </div>
+          <DateNavNext selectedDate={selectedDate} onDateChange={handleDateChange} scope={scope} />
+          <DateNavToday selectedDate={selectedDate} onDateChange={handleDateChange} />
         </div>
         <div className="task-board__toolbar-right">
+          <div className="task-board__filter-tabs" role="tablist" aria-label="Type filter">
+            {([
+              { value: 'all', label: 'All', color: '' },
+              { value: 'refinement', label: 'Refinement', color: '#3b82f6' },
+              { value: 'implementation', label: 'Impl.', color: '#f97316' },
+              { value: 'review', label: 'Review', color: '#ef4444' },
+            ] as const).map((opt) => (
+              <button key={opt.value} type="button" role="tab" aria-selected={filterType === opt.value}
+                className={`task-board__filter-tab${filterType === opt.value ? ' task-board__filter-tab--active' : ''}`}
+                style={filterType === opt.value && opt.color ? { color: opt.color, borderColor: `${opt.color}40`, background: `${opt.color}0d` } : undefined}
+                onClick={() => setFilterType(opt.value)}
+              >{opt.label}</button>
+            ))}
+          </div>
+          <div className="task-board__filter-tabs" role="tablist" aria-label="Worker filter">
+            {([
+              { value: 'all', label: 'All', color: '' },
+              { value: 'with', label: 'Worker', color: '#7b2fff' },
+              { value: 'without', label: 'No worker', color: '#6b7280' },
+            ] as const).map((opt) => (
+              <button key={opt.value} type="button" role="tab" aria-selected={filterWorker === opt.value}
+                className={`task-board__filter-tab${filterWorker === opt.value ? ' task-board__filter-tab--active' : ''}`}
+                style={filterWorker === opt.value && opt.color ? { color: opt.color, borderColor: `${opt.color}40`, background: `${opt.color}0d` } : undefined}
+                onClick={() => { setFilterWorker(opt.value); if (opt.value !== 'with') setFilterWorkerState('all'); }}
+              >{opt.label}</button>
+            ))}
+          </div>
+          {filterWorker === 'with' && (
+            <div className="task-board__filter-tabs" role="tablist" aria-label="Worker state filter">
+              {([
+                { value: 'all', label: 'Any', color: '' },
+                { value: 'working', label: 'Active', color: '#3b82f6' },
+                { value: 'waiting_for_human', label: 'Waiting', color: '#ef4444' },
+                { value: 'initialized', label: 'Init', color: '#6b7280' },
+                { value: 'done', label: 'Done', color: '#10b981' },
+                { value: 'archived', label: 'Off', color: '#374151' },
+              ] as const).map((opt) => (
+                <button key={opt.value} type="button" role="tab" aria-selected={filterWorkerState === opt.value}
+                  className={`task-board__filter-tab${filterWorkerState === opt.value ? ' task-board__filter-tab--active' : ''}`}
+                  style={filterWorkerState === opt.value && opt.color ? { color: opt.color, borderColor: `${opt.color}40`, background: `${opt.color}0d` } : undefined}
+                  onClick={() => setFilterWorkerState(opt.value)}
+                >{opt.label}</button>
+              ))}
+            </div>
+          )}
           <div className="task-board__scope-tabs" role="tablist" aria-label="Scope filter">
             {SCOPE_OPTIONS.map((opt) => (
               <button
@@ -1621,10 +1695,11 @@ export default function TaskBoard() {
                   onNotes={() => setNotePanelTask(task)}
                   onBlockers={() => setBlockerPanelTask(task)}
                   onPlayClick={!task.worker ? () => setWorkerCreateTask(task) : undefined}
-                  onWorkerClick={task.worker ? () => window.open(`http://jaw.jarvis.io/${task.worker!.id}`, '_blank') : undefined}
-                  onVscodeClick={task.worker && task.worker.effective_state !== 'archived' ? () => {
+                  onWorkerClick={task.worker ? () => {
                     getWorkerVscodeUri(task.worker!.id).then(({ uri }) => { window.location.href = uri; });
                   } : undefined}
+                  onWorkerArchive={task.worker && task.worker.effective_state !== 'archived' ? () => archiveWorkerMutation.mutate(task.worker!.id) : undefined}
+                  onWorkerDelete={task.worker ? () => { if (confirm('Delete this worker and its Kubernetes resources?')) deleteWorkerMutation.mutate(task.worker!.id); } : undefined}
                 />
               ))}
               {visibleTasks.length === 0 && (

@@ -18,6 +18,7 @@ import {
   type KeyFocusFrequency,
 } from '../../api/client';
 import { BlockerPanel } from '../TaskBoard/BlockerPanel';
+import { DateNavPrev, DateNavNext, DateNavToday } from '../../components/DateNav';
 import './KeyFocusBoard.css';
 
 // --- helpers ---
@@ -319,6 +320,7 @@ export default function KeyFocusBoard() {
             </svg>
             Create
           </button>
+          <DateNavPrev selectedDate={selectedDate} onDateChange={(d) => setSelectedDate(d)} scope={frequency === 'quarterly' ? 'quarterly' : 'weekly'} />
           <div className="kf-board__calendar-dropdown" ref={calendarRef}>
             <button
               type="button"
@@ -347,6 +349,8 @@ export default function KeyFocusBoard() {
               </div>
             )}
           </div>
+          <DateNavNext selectedDate={selectedDate} onDateChange={(d) => setSelectedDate(d)} scope={frequency === 'quarterly' ? 'quarterly' : 'weekly'} />
+          <DateNavToday selectedDate={selectedDate} onDateChange={(d) => setSelectedDate(d)} />
         </div>
         <div className="kf-board__toolbar-right">
           <div className="kf-board__frequency-tabs" role="tablist" aria-label="Frequency filter">

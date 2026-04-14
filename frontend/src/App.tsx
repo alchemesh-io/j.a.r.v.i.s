@@ -6,6 +6,7 @@ import TaskBoard from './pages/TaskBoard/TaskBoard';
 import KeyFocusBoard from './pages/KeyFocusBoard/KeyFocusBoard';
 import Reports from './pages/Reports/Reports';
 import Workers from './pages/Workers/Workers';
+import Repositories from './pages/Repositories/Repositories';
 import ParticlesBackground from './components/ParticlesBackground';
 import './App.css';
 
@@ -24,6 +25,11 @@ const BOARD_TABS = [
   { path: '/reports', label: 'Reports' },
 ];
 
+const WORKER_TABS = [
+  { path: '/workers', label: 'Workers' },
+  { path: '/repositories', label: 'Repositories' },
+];
+
 function InvalidateOnRouteChange() {
   const location = useLocation();
   const qc = useQueryClient();
@@ -37,11 +43,11 @@ function InvalidateOnRouteChange() {
   return null;
 }
 
-function BoardNav() {
+function TabNav({ tabs }: { tabs: { path: string; label: string }[] }) {
   const location = useLocation();
   return (
     <div className="board-nav" role="tablist" aria-label="Board navigation">
-      {BOARD_TABS.map((tab) => (
+      {tabs.map((tab) => (
         <Link
           key={tab.path}
           to={tab.path}
@@ -54,6 +60,14 @@ function BoardNav() {
       ))}
     </div>
   );
+}
+
+function BoardNav() {
+  return <TabNav tabs={BOARD_TABS} />;
+}
+
+function WorkerNav() {
+  return <TabNav tabs={WORKER_TABS} />;
 }
 
 export default function App() {
@@ -80,7 +94,8 @@ export default function App() {
               <Route path="/tasks" element={<><BoardNav /><TaskBoard /></>} />
               <Route path="/key-focuses" element={<><BoardNav /><KeyFocusBoard /></>} />
               <Route path="/reports" element={<><BoardNav /><Reports /></>} />
-              <Route path="/workers" element={<Workers />} />
+              <Route path="/workers" element={<><WorkerNav /><Workers /></>} />
+              <Route path="/repositories" element={<><WorkerNav /><Repositories /></>} />
             </Routes>
           </main>
 
