@@ -121,15 +121,22 @@ def get_worker(worker_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{worker_id}/vscode-uri")
 def get_worker_vscode_uri(worker_id: str, db: Session = Depends(get_db)):
-    """Return a vscode:// URI to attach VSCode Dev Containers to this worker pod."""
+    """Return a vscode:// URI to attach VSCode Dev Containers to this worker pod via Kubernetes."""
     _load_worker(db, worker_id)
-    container_name = k8s.get_worker_container_name(worker_id)
-    if not container_name:
-        raise HTTPException(status_code=503, detail="Worker container not found or cluster unavailable")
+
+    kube_context = k8s.get_kube_context()
+    if not kube_context:
+        raise HTTPException(status_code=503, detail="Kubernetes cluster not available")
+
     import json
-    config = json.dumps({"containerName": f"/{container_name}"})
+    config = json.dumps({
+        "context": kube_context,
+        "podname": f"jarvis-worker-{worker_id}",
+        "namespace": k8s.NAMESPACE,
+        "name": "worker",
+    })
     hex_config = config.encode().hex()
-    uri = f"vscode://vscode-remote/attached-container+{hex_config}/home/node/jarvis"
+    uri = f"vscode://vscode-remote/k8s-container+{hex_config}/home/node"
     return {"uri": uri}
 
 
