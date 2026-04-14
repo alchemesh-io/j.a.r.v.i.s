@@ -18,6 +18,7 @@ router = APIRouter(prefix="/workers", tags=["workers"])
 
 WORKER_IMAGE = os.getenv("WORKER_IMAGE", "ghcr.io/alchemesh-io/jarvis-worker:latest")
 WORKER_IMAGE_PULL_POLICY = os.getenv("WORKER_IMAGE_PULL_POLICY", "IfNotPresent")
+KUBE_CONTEXT = os.getenv("KUBE_CONTEXT", "minikube")
 
 
 def _load_worker(db: Session, worker_id: str) -> Worker:
@@ -124,13 +125,9 @@ def get_worker_vscode_uri(worker_id: str, db: Session = Depends(get_db)):
     """Return a vscode:// URI to attach VSCode Dev Containers to this worker pod via Kubernetes."""
     _load_worker(db, worker_id)
 
-    kube_context = k8s.get_kube_context()
-    if not kube_context:
-        raise HTTPException(status_code=503, detail="Kubernetes cluster not available")
-
     import json
     config = json.dumps({
-        "context": kube_context,
+        "context": KUBE_CONTEXT,
         "podname": f"jarvis-worker-{worker_id}",
         "namespace": k8s.NAMESPACE,
         "name": "worker",

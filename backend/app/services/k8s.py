@@ -44,16 +44,6 @@ def is_available() -> bool:
     return _init_client()
 
 
-def get_kube_context() -> str | None:
-    """Return the current Kubernetes context name."""
-    if not _init_client():
-        return None
-    try:
-        _, active_context = config.list_kube_config_contexts()
-        return active_context["name"]
-    except (config.ConfigException, KeyError, TypeError):
-        return "in-cluster"
-
 
 def create_worker_pod(
     worker_id: str,
