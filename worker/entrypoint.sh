@@ -28,12 +28,13 @@ if [ -n "$REPOSITORIES" ]; then
         repo_name=$(basename "$git_url" .git)
         echo "[worker] Cloning $git_url (branch: $branch) into ~/jarvis/$repo_name"
 
-        GIT_ARGS=(clone --branch "$branch" --single-branch)
         if [ -n "$GITHUB_TOKEN" ]; then
-            GIT_ARGS+=(-c "http.extraHeader=Authorization: token ${GITHUB_TOKEN}")
+            auth_url=$(echo "$git_url" | sed "s|https://|https://x-access-token:${GITHUB_TOKEN}@|")
+        else
+            auth_url="$git_url"
         fi
 
-        GIT_TERMINAL_PROMPT=0 git "${GIT_ARGS[@]}" "$git_url" ~/jarvis/"$repo_name" 2>&1 || \
+        GIT_TERMINAL_PROMPT=0 git clone --branch "$branch" --single-branch "$auth_url" ~/jarvis/"$repo_name" 2>&1 || \
             echo "[worker] WARNING: Failed to clone $git_url"
     done
 fi
