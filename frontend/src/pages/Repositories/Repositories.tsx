@@ -103,17 +103,6 @@ export default function Repositories() {
 
             return (
               <article key={repo.id} className={`repo-card${hasActive ? ' repo-card--active' : ''}`}>
-                <button
-                  className="repo-card__delete"
-                  onClick={() => {
-                    if (hasActive) { setError('Repository in use by active worker'); return; }
-                    if (confirm(`Delete ${owner}/${name} @${repo.branch}?`)) deleteRepoMutation.mutate(repo.id);
-                  }}
-                  title="Delete repository"
-                >
-                  &times;
-                </button>
-
                 <div className="repo-card__icon">
                   <RepoIcon gitUrl={repo.git_url} />
                 </div>
@@ -121,11 +110,19 @@ export default function Repositories() {
                 <div className="repo-card__body">
                   <div className="repo-card__name">{name}</div>
                   {owner && <div className="repo-card__owner">{owner}</div>}
-                  <div className="repo-card__branch">
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-                      <path d="M11.75 2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122V6a2.5 2.5 0 01-2.5 2.5H7.5V12h.378a2.25 2.25 0 110 1.5H6.5v-5H4.75a1 1 0 01-1-1V5.372a2.25 2.25 0 111.5 0V7.5h5A1 1 0 0011.25 6.5V5.372A2.25 2.25 0 019.5 3.25zM4 2.5a.75.75 0 100 1.5.75.75 0 000-1.5z" fill="currentColor"/>
-                    </svg>
-                    {repo.branch}
+                  <div className="repo-card__branch-row">
+                    <span className="repo-card__branch">
+                      <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                        <path d="M11.75 2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122V6a2.5 2.5 0 01-2.5 2.5H7.5V12h.378a2.25 2.25 0 110 1.5H6.5v-5H4.75a1 1 0 01-1-1V5.372a2.25 2.25 0 111.5 0V7.5h5A1 1 0 0011.25 6.5V5.372A2.25 2.25 0 019.5 3.25zM4 2.5a.75.75 0 100 1.5.75.75 0 000-1.5z" fill="currentColor"/>
+                      </svg>
+                      {repo.branch}
+                    </span>
+                    <a className="repo-card__action" href={repo.git_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Open in browser">
+                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M9 2H14V7M14 2L6 10M6 4H3V13H12V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </a>
+                    <button className="repo-card__action repo-card__action--danger" onClick={() => { if (hasActive) { setError('Repository in use by active worker'); return; } if (confirm(`Delete ${owner}/${name} @${repo.branch}?`)) deleteRepoMutation.mutate(repo.id); }} title="Delete repository">
+                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 4H13M6 4V3H10V4M5 4V13H11V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
                   </div>
                 </div>
 
@@ -139,19 +136,6 @@ export default function Repositories() {
                     <span className="repo-card__stat-label">active</span>
                   </div>
                 </div>
-
-                <a
-                  className="repo-card__link"
-                  href={repo.git_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  title="Open in browser"
-                >
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                    <path d="M9 2H14V7M14 2L6 10M6 4H3V13H12V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </a>
               </article>
             );
           })}

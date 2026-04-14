@@ -166,106 +166,163 @@
 /* --- Worker Card --- */
 
 .worker-card {
+  display: flex;
+  gap: var(--jads-space-4, 16px);
   background: var(--color-surface, #111827);
   border: 1px solid var(--color-border, #2d3748);
   border-radius: 12px;
-  padding: var(--jads-space-3, 12px) var(--jads-space-4, 16px);
-  cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  position: relative;
+  padding: var(--jads-space-4, 16px);
+  transition: border-color 0.2s;
 }
 
 .worker-card:hover {
-  border-color: rgba(0, 212, 255, 0.3);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.08);
+  border-color: rgba(0, 212, 255, 0.2);
 }
 
-.worker-card__header {
+/* Left column: brain + controls */
+.worker-card__brain-col {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
-.worker-card__id {
-  font-family: monospace;
-  font-size: 0.75rem;
+.worker-card__brain {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.worker-card__brain:hover {
+  background: rgba(0, 212, 255, 0.06);
+}
+
+.worker-card__brain--disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.worker-card__brain--disabled:hover {
+  background: transparent;
+}
+
+.worker-card__controls {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.worker-card:hover .worker-card__controls {
+  opacity: 1;
+}
+
+.worker-card__stop {
+  color: #f59e0b;
+}
+.worker-card__stop:hover {
+  color: #ef4444 !important;
+}
+
+.worker-card__delete-btn {
   color: var(--color-text-muted, #94a3b8);
 }
+.worker-card__delete-btn:hover {
+  color: #ef4444 !important;
+}
 
-.worker-card__type {
-  font-size: 0.7rem;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: rgba(123, 47, 255, 0.15);
-  color: var(--color-accent-purple, #7b2fff);
-  font-weight: 500;
+/* Right column: details */
+.worker-card__details {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .worker-card__task-title {
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-text, #e2e8f0);
-  margin-bottom: 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.worker-card__footer {
+.worker-card__meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.worker-card__state {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-}
-
-.worker-card__state-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.worker-card__state-dot--initialized { background: #6b7280; }
-.worker-card__state-dot--working { background: #10b981; }
-.worker-card__state-dot--waiting_for_human { background: var(--color-accent-cyan, #00d4ff); }
-.worker-card__state-dot--done { background: #f59e0b; }
-.worker-card__state-dot--archived { background: #374151; }
-
-.worker-card__state-label {
+.worker-card__id {
+  font-family: monospace;
+  font-size: 0.7rem;
   color: var(--color-text-muted, #94a3b8);
+}
+
+.worker-card__type-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(123, 47, 255, 0.12);
+  color: var(--color-accent-purple, #7b2fff);
 }
 
 .worker-card__time {
+  font-size: 0.7rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+/* Repos list inside card */
+.worker-card__repos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.worker-card__repo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
+
+.worker-card__repo-icon {
+  flex-shrink: 0;
+  color: var(--color-text-muted, #94a3b8);
+  display: flex;
+}
+
+.worker-card__repo-name {
+  flex: 1;
   font-size: 0.75rem;
-  color: var(--color-text-muted, #94a3b8);
+  font-weight: 500;
+  color: var(--color-text, #e2e8f0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.worker-card__delete {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: none;
-  border: none;
-  color: var(--color-text-muted, #94a3b8);
-  cursor: pointer;
-  padding: 4px;
-  font-size: 0.9rem;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.worker-card:hover .worker-card__delete {
-  opacity: 1;
-}
-
-.worker-card__delete:hover {
-  color: #ef4444;
+.worker-card__repo-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: var(--color-accent-cyan, #00d4ff);
+  background: rgba(0, 212, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
 }
 
 /* --- Create Worker Overlay --- */
@@ -324,24 +381,89 @@
   border-color: var(--color-accent-cyan, #00d4ff);
 }
 
-.workers__repo-checkboxes {
+/* Repo picker — selectable cards */
+.workers__repo-picker {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 150px;
+  max-height: 200px;
   overflow-y: auto;
 }
 
-.workers__repo-checkbox {
+.workers__repo-card {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--color-bg, #0a0e1a);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 8px;
+  cursor: pointer;
   color: var(--color-text, #e2e8f0);
+  font-family: var(--jads-font-family, inherit);
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.workers__repo-checkbox input[type="checkbox"] {
-  width: auto;
+.workers__repo-card:hover {
+  border-color: rgba(0, 212, 255, 0.3);
+  background: rgba(0, 212, 255, 0.04);
+}
+
+.workers__repo-card--selected {
+  border-color: rgba(0, 212, 255, 0.5);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.workers__repo-card-icon {
+  flex-shrink: 0;
+  color: var(--color-text-muted, #94a3b8);
+  display: flex;
+}
+
+.workers__repo-card--selected .workers__repo-card-icon {
+  color: var(--color-accent-cyan, #00d4ff);
+}
+
+.workers__repo-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.workers__repo-card-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workers__repo-card-owner {
+  font-size: 0.7rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.workers__repo-card-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--color-accent-cyan, #00d4ff);
+  background: rgba(0, 212, 255, 0.08);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.workers__repo-card-check {
+  flex-shrink: 0;
+  width: 18px;
+  font-size: 0.85rem;
+  color: var(--color-accent-cyan, #00d4ff);
+  text-align: center;
 }
 
 .workers__create-actions {
