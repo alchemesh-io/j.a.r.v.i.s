@@ -40,36 +40,6 @@
   display: none;
 }
 
-/* + Create button — ghost HUD style override */
-.task-board__create-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  font-family: var(--jads-font-family);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--jads-color-accent-cyan, #00d4ff);
-  background: transparent;
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  min-height: unset;
-}
-
-.task-board__create-btn:hover {
-  background: rgba(0, 212, 255, 0.08);
-  border-color: var(--jads-color-accent-cyan, #00d4ff);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.2);
-}
-
-.task-board__create-btn:focus-visible {
-  outline: 1px solid var(--jads-color-accent-cyan, #00d4ff);
-  outline-offset: 2px;
-}
 
 /* Calendar dropdown */
 .task-board__calendar-dropdown {

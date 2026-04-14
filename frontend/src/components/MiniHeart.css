@@ -1,0 +1,41 @@
+.mini-brain {
+  display: block;
+  flex-shrink: 0;
+  overflow: visible;
+  transition: filter 2s ease;
+  margin: -18px 0 -14px;
+}
+
+.mini-brain__ring-2 {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mb-rotate-cw 30s linear infinite;
+}
+
+.mini-brain__ring-3 {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mb-rotate-ccw 50s linear infinite;
+}
+
+.mini-brain__ring-4 {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mb-rotate-cw 80s linear infinite;
+}
+
+.mini-brain__ring-5 {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mb-rotate-ccw 120s linear infinite;
+}
+
+@keyframes mb-rotate-cw {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes mb-rotate-ccw {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}

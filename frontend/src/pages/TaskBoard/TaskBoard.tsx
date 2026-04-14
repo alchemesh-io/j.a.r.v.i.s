@@ -859,10 +859,10 @@ export default function TaskBoard() {
         <div className="task-board__toolbar-left">
           <button
             type="button"
-            className="task-board__create-btn"
+            className="create-btn"
             onClick={() => { setShowCreateForm(true); setEditingTask(null); resetForm(); }}
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M8 2V14M2 8H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             Create

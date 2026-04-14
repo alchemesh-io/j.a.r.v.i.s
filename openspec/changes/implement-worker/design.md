@@ -197,3 +197,47 @@ Rollback: delete the ArgoCD app and revert to the previous commit. Worker pods i
 3. **Skill pulling at init vs. on-demand** — Should all JAAR skills be pulled during pod init (slower startup, guaranteed availability) or pulled on-demand by Claude Code (faster startup, potential runtime failures)?
 4. **Worker restart semantics** — When a worker is "restarted", should the Claude Code session history be preserved (requires volume persistence) or start fresh?
 5. **Maximum concurrent workers** — Should there be a configurable limit to prevent resource exhaustion, or leave it to Kubernetes resource quotas?
+
+## Implementation Additions
+
+The following decisions were made during implementation and extend the original design.
+
+### D11: Hook-based state reporting — not process polling
+
+The original design (D4) described deriving live worker state by inspecting the Claude Code process from the status endpoint. In practice, Claude Code hooks provide a more reliable mechanism: `PreToolUse` fires when Claude starts working, and `Stop`/`Notification` fire when it finishes. The `setup-claude.sh` script configures these hooks to write the current state to `/tmp/claude-state`. The status server reads from this file and pushes state to the backend via `PATCH /api/v1/workers/{id}` every 3 seconds. This replaces the pull-based model (backend polling the pod) with a push-based model (pod pushing state to the backend).
+
+**Alternatives considered:**
+- Process stdout/stderr parsing: fragile, depends on Claude Code output format
+- Polling from backend to pod status endpoint: higher latency, more network traffic, complicates backend with async polling loops
+
+### D12: Dedicated JAW secret — separate from backend secret
+
+Worker pods need credentials (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `GITHUB_TOKEN`) that differ from the backend's secrets. A dedicated Kubernetes Secret (`jarvis-jaw-secret`) is created in the `jarvis` namespace, deployed via a separate Makefile target (`_deploy-jaw-secrets`) from `secrets/jaw-secret.yaml`. This keeps worker credentials isolated and allows rotation without affecting the backend.
+
+**Alternatives considered:**
+- Shared backend secret with additional keys: couples backend and worker credential lifecycles; worker needs tokens (e.g., GITHUB_TOKEN) that backend does not
+- Per-worker secrets: too granular for local dev; all workers share the same credentials
+
+### D13: VSCode Dev Containers via k8s-container URI — not SSH
+
+The original design (D9) mentioned VSCode Kubernetes extension for remote access. The implementation uses the Dev Containers extension with the `k8s-container` URI scheme: `vscode://vscode-remote/k8s-container+<hex-encoded-context-and-pod>/home/node`. A dedicated backend endpoint `GET /api/v1/workers/{id}/vscode-uri` generates this URI, encoding the `KUBE_CONTEXT` (configurable via env var, default `"minikube"`), namespace, pod name, and container name into the hex payload. The SSH approach was abandoned as it requires sshd in the container and key management.
+
+**Alternatives considered:**
+- SSH with key injection: requires sshd, key management, port exposure — complexity not justified for local dev
+- Kubernetes extension `attach` command: less integrated than Dev Containers; doesn't provide a full IDE workspace
+
+### D14: Claude Code non-interactive mode via named pipe + stream-json
+
+Claude Code runs in `--print --input-format stream-json --output-format stream-json --dangerously-skip-permissions` mode, receiving input through a named pipe. The worker UI writes user messages to the named pipe, and Claude Code streams responses back as JSON. This avoids the complexities of PTY emulation and provides structured input/output. Claude Code version is pinned at 2.1.104.
+
+**Alternatives considered:**
+- PTY-based interactive session: harder to parse output, TTY escape codes contaminate streams
+- `--resume` with session files: requires persistent storage; stream-json is more reliable for programmatic interaction
+
+### D15: Repository page as separate tab — not inline on Workers page
+
+The original UI spec placed repositories as a collapsible panel on the Workers page. During implementation, repositories were moved to a dedicated `/repositories` route with a `TabNav` component (`Workers | Repositories`). This provides more space for rich repository cards (platform icon, owner, name, branch badge, worker counts) and separates concerns. The `TabNav` pattern (`WorkerNav`) is shared with `BoardNav` for consistency.
+
+**Alternatives considered:**
+- Inline collapsible panel: cramped UI, especially with rich repo cards showing worker counts
+- Modal dialog: loses context; repositories are a first-class management concern, not a secondary action

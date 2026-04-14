@@ -2,7 +2,7 @@
 
 ## Forbidden Files
 
-**NEVER read, write, display, or reference the contents of `secrets/backend-secret.yaml` or `secrets/jaar-secret.yaml`.** These files contain sensitive credentials and are not version-controlled. Use the corresponding `.example.yaml` files as a reference for the expected structure.
+**NEVER read, write, display, or reference the contents of `secrets/backend-secret.yaml`, `secrets/jaar-secret.yaml`, or `secrets/jaw-secret.yaml`.** These files contain sensitive credentials and are not version-controlled. Use the corresponding `.example.yaml` files as a reference for the expected structure.
 
 ## Project Overview
 
@@ -25,7 +25,9 @@ j.a.r.v.i.s/
 │   ├── backend-secret.example.yaml  # Template — copy to backend-secret.yaml
 │   ├── backend-secret.yaml          # (gitignored) Actual K8s Secret manifest
 │   ├── jaar-secret.example.yaml     # Template — copy to jaar-secret.yaml
-│   └── jaar-secret.yaml             # (gitignored) JAAR PostgreSQL/DB credentials
+│   ├── jaar-secret.yaml             # (gitignored) JAAR PostgreSQL/DB credentials
+│   ├── jaw-secret.example.yaml      # Template — copy to jaw-secret.yaml
+│   └── jaw-secret.yaml              # (gitignored) Worker credentials (ANTHROPIC_API_KEY, GITHUB_TOKEN)
 ├── backend/
 │   ├── app/
 │   │   ├── main.py           # FastAPI application — routes mounted under /api/v1
@@ -51,7 +53,7 @@ j.a.r.v.i.s/
 │   │   │   ├── worker.py     # Worker Pydantic schemas (Create, Update, Response, Summary)
 │   │   │   └── repository.py # Repository Pydantic schemas (Create, Response)
 │   │   ├── services/
-│   │   │   └── k8s.py        # Kubernetes client — create/delete worker pods, services, httproutes
+│   │   │   └── k8s.py        # Kubernetes client — create/delete worker pods and services
 │   │   └── routes/
 │   │       ├── tasks.py      # /api/v1/tasks — CRUD + date/scope filtering
 │   │       ├── weeklies.py   # /api/v1/weeklies — CRUD with nested dailies
@@ -69,18 +71,22 @@ j.a.r.v.i.s/
 │   ├── packages/
 │   │   └── jads/             # J.A.D.S (Just A Design System) — @jarvis/jads
 │   │       ├── src/
-│   │       │   ├── components/ # Button, Card, Input, Select, IconButton, TaskCard, Calendar
+│   │       │   ├── components/ # Button, Card, Input, Select, IconButton, TaskCard, Calendar, WorkerBrain
 │   │       │   ├── theme.css   # CSS custom properties (dark futuristic theme)
 │   │       │   └── index.ts    # Barrel exports
 │   │       ├── .storybook/     # Storybook 10.x config
 │   │       └── package.json
 │   ├── src/
-│   │   ├── App.tsx           # Root with React Router, TanStack Query provider
+│   │   ├── App.tsx           # Root with React Router, TanStack Query provider, TabNav
 │   │   ├── api/client.ts     # Typed fetch functions for /api/v1/ endpoints
+│   │   ├── components/
+│   │   │   ├── DateNav.tsx     # Date navigation (prev/next/today) for all board pages
+│   │   │   └── DateNav.css
 │   │   ├── pages/
 │   │   │   ├── Dashboard/    # Dashboard with metric blocks, brain animation, chat
-│   │   │   ├── TaskBoard/    # Task board with calendar, DnD, CRUD
-│   │   │   └── Workers/      # Worker management page (repository panel + worker cards)
+│   │   │   ├── TaskBoard/    # Task board with calendar, DnD, CRUD, filters
+│   │   │   ├── Workers/      # Worker management page (state filters + worker cards)
+│   │   │   └── Repositories/ # Repository management page (repo cards + CRUD)
 │   │   ├── App.css           # App shell styles
 │   │   └── index.css         # Global styles, CSS variables
 │   ├── e2e/                  # Playwright E2E tests
@@ -103,10 +109,11 @@ j.a.r.v.i.s/
 │   ├── skills/                 # Skill artifacts (add via arctl)
 │   └── prompts/                # Prompt artifacts (add via arctl)
 ├── worker/
-│   ├── Dockerfile            # Worker Docker image (node:22-slim + Claude Code + tools)
+│   ├── Dockerfile            # Worker Docker image (node:22-slim + Claude Code 2.1.104 + tools)
 │   ├── entrypoint.sh         # Init sequence: config copy, repo clone, skill pull, start
+│   ├── setup-claude.sh       # Claude Code config: hooks, workspace trust, MCP server
 │   └── status-server/
-│       └── index.js          # Minimal HTTP status endpoint (port 8080)
+│       └── index.js          # Status endpoint (port 8080) + push state to backend every 3s
 ├── helm/
 │   ├── istio/                # Istio service mesh (deployed via ArgoCD)
 │   │   ├── Chart.yaml        # Sub-chart deps: base, istiod, gateway
@@ -150,7 +157,6 @@ All traffic enters through the Istio ingress gateway via host-based routing on p
 
 - `main.jarvis.io` — JARVIS: `/api/*` → backend, `/*` → frontend SPA (HTTP)
 - `mcp.jarvis.io` — MCP server: `/*` → FastMCP HTTP transport (HTTP)
-- `jaw.jarvis.io` — Worker UIs: `/<worker_id>/*` → worker pod chat UI (HTTP, dynamic HTTPRoutes)
 - `jaar.jarvis.io` — AgentRegistry: `/*` → Next.js UI + API (HTTP)
 - `jaac.jarvis.io` — ArgoCD UI (HTTPS — self-signed wildcard cert)
 
@@ -158,10 +164,12 @@ The gateway has two listeners: HTTP (:80) and HTTPS (:443) both matching `*.jarv
 
 For local dev, add entries to `/etc/hosts` (or use dnsmasq for wildcard):
 ```
-<GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaw.jarvis.io jaar.jarvis.io jaac.jarvis.io
+<GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaar.jarvis.io jaac.jarvis.io
 ```
 
 Backend task management endpoints are under `/api/v1/`. OpenAPI docs at `main.jarvis.io/docs`.
+
+Frontend routes: `/` (Dashboard), `/tasks` (TaskBoard), `/key-focuses` (Key Focuses), `/reports` (Reports), `/workers` (Workers), `/repositories` (Repositories). Workers and Repositories share a `WorkerNav` tab bar.
 
 ## Local Development Workflow
 
@@ -213,7 +221,6 @@ kubectl get svc istio-ingressgateway -n istio-system   # Shows EXTERNAL-IP for t
 All traffic enters through the Istio ingress gateway via host-based routing (`*.jarvis.io`):
 - `main.jarvis.io`: `/api/*`, `/docs`, `/health` → backend; `/*` → frontend SPA
 - `mcp.jarvis.io`: `/*` → MCP server (FastMCP HTTP transport)
-- `jaw.jarvis.io`: `/<worker_id>/*` → worker pod chat UI (dynamic HTTPRoutes)
 - `jaar.jarvis.io`: `/*` → AgentRegistry
 - `jaac.jarvis.io`: `/*` → ArgoCD UI (HTTPS)
 
@@ -305,7 +312,8 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
 - ArgoCD syncs from `HEAD` of the current branch via `minikube mount`
 - Helm values for image tags use `latest` by default locally; CI tags with short git SHA
 - Kubernetes Gateway API (Gateway + HTTPRoute) with Istio: host-based routing on `*.jarvis.io` (`main.jarvis.io` → JARVIS, `mcp.jarvis.io` → MCP server, `jaar.jarvis.io` → AgentRegistry)
-- Backend config via ConfigMap (`backend-configmap.yaml`), secrets via Secret (`backend-secret.yaml`)
+- Backend config via ConfigMap (`backend-configmap.yaml`) including `WORKER_IMAGE`, `WORKER_IMAGE_PULL_POLICY`, `KUBE_CONTEXT`; secrets via Secret (`backend-secret.yaml`)
+- Worker credentials via dedicated Secret (`jarvis-jaw-secret` from `secrets/jaw-secret.yaml`): `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `GITHUB_TOKEN`
 - JAAR config via upstream AgentRegistry subchart, secrets via Secret (`jaar-secret.yaml`)
 - Frontend uses `serve` for static files — no nginx (Istio handles routing via host-based matching)
 - MCP server gets `BACKEND_URL` from its deployment env vars
@@ -321,6 +329,9 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
 | **MCP server depends on backend** | MCP tools fail if backend is down | httpx with retry logic; K8s readiness probes check backend connectivity |
 | **JAAR + PostgreSQL add ~512 MB RAM** | May require more Minikube memory | Bump with `MINIKUBE_MEMORY=12288` |
 | **Data persistence requires mount** | `minikube mount` for `.data/` must stay running | `make cluster-status` shows mount health; data survives `minikube delete` |
-| **Host-based routing requires `/etc/hosts`** | `*.jarvis.io` must resolve to gateway IP | Add entries for `main.jarvis.io`, `mcp.jarvis.io`, `jaw.jarvis.io`, `jaar.jarvis.io`, `jaac.jarvis.io` (or use dnsmasq for wildcard) |
+| **Host-based routing requires `/etc/hosts`** | `*.jarvis.io` must resolve to gateway IP | Add entries for `main.jarvis.io`, `mcp.jarvis.io`, `jaar.jarvis.io`, `jaac.jarvis.io` (or use dnsmasq for wildcard) |
 | **Worker pods consume significant resources** | Each worker pod runs Claude Code + UI + status server (~512MB–1GB RAM) | Set resource requests/limits via Helm values; limit concurrent workers |
 | **Dynamic HTTPRoutes managed outside ArgoCD** | Worker HTTPRoutes aren't managed by ArgoCD sync | Worker deletion explicitly removes HTTPRoutes; orphan cleanup can be added later |
+| **Hook-based state reporting has 3s latency** | Worker state changes are pushed to the backend every 3 seconds by the status server, not in real-time | Acceptable for UI updates combined with 5s frontend polling; total worst-case latency is ~8s |
+| **Claude Code version pinned at 2.1.104** | Worker image must be rebuilt to upgrade Claude Code | Pin prevents unexpected breaking changes; bump version in `worker/Dockerfile` and rebuild |
+| **VSCode Dev Containers requires extension** | `vscode-uri` endpoint generates `k8s-container` URIs that need the Dev Containers extension | Document prerequisite; SSH fallback abandoned |

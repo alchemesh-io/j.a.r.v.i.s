@@ -215,7 +215,6 @@ def test_create_worker_with_k8s(mock_k8s, client):
     assert resp.status_code == 201
     mock_k8s.create_worker_pod.assert_called_once()
     mock_k8s.create_worker_service.assert_called_once()
-    mock_k8s.create_worker_httproute.assert_called_once()
 
 
 @patch("app.routes.workers.k8s")

@@ -8,18 +8,67 @@
   width: 100%;
 }
 
-.workers__header {
+/* Toolbar */
+.workers__toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--jads-space-4, 16px);
+  padding: 10px 0;
+}
+
+.workers__toolbar-left {
+  display: flex;
+  align-items: center;
   gap: var(--jads-space-3, 12px);
 }
 
-.workers__title {
-  font-size: 1.5rem;
+.workers__toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--jads-space-3, 12px);
+}
+
+.workers__count {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.workers__filter-tabs {
+  display: flex;
+  background: rgba(11, 14, 26, 0.5);
+  border: 1px solid rgba(0, 212, 255, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.workers__filter-tab {
+  padding: 4px 10px;
+  font-family: var(--jads-font-family);
+  font-size: 0.7rem;
   font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted, #94a3b8);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.workers__filter-tab:hover {
   color: var(--color-text, #e2e8f0);
-  margin: 0;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.workers__filter-tab--active {
+  font-weight: 700;
+}
+
+.workers__filter-tab--active:not([style]) {
+  color: var(--color-accent-cyan, #00d4ff);
+  background: rgba(0, 212, 255, 0.1);
 }
 
 /* --- Repository Panel --- */
@@ -167,7 +216,8 @@
 
 .worker-card {
   display: flex;
-  gap: var(--jads-space-4, 16px);
+  flex-direction: column;
+  gap: 10px;
   background: var(--color-surface, #111827);
   border: 1px solid var(--color-border, #2d3748);
   border-radius: 12px;
@@ -179,14 +229,88 @@
   border-color: rgba(0, 212, 255, 0.2);
 }
 
-/* Left column: brain + controls */
-.worker-card__brain-col {
+/* State-based card accents */
+.worker-card--working {
+  border-left: 3px solid #3b82f6;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.06) 0%, transparent 60%);
+}
+
+.worker-card--waiting_for_human {
+  border-left: 3px solid #ef4444;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, transparent 60%);
+}
+
+.worker-card--initialized {
+  border-left: 3px solid #6b7280;
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.06) 0%, transparent 60%);
+}
+
+.worker-card--done {
+  border-left: 3px solid #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, transparent 60%);
+}
+
+.worker-card--archived {
+  border-left: 3px solid #374151;
+  opacity: 0.6;
+}
+
+/* Title row */
+.worker-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.worker-card__task-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text, #e2e8f0);
+  margin: 0;
+}
+
+.worker-card__type-badge {
+  align-self: flex-start;
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(123, 47, 255, 0.12);
+  color: var(--color-accent-purple, #7b2fff);
+  white-space: nowrap;
+}
+
+/* Brain row: controls left (absolute), brain center */
+.worker-card__brain-row {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.worker-card__brain-controls {
+  position: absolute;
+  left: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
 }
+
+.worker-card:hover .worker-card__brain-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.worker-card__stop { color: #f59e0b; }
+.worker-card__stop:hover { color: #ef4444 !important; }
+.worker-card__delete-btn { color: var(--color-text-muted, #94a3b8); }
+.worker-card__delete-btn:hover { color: #ef4444 !important; }
 
 .worker-card__brain {
   cursor: pointer;
@@ -207,79 +331,7 @@
   background: transparent;
 }
 
-.worker-card__controls {
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.worker-card:hover .worker-card__controls {
-  opacity: 1;
-}
-
-.worker-card__stop {
-  color: #f59e0b;
-}
-.worker-card__stop:hover {
-  color: #ef4444 !important;
-}
-
-.worker-card__delete-btn {
-  color: var(--color-text-muted, #94a3b8);
-}
-.worker-card__delete-btn:hover {
-  color: #ef4444 !important;
-}
-
-/* Right column: details */
-.worker-card__details {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.worker-card__task-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--color-text, #e2e8f0);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.worker-card__meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.worker-card__id {
-  font-family: monospace;
-  font-size: 0.7rem;
-  color: var(--color-text-muted, #94a3b8);
-}
-
-.worker-card__type-badge {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: rgba(123, 47, 255, 0.12);
-  color: var(--color-accent-purple, #7b2fff);
-}
-
-.worker-card__time {
-  font-size: 0.7rem;
-  color: var(--color-text-muted, #94a3b8);
-}
-
-/* Repos list inside card */
+/* Repos */
 .worker-card__repos {
   display: flex;
   flex-direction: column;
@@ -290,7 +342,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 8px;
+  padding: 5px 10px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 6px;
@@ -320,9 +372,29 @@
   font-weight: 500;
   color: var(--color-accent-cyan, #00d4ff);
   background: rgba(0, 212, 255, 0.08);
-  padding: 1px 6px;
+  padding: 2px 6px;
   border-radius: 3px;
   flex-shrink: 0;
+}
+
+/* Footer */
+.worker-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.worker-card__id {
+  font-family: monospace;
+  font-size: 0.65rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.worker-card__time {
+  font-size: 0.65rem;
+  color: var(--color-text-muted, #94a3b8);
 }
 
 /* --- Create Worker Overlay --- */

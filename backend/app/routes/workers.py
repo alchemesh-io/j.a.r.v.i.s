@@ -85,7 +85,6 @@ def create_worker(body: WorkerCreate, db: Session = Depends(get_db)):
             repo_data = [{"git_url": r.git_url, "branch": r.branch} for r in repos]
             k8s.create_worker_pod(worker_id, body.task_id, WORKER_IMAGE, repo_data, image_pull_policy=WORKER_IMAGE_PULL_POLICY)
             k8s.create_worker_service(worker_id)
-            k8s.create_worker_httproute(worker_id)
         except Exception:
             logger.exception("Failed to create K8s resources for worker %s", worker_id)
             raise HTTPException(status_code=503, detail="Failed to create worker Kubernetes resources")

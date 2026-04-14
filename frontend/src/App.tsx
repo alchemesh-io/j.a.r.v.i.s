@@ -8,6 +8,7 @@ import Reports from './pages/Reports/Reports';
 import Workers from './pages/Workers/Workers';
 import Repositories from './pages/Repositories/Repositories';
 import ParticlesBackground from './components/ParticlesBackground';
+import { MiniHeart } from './components/MiniHeart';
 import './App.css';
 
 const queryClient = new QueryClient({
@@ -79,7 +80,7 @@ export default function App() {
         <div className="app">
           <header className="app-header">
             <Link to="/" className="logo" aria-label="J.A.R.V.I.S">
-              J.A.R.V.I.S
+              <MiniHeart />
             </Link>
             <nav aria-label="Main navigation">
               <Link to="/">Dashboard</Link>

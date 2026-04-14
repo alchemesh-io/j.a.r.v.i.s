@@ -9,6 +9,3 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "services"]
     verbs: ["create", "get", "list", "delete"]
-  - apiGroups: ["gateway.networking.k8s.io"]
-    resources: ["httproutes"]
-    verbs: ["create", "get", "list", "delete"]

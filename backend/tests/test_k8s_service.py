@@ -9,11 +9,9 @@ from app.services import k8s
 def reset_k8s_state():
     """Reset the module-level K8s client state before each test."""
     k8s._api_v1 = None
-    k8s._custom_api = None
     k8s._k8s_available = None
     yield
     k8s._api_v1 = None
-    k8s._custom_api = None
     k8s._k8s_available = None
 
 
@@ -89,38 +87,17 @@ def test_create_worker_service_calls_api(mock_client, mock_config):
 
 @patch("app.services.k8s.config")
 @patch("app.services.k8s.client")
-def test_create_worker_httproute_calls_api(mock_client, mock_config):
-    mock_config.ConfigException = Exception
-    mock_custom_api = MagicMock()
-    mock_client.CoreV1Api.return_value = MagicMock()
-    mock_client.CustomObjectsApi.return_value = mock_custom_api
-
-    k8s._init_client()
-    k8s._custom_api = mock_custom_api
-
-    k8s.create_worker_httproute("abc123")
-    mock_custom_api.create_namespaced_custom_object.assert_called_once()
-    call_kwargs = mock_custom_api.create_namespaced_custom_object.call_args
-    assert call_kwargs.kwargs["plural"] == "httproutes"
-
-
-@patch("app.services.k8s.config")
-@patch("app.services.k8s.client")
 def test_delete_worker_resources(mock_client, mock_config):
     mock_config.ConfigException = Exception
     mock_api = MagicMock()
-    mock_custom_api = MagicMock()
     mock_client.CoreV1Api.return_value = mock_api
-    mock_client.CustomObjectsApi.return_value = mock_custom_api
 
     k8s._init_client()
     k8s._api_v1 = mock_api
-    k8s._custom_api = mock_custom_api
 
     k8s.delete_worker_resources("abc123")
     mock_api.delete_namespaced_pod.assert_called_once()
     mock_api.delete_namespaced_service.assert_called_once()
-    mock_custom_api.delete_namespaced_custom_object.assert_called_once()
 
 
 @patch("app.services.k8s.config")

@@ -47,10 +47,6 @@ if [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
 fi
 
 # Step 5: Start all processes
-echo "[worker] Starting worker UI on port 3000..."
-serve -s ~/worker-ui -l 3000 &
-UI_PID=$!
-
 echo "[worker] Starting status server on port 8080..."
 node ~/status-server/index.js &
 STATUS_PID=$!
@@ -72,10 +68,10 @@ CLAUDE_PID=$!
 
 echo "$CLAUDE_PID" > /tmp/claude.pid
 
-echo "[worker] All processes started. Claude PID=$CLAUDE_PID, Status PID=$STATUS_PID, UI PID=$UI_PID"
+echo "[worker] All processes started. Claude PID=$CLAUDE_PID, Status PID=$STATUS_PID"
 
-# Keep the pod alive — wait for UI or status server to exit
-wait $UI_PID $STATUS_PID
-echo "[worker] A process exited, shutting down..."
-kill $STATUS_PID $CLAUDE_PID $UI_PID 2>/dev/null || true
+# Keep the pod alive — wait for status server to exit
+wait $STATUS_PID
+echo "[worker] Status server exited, shutting down..."
+kill $STATUS_PID $CLAUDE_PID 2>/dev/null || true
 wait

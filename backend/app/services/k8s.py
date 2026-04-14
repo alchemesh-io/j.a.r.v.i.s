@@ -1,5 +1,4 @@
 import logging
-from typing import Any
 
 import httpx
 from kubernetes import client, config
@@ -9,18 +8,14 @@ logger = logging.getLogger(__name__)
 
 NAMESPACE = "jarvis"
 WORKER_LABEL = "jarvis-worker"
-GATEWAY_NAME = "jarvis-gateway"
-GATEWAY_NAMESPACE = "istio-system"
-WORKER_HOST = "jaw.jarvis.io"
 
 _api_v1: client.CoreV1Api | None = None
-_custom_api: client.CustomObjectsApi | None = None
 _k8s_available: bool | None = None
 
 
 def _init_client() -> bool:
     """Initialize Kubernetes client. Returns True if available."""
-    global _api_v1, _custom_api, _k8s_available
+    global _api_v1, _k8s_available
     if _k8s_available is not None:
         return _k8s_available
     try:
@@ -35,7 +30,6 @@ def _init_client() -> bool:
             _k8s_available = False
             return False
     _api_v1 = client.CoreV1Api()
-    _custom_api = client.CustomObjectsApi()
     return True
 
 
@@ -167,7 +161,6 @@ def create_worker_service(worker_id: str) -> None:
                 "worker-id": worker_id,
             },
             ports=[
-                client.V1ServicePort(name="ui", port=3000, target_port=3000),
                 client.V1ServicePort(name="status", port=8080, target_port=8080),
             ],
         ),
@@ -175,72 +168,8 @@ def create_worker_service(worker_id: str) -> None:
     _api_v1.create_namespaced_service(namespace=NAMESPACE, body=service)
 
 
-def create_worker_httproute(worker_id: str) -> None:
-    """Create a Gateway API HTTPRoute for a worker."""
-    if not _init_client():
-        raise RuntimeError("Kubernetes cluster not available")
-
-    httproute: dict[str, Any] = {
-        "apiVersion": "gateway.networking.k8s.io/v1",
-        "kind": "HTTPRoute",
-        "metadata": {
-            "name": f"jarvis-worker-{worker_id}",
-            "namespace": NAMESPACE,
-            "labels": {
-                "app": WORKER_LABEL,
-                "worker-id": worker_id,
-            },
-        },
-        "spec": {
-            "parentRefs": [
-                {
-                    "name": GATEWAY_NAME,
-                    "namespace": GATEWAY_NAMESPACE,
-                }
-            ],
-            "hostnames": [WORKER_HOST],
-            "rules": [
-                {
-                    "matches": [
-                        {
-                            "path": {
-                                "type": "PathPrefix",
-                                "value": f"/{worker_id}",
-                            }
-                        }
-                    ],
-                    "filters": [
-                        {
-                            "type": "URLRewrite",
-                            "urlRewrite": {
-                                "path": {
-                                    "type": "ReplacePrefixMatch",
-                                    "replacePrefixMatch": "/",
-                                }
-                            },
-                        }
-                    ],
-                    "backendRefs": [
-                        {
-                            "name": f"jarvis-worker-{worker_id}",
-                            "port": 3000,
-                        }
-                    ],
-                }
-            ],
-        },
-    }
-    _custom_api.create_namespaced_custom_object(
-        group="gateway.networking.k8s.io",
-        version="v1",
-        namespace=NAMESPACE,
-        plural="httproutes",
-        body=httproute,
-    )
-
-
 def delete_worker_resources(worker_id: str) -> None:
-    """Delete all Kubernetes resources for a worker (pod, service, httproute)."""
+    """Delete all Kubernetes resources for a worker (pod, service)."""
     if not _init_client():
         return
 
@@ -257,18 +186,6 @@ def delete_worker_resources(worker_id: str) -> None:
     except ApiException as e:
         if e.status != 404:
             logger.error("Failed to delete worker service %s: %s", name, e)
-
-    try:
-        _custom_api.delete_namespaced_custom_object(
-            group="gateway.networking.k8s.io",
-            version="v1",
-            namespace=NAMESPACE,
-            plural="httproutes",
-            name=name,
-        )
-    except ApiException as e:
-        if e.status != 404:
-            logger.error("Failed to delete worker httproute %s: %s", name, e)
 
 
 def get_worker_pod_status(worker_id: str) -> dict[str, str] | None:

@@ -43,3 +43,20 @@ The worker status endpoint (port 8080) SHALL only be accessible within the clust
 #### Scenario: Status endpoint not reachable externally
 - **WHEN** an external request is sent to `jaw.jarvis.io/<worker_id>/status`
 - **THEN** the request is routed to the worker UI (port 3000), not the status endpoint
+
+## Implementation Additions
+
+### Requirement: VSCode Dev Containers URI endpoint
+The API SHALL expose `GET /api/v1/workers/{id}/vscode-uri` that returns a VSCode Dev Containers URI in the format `vscode://vscode-remote/k8s-container+<hex>/home/node`. The `<hex>` payload SHALL encode the Kubernetes context (from `KUBE_CONTEXT` env var, default `"minikube"`), namespace (`jarvis`), pod name (`jarvis-worker-<worker_id>`), and container name. This endpoint enables the frontend to open VSCode directly attached to a worker pod.
+
+#### Scenario: VSCode URI returned for active worker
+- **WHEN** `GET /api/v1/workers/{id}/vscode-uri` is called for a worker with a running pod
+- **THEN** the response contains `{ "uri": "vscode://vscode-remote/k8s-container+<hex>/home/node" }` with HTTP 200
+
+#### Scenario: VSCode URI for non-existent worker
+- **WHEN** `GET /api/v1/workers/{id}/vscode-uri` is called with a non-existent worker ID
+- **THEN** HTTP 404 is returned
+
+#### Scenario: KUBE_CONTEXT configurable
+- **WHEN** the backend is configured with `KUBE_CONTEXT=my-cluster`
+- **THEN** the hex payload in the URI encodes `my-cluster` as the Kubernetes context

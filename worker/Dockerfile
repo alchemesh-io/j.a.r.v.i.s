@@ -1,10 +1,3 @@
-# Stage 1: Build worker UI from erdrix/claude-code
-# TODO: Replace placeholder with actual erdrix/claude-code build
-FROM node:22-slim AS worker-ui-build
-RUN mkdir -p /app/dist
-RUN echo '<!DOCTYPE html><html><head><title>Worker UI</title></head><body><h1>Worker UI placeholder</h1><p>Replace with erdrix/claude-code build</p></body></html>' > /app/dist/index.html
-
-# Stage 2: Final worker image
 FROM node:22-slim AS base
 
 # Install system dependencies
@@ -30,15 +23,8 @@ RUN curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry
     || echo "arctl install failed — continuing without it"
 
 # Reuse the existing node user (UID 1000) from node:22-slim
-# Create working directories under its home
 RUN mkdir -p /home/node/jarvis /home/node/.claude && \
     chown -R node:node /home/node
-
-# Copy worker UI built assets
-COPY --from=worker-ui-build --chown=node:node /app/dist/ /home/node/worker-ui/
-
-# Install serve for static file hosting
-RUN npm install -g serve
 
 # Copy status server
 COPY --chown=node:node status-server/ /home/node/status-server/
@@ -52,6 +38,6 @@ RUN chmod +x /home/node/entrypoint.sh /home/node/setup-claude.sh
 USER node
 WORKDIR /home/node/jarvis
 
-EXPOSE 3000 8080
+EXPOSE 8080
 
 ENTRYPOINT ["/home/node/entrypoint.sh"]
