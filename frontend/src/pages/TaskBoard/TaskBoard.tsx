@@ -48,6 +48,7 @@ import {
   removeKeyFocusFromTask,
   createWorker,
   listRepositories,
+  getWorkerVscodeUri,
   type Task,
   type TaskType,
   type JiraTicket,
@@ -1622,8 +1623,7 @@ export default function TaskBoard() {
                   onPlayClick={!task.worker ? () => setWorkerCreateTask(task) : undefined}
                   onWorkerClick={task.worker ? () => window.open(`http://jaw.jarvis.io/${task.worker!.id}`, '_blank') : undefined}
                   onVscodeClick={task.worker && task.worker.effective_state !== 'archived' ? () => {
-                    const config = JSON.stringify({ containerName: 'worker', podName: `jarvis-worker-${task.worker!.id}`, namespace: 'jarvis' });
-                    window.location.href = `vscode://ms-vscode-remote.remote-containers/attachContainer?connectInfo=${encodeURIComponent(config)}&folderPath=/home/node/jarvis`;
+                    getWorkerVscodeUri(task.worker!.id).then(({ uri }) => { window.location.href = uri; });
                   } : undefined}
                 />
               ))}

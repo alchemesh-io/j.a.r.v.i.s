@@ -119,6 +119,20 @@ def get_worker(worker_id: str, db: Session = Depends(get_db)):
     return _worker_to_response(worker, pod_status="unreachable")
 
 
+@router.get("/{worker_id}/vscode-uri")
+def get_worker_vscode_uri(worker_id: str, db: Session = Depends(get_db)):
+    """Return a vscode:// URI to attach VSCode Dev Containers to this worker pod."""
+    _load_worker(db, worker_id)
+    container_name = k8s.get_worker_container_name(worker_id)
+    if not container_name:
+        raise HTTPException(status_code=503, detail="Worker container not found or cluster unavailable")
+    import json
+    config = json.dumps({"containerName": f"/{container_name}"})
+    hex_config = config.encode().hex()
+    uri = f"vscode://vscode-remote/attached-container+{hex_config}/home/node/jarvis"
+    return {"uri": uri}
+
+
 @router.patch("/{worker_id}", response_model=WorkerResponse)
 def update_worker(worker_id: str, body: WorkerUpdate, db: Session = Depends(get_db)):
     worker = _load_worker(db, worker_id)

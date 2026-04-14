@@ -269,6 +269,25 @@ def delete_worker_resources(worker_id: str) -> None:
             logger.error("Failed to delete worker httproute %s: %s", name, e)
 
 
+def get_worker_container_name(worker_id: str) -> str | None:
+    """Get the Docker container name for a worker pod's 'worker' container.
+    Returns the name in the k8s_<container>_<pod>_<namespace>_<uid>_<restart> format,
+    needed by VSCode Dev Containers 'attached-container' URI."""
+    if not _init_client():
+        return None
+    try:
+        pod_name = f"jarvis-worker-{worker_id}"
+        pod = _api_v1.read_namespaced_pod(name=pod_name, namespace=NAMESPACE)
+        pod_uid = pod.metadata.uid
+        for cs in pod.status.container_statuses or []:
+            if cs.name == "worker":
+                restart_count = cs.restart_count or 0
+                return f"k8s_worker_{pod_name}_{NAMESPACE}_{pod_uid}_{restart_count}"
+    except ApiException:
+        pass
+    return None
+
+
 def get_worker_pod_status(worker_id: str) -> dict[str, str] | None:
     """Query the worker pod's status endpoint. Returns the status dict or None if unreachable."""
     if not _init_client():

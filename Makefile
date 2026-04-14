@@ -471,11 +471,21 @@ db-restore:
 # Worker
 # ---------------------------------------------------------------------------
 
-## (no-op) Placeholder for worker IDE setup — VSCode attaches via Kubernetes Dev Containers extension
+## Configure VSCode Dev Containers to connect to minikube's Docker daemon
 setup-worker-ssh:
-	@echo "==> VSCode connects to worker pods via Kubernetes Dev Containers extension."
-	@echo "    Install: ms-vscode-remote.remote-containers + ms-kubernetes-tools.vscode-kubernetes-tools"
-	@echo "    Usage:   Click the VSCode icon on a task card, or use Command Palette > 'Kubernetes: Attach Visual Studio Code'"
+	@echo "==> Configuring VSCode Dev Containers for minikube worker pods..."
+	$(eval DOCKER_HOST_VAL := $(shell minikube docker-env --shell bash 2>/dev/null | grep DOCKER_HOST | sed "s/export DOCKER_HOST=\"\(.*\)\"/\1/"))
+	@if [ -z "$(DOCKER_HOST_VAL)" ]; then \
+		echo "  WARNING: Could not detect minikube Docker host. Is minikube running?"; \
+	else \
+		echo "  Minikube Docker host: $(DOCKER_HOST_VAL)"; \
+		echo ""; \
+		echo "  Add this to your VSCode settings.json (Cmd+Shift+P > 'Preferences: Open User Settings (JSON)'):"; \
+		echo ""; \
+		echo '    "docker.host": "$(DOCKER_HOST_VAL)"'; \
+		echo ""; \
+		echo "  Required extensions: ms-vscode-remote.remote-containers"; \
+	fi
 
 ## Build the worker Docker image
 build-worker:

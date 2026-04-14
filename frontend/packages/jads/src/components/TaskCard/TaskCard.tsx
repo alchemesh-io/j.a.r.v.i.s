@@ -113,7 +113,7 @@ const PlayIcon = () => (
 
 const VscodeIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M11.5 1L6 6.5L3.5 4.5L1 6L5 10L1 14L3.5 15.5L6 13.5L11.5 19L15 17.5V2.5L11.5 1Z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" transform="scale(0.75) translate(2 1)" />
+    <path d="M10.5 1.5L4.5 7L2.5 5.5L1 6.5L4 9.5L1 12.5L2.5 13.5L4.5 12L10.5 17.5L14 16V3L10.5 1.5Z" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" transform="scale(0.85) translate(1 0.5)" />
   </svg>
 );
 
@@ -316,7 +316,7 @@ export function TaskCard({
           )}
           {worker && worker.effective_state !== 'archived' && onVscodeClick && (
             <IconButton
-              aria-label={`Open VSCode for: ${title}`}
+              aria-label={`Open terminal on worker for: ${title}`}
               variant="ghost"
               size="sm"
               onClick={onVscodeClick}

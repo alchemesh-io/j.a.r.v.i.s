@@ -474,6 +474,10 @@ export function deleteWorker(id: string): Promise<void> {
   return request(`/workers/${id}`, { method: 'DELETE' });
 }
 
+export function getWorkerVscodeUri(id: string): Promise<{ uri: string }> {
+  return request(`/workers/${id}/vscode-uri`);
+}
+
 // --- Repository API ---
 
 export function createRepository(body: {
