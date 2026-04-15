@@ -1,0 +1,243 @@
+.repositories {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jads-space-4, 16px);
+  padding: var(--jads-space-4, 16px);
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.repositories__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.repositories__title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text, #e2e8f0);
+  margin: 0;
+}
+
+.repositories__error {
+  color: #ef4444;
+  font-size: 0.8rem;
+}
+
+.repositories__empty {
+  text-align: center;
+  padding: var(--jads-space-6, 24px);
+  color: var(--color-text-muted, #94a3b8);
+  font-style: italic;
+}
+
+/* Create form overlay */
+.repositories__form-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.repositories__form {
+  background: var(--color-surface, #111827);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 16px;
+  padding: var(--jads-space-5, 20px);
+  min-width: 420px;
+  max-width: 520px;
+}
+
+.repositories__form h3 {
+  margin: 0 0 var(--jads-space-4, 16px);
+  color: var(--color-text, #e2e8f0);
+  font-size: 1.1rem;
+}
+
+.repositories__form-field {
+  margin-bottom: var(--jads-space-3, 12px);
+}
+
+.repositories__form-field label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #94a3b8);
+  margin-bottom: 4px;
+}
+
+.repositories__form-field input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--color-bg, #0a0e1a);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 8px;
+  color: var(--color-text, #e2e8f0);
+  font-size: 0.85rem;
+  font-family: var(--jads-font-family, inherit);
+}
+
+.repositories__form-field input:focus {
+  outline: none;
+  border-color: var(--color-accent-cyan, #00d4ff);
+}
+
+.repositories__form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--jads-space-2, 8px);
+  margin-top: var(--jads-space-4, 16px);
+}
+
+/* Card grid */
+.repositories__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--jads-space-3, 12px);
+}
+
+/* Repository card */
+.repo-card {
+  display: flex;
+  align-items: center;
+  gap: var(--jads-space-3, 12px);
+  padding: var(--jads-space-4, 16px);
+  background: var(--color-surface, #111827);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 12px;
+  position: relative;
+  transition: border-color 0.2s;
+}
+
+.repo-card:hover {
+  border-color: rgba(0, 212, 255, 0.2);
+}
+
+.repo-card--active {
+  border-left: 3px solid #3b82f6;
+}
+
+
+/* Icon */
+.repo-card__icon {
+  flex-shrink: 0;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.repo-card__logo {
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+/* Body */
+.repo-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.repo-card__name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text, #e2e8f0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.repo-card__owner {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #94a3b8);
+  margin-top: 1px;
+}
+
+.repo-card__branch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.repo-card__branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--color-accent-cyan, #00d4ff);
+  background: rgba(0, 212, 255, 0.08);
+  border-radius: 4px;
+}
+
+.repo-card__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  text-decoration: none;
+}
+
+.repo-card:hover .repo-card__action {
+  opacity: 1;
+}
+
+.repo-card__action:hover {
+  color: var(--color-accent-cyan, #00d4ff);
+}
+
+.repo-card__action--danger:hover {
+  color: #ef4444;
+}
+
+/* Stats — pill badges */
+.repo-card__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: var(--jads-space-3, 12px);
+}
+
+.repo-card__stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.repo-card__stat-value {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text, #e2e8f0);
+  font-family: var(--jads-font-family, system-ui);
+}
+
+.repo-card__stat-value--active {
+  color: #3b82f6;
+}
+
+.repo-card__stat-label {
+  font-size: 0.6rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted, #94a3b8);
+  white-space: nowrap;
+}
+

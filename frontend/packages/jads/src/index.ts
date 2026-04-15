@@ -16,7 +16,9 @@ export { IconButton } from './components/IconButton/IconButton';
 export type { IconButtonProps } from './components/IconButton/IconButton';
 
 export { TaskCard } from './components/TaskCard/TaskCard';
-export type { TaskCardProps } from './components/TaskCard/TaskCard';
+export type { TaskCardProps, WorkerInfo, WorkerEffectiveState } from './components/TaskCard/TaskCard';
+
+export { WorkerBrain } from './components/TaskCard/WorkerBrain';
 
 export { Calendar } from './components/Calendar/Calendar';
 export type { CalendarProps } from './components/Calendar/Calendar';

@@ -21,11 +21,19 @@ export type KeyFocusKind = 'delivery' | 'learning' | 'support' | 'operational' |
 export type KeyFocusStatus = 'in_progress' | 'succeed' | 'failed';
 export type KeyFocusFrequency = 'weekly' | 'quarterly';
 export type BlockerStatus = 'opened' | 'resolved';
+export type WorkerState = 'initialized' | 'working' | 'waiting_for_human' | 'done' | 'archived';
+export type WorkerType = 'claude_code';
 
 export interface TaskKeyFocusSummary {
   id: number;
   title: string;
   kind: KeyFocusKind;
+}
+
+export interface WorkerSummary {
+  id: string;
+  state: WorkerState;
+  effective_state: WorkerState;
 }
 
 export interface Task {
@@ -39,6 +47,27 @@ export interface Task {
   note_count: number;
   key_focuses: TaskKeyFocusSummary[];
   blocker_count: number;
+  worker: WorkerSummary | null;
+}
+
+export interface Repository {
+  id: number;
+  git_url: string;
+  branch: string;
+  worker_count: number;
+  active_worker_count: number;
+}
+
+export interface Worker {
+  id: string;
+  task_id: number;
+  type: WorkerType;
+  state: WorkerState;
+  effective_state: WorkerState;
+  pod_status: string | null;
+  created_at: string;
+  updated_at: string;
+  repositories: Repository[];
 }
 
 export interface KeyFocus {
@@ -416,6 +445,60 @@ export function listKeyFocusBlockers(keyFocusId: number): Promise<Blocker[]> {
 
 export function createKeyFocusBlocker(keyFocusId: number, body: { title: string; description?: string }): Promise<Blocker> {
   return request(`/key-focuses/${keyFocusId}/blockers`, { method: 'POST', body: JSON.stringify(body) });
+}
+
+// --- Worker API ---
+
+export function createWorker(body: {
+  task_id: number;
+  repository_ids?: number[];
+  type?: WorkerType;
+}): Promise<Worker> {
+  return request('/workers', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function listWorkers(): Promise<Worker[]> {
+  return request('/workers');
+}
+
+export function getWorker(id: string): Promise<Worker> {
+  return request(`/workers/${id}`);
+}
+
+export function updateWorker(
+  id: string,
+  body: { state?: WorkerState },
+): Promise<Worker> {
+  return request(`/workers/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+export function deleteWorker(id: string): Promise<void> {
+  return request(`/workers/${id}`, { method: 'DELETE' });
+}
+
+export function getWorkerVscodeUri(id: string): Promise<{ uri: string }> {
+  return request(`/workers/${id}/vscode-uri`);
+}
+
+// --- Repository API ---
+
+export function createRepository(body: {
+  git_url: string;
+  branch?: string;
+}): Promise<Repository> {
+  return request('/repositories', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function listRepositories(): Promise<Repository[]> {
+  return request('/repositories');
+}
+
+export function getRepository(id: number): Promise<Repository> {
+  return request(`/repositories/${id}`);
+}
+
+export function deleteRepository(id: number): Promise<void> {
+  return request(`/repositories/${id}`, { method: 'DELETE' });
 }
 
 // --- Helpers ---

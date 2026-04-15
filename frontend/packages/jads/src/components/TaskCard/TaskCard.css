@@ -3,8 +3,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--jads-space-4);
-  padding: 20px 20px 16px;
+  gap: 0;
+  padding: 0;
   border: 1px solid var(--jads-color-border, #2d3748);
   border-radius: var(--jads-radius-lg);
   box-shadow:
@@ -107,6 +107,34 @@
 }
 
 /* Content area */
+/* Horizontal body: left content + right action sidebar */
+.jads-task-card__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.jads-task-card__left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--jads-space-2, 8px);
+  padding: 16px 0 12px 16px;
+  position: relative;
+}
+
+/* Right action sidebar — vertical, always visible */
+.jads-task-card__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.04);
+  flex-shrink: 0;
+}
+
 .jads-task-card__content {
   flex: 1;
   min-width: 0;
@@ -237,35 +265,20 @@
   background-color: rgba(239, 68, 68, 0.15);
 }
 
-/* Footer with actions + type badge */
-.jads-task-card__footer {
-  display: flex;
-  align-items: center;
-  gap: var(--jads-space-2);
-  margin-top: var(--jads-space-2);
-  min-width: 0;
-  flex-wrap: wrap;
+/* (footer removed — actions moved to right sidebar) */
+
+/* Status button — bottom of action sidebar, pushed down by spacer */
+.jads-task-card__actions-spacer {
+  flex: 1;
 }
 
-/* Actions area */
-.jads-task-card__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--jads-space-1);
-  flex-shrink: 0;
-}
-
-/* Status button — top right */
 .jads-task-card__status-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  opacity: 0.4;
+  opacity: 0.5;
   transition: opacity var(--jads-transition-fast);
 }
 
 .jads-task-card:hover .jads-task-card__status-btn {
-  opacity: 0.7;
+  opacity: 0.8;
 }
 
 .jads-task-card__status-btn:hover {
@@ -276,9 +289,9 @@
   color: var(--jads-color-text-muted);
 }
 
-/* Edit/delete hidden until hover */
+/* Action sidebar — subtle until hover */
 .jads-task-card__actions {
-  opacity: 0;
+  opacity: 0.3;
   transition: opacity var(--jads-transition-fast);
 }
 
@@ -357,3 +370,84 @@
   font-size: 0.7rem;
   color: #ef4444;
 }
+
+/* Worker row — controls left, brain always centered via absolute positioning */
+.jads-task-card__worker-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jads-task-card__worker-controls {
+  position: absolute;
+  left: calc(50% - 68px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--jads-transition-fast);
+}
+
+.jads-task-card:hover .jads-task-card__worker-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.jads-task-card__worker-stop {
+  color: #f59e0b;
+}
+
+.jads-task-card__worker-stop:hover {
+  color: #ef4444 !important;
+}
+
+.jads-task-card__worker-drop {
+  color: var(--jads-color-text-muted, #94a3b8);
+}
+
+.jads-task-card__worker-drop:hover {
+  color: #ef4444 !important;
+}
+
+/* Worker brain — clickable */
+.jads-task-card__worker-brain {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.jads-task-card__worker-brain:hover {
+  background: rgba(0, 212, 255, 0.06);
+}
+
+.jads-task-card__worker-brain:focus-visible {
+  outline: 2px solid var(--jads-color-accent-cyan, #00d4ff);
+  outline-offset: 2px;
+}
+
+.jads-task-card__worker-brain--disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.jads-task-card__worker-brain--disabled:hover {
+  background: transparent;
+}
+
+/* Play button - always visible (not hidden on hover) */
+.jads-task-card__play-btn {
+  opacity: 1 !important;
+  color: var(--jads-color-text-muted, #94a3b8);
+}
+
+.jads-task-card__play-btn:hover {
+  color: #10b981;
+}
+
+/* Worker button - always visible */
+.jads-task-card__worker-btn {
+  opacity: 1 !important;
+}
+

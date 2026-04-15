@@ -2,7 +2,7 @@ import datetime
 
 from pydantic import BaseModel
 
-from app.models.enums import KeyFocusKind, SourceType, TaskStatus, TaskType
+from app.models.enums import KeyFocusKind, SourceType, TaskStatus, TaskType, WorkerState
 
 
 class TaskKeyFocusSummary(BaseModel):
@@ -11,6 +11,14 @@ class TaskKeyFocusSummary(BaseModel):
     id: int
     title: str
     kind: KeyFocusKind
+
+
+class WorkerSummary(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: str
+    state: WorkerState
+    effective_state: WorkerState
 
 
 class TaskCreate(BaseModel):
@@ -44,3 +52,4 @@ class TaskResponse(BaseModel):
     note_count: int = 0
     key_focuses: list[TaskKeyFocusSummary] = []
     blocker_count: int = 0
+    worker: WorkerSummary | None = None

@@ -1,11 +1,19 @@
 import type { HTMLAttributes } from 'react';
 import { IconButton } from '../IconButton/IconButton';
+import { WorkerBrain } from './WorkerBrain';
 import './TaskCard.css';
 
 export interface KeyFocusBadge {
   id: number;
   title: string;
   kind: 'delivery' | 'learning' | 'support' | 'operational' | 'side_quest';
+}
+
+export type WorkerEffectiveState = 'initialized' | 'working' | 'waiting_for_human' | 'done' | 'archived';
+
+export interface WorkerInfo {
+  id: string;
+  effective_state: WorkerEffectiveState;
 }
 
 export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
@@ -27,6 +35,11 @@ export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   blockerCount?: number;
   keyFocuses?: KeyFocusBadge[];
   dragListeners?: Record<string, Function>;
+  worker?: WorkerInfo | null;
+  onPlayClick?: () => void;
+  onWorkerClick?: () => void;
+  onWorkerArchive?: () => void;
+  onWorkerDelete?: () => void;
 }
 
 const EditIcon = () => (
@@ -94,6 +107,24 @@ const KIND_COLORS: Record<string, string> = {
   side_quest: '#06b6d4',
 };
 
+const StopIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <rect x="3" y="3" width="10" height="10" rx="1" fill="currentColor" />
+  </svg>
+);
+
+const DropIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M3 4H13M6 4V3H10V4M5 4V13H11V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const PlayIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M5 3L13 8L5 13V3Z" fill="currentColor" />
+  </svg>
+);
+
 const UndoIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M4 6L2 8L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -125,6 +156,11 @@ export function TaskCard({
   blockerCount,
   keyFocuses,
   dragListeners,
+  worker,
+  onPlayClick,
+  onWorkerClick,
+  onWorkerArchive,
+  onWorkerDelete,
   className = '',
   ...props
 }: TaskCardProps) {
@@ -136,126 +172,133 @@ export function TaskCard({
       className={`jads-task-card jads-task-card--${type} ${isDone ? 'jads-task-card--done' : ''} ${className}`.trim()}
       {...props}
     >
-      {onToggleStatus && (
-        <IconButton
-          aria-label={isDone ? `Reopen task: ${title}` : `Complete task: ${title}`}
-          variant="ghost"
-          size="sm"
-          onClick={onToggleStatus}
-          className={`jads-task-card__status-btn ${isDone ? 'jads-task-card__status-btn--done' : ''}`}
-        >
-          {isDone ? <UndoIcon /> : <CheckIcon />}
-        </IconButton>
-      )}
-      <div className="jads-task-card__content" {...dragListeners}>
-        <h4 className="jads-task-card__title">
-          {displayTitle}
-          {sourceType === 'jira' && sourceId && jiraProjectUrl && (
-            <a
-              href={`${jiraProjectUrl}/browse/${sourceId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="jads-task-card__jira-link"
-              aria-label={`Open JIRA ticket ${sourceId}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <JiraIcon />
-            </a>
+      <div className="jads-task-card__body">
+        {/* Left: content */}
+        <div className="jads-task-card__left">
+          <div className="jads-task-card__content" {...dragListeners}>
+            <h4 className="jads-task-card__title">
+              {displayTitle}
+              {sourceType === 'jira' && sourceId && jiraProjectUrl && (
+                <a
+                  href={`${jiraProjectUrl}/browse/${sourceId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="jads-task-card__jira-link"
+                  aria-label={`Open JIRA ticket ${sourceId}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <JiraIcon />
+                </a>
+              )}
+              {sourceType === 'gcal' && sourceId && gcalCalendarEmail && (
+                <a
+                  href={`https://www.google.com/calendar/event?eid=${btoa(`${sourceId} ${gcalCalendarEmail}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="jads-task-card__gcal-link"
+                  aria-label="Open in Google Calendar"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <GCalIcon />
+                </a>
+              )}
+            </h4>
+          </div>
+          {dates && dates.length > 0 && (
+            <div className="jads-task-card__dates">
+              {dates.map((d) => (
+                <span key={d} className="jads-task-card__date">{formatShortDate(d)}</span>
+              ))}
+            </div>
           )}
-          {sourceType === 'gcal' && sourceId && gcalCalendarEmail && (
-            <a
-              href={`https://www.google.com/calendar/event?eid=${btoa(`${sourceId} ${gcalCalendarEmail}`)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="jads-task-card__gcal-link"
-              aria-label="Open in Google Calendar"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <GCalIcon />
-            </a>
+          {keyFocuses && keyFocuses.length > 0 && (
+            <div className="jads-task-card__kf-badges">
+              {keyFocuses.map((kf) => (
+                <span key={kf.id} className="jads-task-card__kf-badge" style={{ backgroundColor: KIND_COLORS[kf.kind] }}>
+                  {kf.title}
+                </span>
+              ))}
+            </div>
           )}
-        </h4>
-      </div>
-      {dates && dates.length > 0 && (
-        <div className="jads-task-card__dates">
-          {dates.map((d) => (
-            <span key={d} className="jads-task-card__date">{formatShortDate(d)}</span>
-          ))}
+          {worker && (
+            <div className="jads-task-card__worker-row">
+              <div className="jads-task-card__worker-controls">
+                {onWorkerArchive && worker.effective_state !== 'archived' && worker.effective_state !== 'done' && (
+                  <IconButton aria-label="End worker" variant="ghost" size="sm" onClick={onWorkerArchive} className="jads-task-card__worker-stop">
+                    <StopIcon />
+                  </IconButton>
+                )}
+                {onWorkerDelete && (
+                  <IconButton aria-label="Delete worker" variant="ghost" size="sm" onClick={onWorkerDelete} className="jads-task-card__worker-drop">
+                    <DropIcon />
+                  </IconButton>
+                )}
+              </div>
+              <div
+                className={`jads-task-card__worker-brain${onWorkerClick && worker.effective_state !== 'archived' ? '' : ' jads-task-card__worker-brain--disabled'}`}
+                onClick={onWorkerClick && worker.effective_state !== 'archived' ? onWorkerClick : undefined}
+                role={onWorkerClick && worker.effective_state !== 'archived' ? 'button' : undefined}
+                tabIndex={onWorkerClick && worker.effective_state !== 'archived' ? 0 : undefined}
+                onKeyDown={onWorkerClick && worker.effective_state !== 'archived' ? (e) => e.key === 'Enter' && onWorkerClick() : undefined}
+              >
+                <WorkerBrain state={worker.effective_state} />
+              </div>
+            </div>
+          )}
+          <span className="jads-task-card__type">{type}</span>
         </div>
-      )}
-      {keyFocuses && keyFocuses.length > 0 && (
-        <div className="jads-task-card__kf-badges">
-          {keyFocuses.map((kf) => (
-            <span key={kf.id} className="jads-task-card__kf-badge" style={{ backgroundColor: KIND_COLORS[kf.kind] }}>
-              {kf.title}
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="jads-task-card__footer">
+
+        {/* Right: action sidebar */}
         <div className="jads-task-card__actions">
           {onEdit && (
-            <IconButton
-              aria-label={`Edit task: ${title}`}
-              variant="ghost"
-              size="sm"
-              onClick={onEdit}
-            >
+            <IconButton aria-label={`Edit task: ${title}`} variant="ghost" size="sm" onClick={onEdit}>
               <EditIcon />
             </IconButton>
           )}
           {onDelete && (
-            <IconButton
-              aria-label={`Delete task: ${title}`}
-              variant="ghost"
-              size="sm"
-              onClick={onDelete}
-            >
+            <IconButton aria-label={`Delete task: ${title}`} variant="ghost" size="sm" onClick={onDelete}>
               <DeleteIcon />
             </IconButton>
           )}
           {onNotes && (
-            <IconButton
-              aria-label={`Notes: ${title}`}
-              variant="ghost"
-              size="sm"
-              onClick={onNotes}
-              className="jads-task-card__notes-btn"
-            >
+            <IconButton aria-label={`Notes: ${title}`} variant="ghost" size="sm" onClick={onNotes} className="jads-task-card__notes-btn">
               <NoteIcon />
-              {(noteCount ?? 0) > 0 && (
-                <span className="jads-task-card__note-badge">{noteCount}</span>
-              )}
+              {(noteCount ?? 0) > 0 && <span className="jads-task-card__note-badge">{noteCount}</span>}
             </IconButton>
           )}
           {onBlockers && (
-            <IconButton
-              aria-label={`Blockers: ${title}`}
-              variant="ghost"
-              size="sm"
-              onClick={onBlockers}
-              className="jads-task-card__blockers-btn"
-            >
+            <IconButton aria-label={`Blockers: ${title}`} variant="ghost" size="sm" onClick={onBlockers} className="jads-task-card__blockers-btn">
               <BlockerIcon />
-              {(blockerCount ?? 0) > 0 && (
-                <span className="jads-task-card__blocker-badge">{blockerCount}</span>
-              )}
+              {(blockerCount ?? 0) > 0 && <span className="jads-task-card__blocker-badge">{blockerCount}</span>}
             </IconButton>
           )}
           {onExpand && (
-            <IconButton
-              aria-label={`View source details: ${title}`}
-              variant="ghost"
-              size="sm"
-              onClick={onExpand}
-            >
+            <IconButton aria-label={`View source details: ${title}`} variant="ghost" size="sm" onClick={onExpand}>
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M3 4H13M3 8H10M3 12H7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </IconButton>
           )}
+          {!worker && onPlayClick && (
+            <IconButton aria-label={`Create worker for: ${title}`} variant="ghost" size="sm" onClick={onPlayClick} className="jads-task-card__play-btn">
+              <PlayIcon />
+            </IconButton>
+          )}
+          {onToggleStatus && (
+            <div className="jads-task-card__actions-spacer" />
+          )}
+          {onToggleStatus && (
+            <IconButton
+              aria-label={isDone ? `Reopen task: ${title}` : `Complete task: ${title}`}
+              variant="ghost"
+              size="sm"
+              onClick={onToggleStatus}
+              className={`jads-task-card__status-btn ${isDone ? 'jads-task-card__status-btn--done' : ''}`}
+            >
+              {isDone ? <UndoIcon /> : <CheckIcon />}
+            </IconButton>
+          )}
         </div>
-        <span className="jads-task-card__type">{type}</span>
       </div>
     </article>
   );

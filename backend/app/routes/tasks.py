@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.session import get_db
 from app.models import Daily, DailyTask, Task
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
+from app.services import k8s
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -32,6 +33,7 @@ def _load_task(db: Session, task_id: int) -> Task:
             selectinload(Task.notes),
             selectinload(Task.key_focuses),
             selectinload(Task.blockers),
+            selectinload(Task.worker),
         )
     )
     task = db.scalars(stmt).first()
@@ -61,6 +63,7 @@ def list_tasks(
             selectinload(Task.notes),
             selectinload(Task.key_focuses),
             selectinload(Task.blockers),
+            selectinload(Task.worker),
         )
         tasks = db.scalars(stmt).all()
     else:
@@ -80,6 +83,7 @@ def list_tasks(
                 selectinload(Task.notes),
                 selectinload(Task.key_focuses),
                 selectinload(Task.blockers),
+                selectinload(Task.worker),
             )
         )
         tasks = db.scalars(stmt).unique().all()
@@ -105,4 +109,6 @@ def update_task(task_id: int, body: TaskUpdate, db: Session = Depends(get_db)):
 @router.delete("/{task_id}", status_code=204)
 def delete_task(task_id: int, db: Session = Depends(get_db)):
     task = _load_task(db, task_id)
+    if task.worker:
+        k8s.delete_worker_resources(task.worker.id)
     db.delete(task)

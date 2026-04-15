@@ -39,3 +39,15 @@ class KeyFocusFrequency(str, Enum):
 class BlockerStatus(str, Enum):
     opened = "opened"
     resolved = "resolved"
+
+
+class WorkerState(str, Enum):
+    initialized = "initialized"
+    working = "working"
+    waiting_for_human = "waiting_for_human"
+    done = "done"
+    archived = "archived"
+
+
+class WorkerType(str, Enum):
+    claude_code = "claude_code"

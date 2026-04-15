@@ -254,3 +254,50 @@ class BackendClient:
 
     async def list_task_key_focuses(self, task_id: int) -> list[dict]:
         return await self._request("GET", f"/api/v1/tasks/{task_id}/key-focuses")
+
+    # --- Workers ---
+
+    async def create_worker(
+        self,
+        task_id: int,
+        repository_ids: Optional[list[int]] = None,
+        type: str = "claude_code",
+    ) -> dict:
+        body: dict[str, Any] = {"task_id": task_id, "type": type}
+        if repository_ids:
+            body["repository_ids"] = repository_ids
+        return await self._request("POST", "/api/v1/workers", json=body)
+
+    async def get_worker(self, worker_id: str) -> dict:
+        return await self._request("GET", f"/api/v1/workers/{worker_id}")
+
+    async def list_workers(self) -> list[dict]:
+        return await self._request("GET", "/api/v1/workers")
+
+    async def update_worker(self, worker_id: str, **fields) -> dict:
+        return await self._request(
+            "PATCH", f"/api/v1/workers/{worker_id}", json=fields
+        )
+
+    async def delete_worker(self, worker_id: str) -> None:
+        await self._request("DELETE", f"/api/v1/workers/{worker_id}")
+
+    # --- Repositories ---
+
+    async def create_repository(
+        self, git_url: str, branch: str = "main"
+    ) -> dict:
+        return await self._request(
+            "POST",
+            "/api/v1/repositories",
+            json={"git_url": git_url, "branch": branch},
+        )
+
+    async def get_repository(self, repository_id: int) -> dict:
+        return await self._request("GET", f"/api/v1/repositories/{repository_id}")
+
+    async def list_repositories(self) -> list[dict]:
+        return await self._request("GET", "/api/v1/repositories")
+
+    async def delete_repository(self, repository_id: int) -> None:
+        await self._request("DELETE", f"/api/v1/repositories/{repository_id}")

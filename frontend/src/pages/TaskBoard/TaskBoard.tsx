@@ -46,15 +46,22 @@ import {
   listKeyFocuses,
   addKeyFocusToTask,
   removeKeyFocusFromTask,
+  createWorker,
+  updateWorker,
+  deleteWorker,
+  listRepositories,
+  getWorkerVscodeUri,
   type Task,
   type TaskType,
   type JiraTicket,
   type CalendarEvent,
   type KeyFocus,
+  type Repository,
 } from '../../api/client';
 import { NotePanel } from './NotePanel';
 import { BlockerPanel } from './BlockerPanel';
 import { EmptyState } from './EmptyState';
+import { DateNavPrev, DateNavNext, DateNavToday } from '../../components/DateNav';
 import './TaskBoard.css';
 
 // --- localStorage helpers ---
@@ -246,6 +253,18 @@ function getPriorityStyle(priority: string) {
 
 // --- SortableTaskCard ---
 
+function extractRepoName(gitUrl: string): string {
+  const match = gitUrl.match(/\/([^/]+?)(\.git)?$/);
+  return match ? match[1] : gitUrl;
+}
+function extractOwner(gitUrl: string): string {
+  const match = gitUrl.match(/[/:]([^/:]+)\/[^/]+?(?:\.git)?$/);
+  return match ? match[1] : '';
+}
+function isGitHub(gitUrl: string): boolean { return gitUrl.includes('github'); }
+const GitHubMini = () => <svg width="14" height="14" viewBox="0 0 98 96" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0112.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z"/></svg>;
+const GitBranchMini = () => <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M11.75 2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122V6a2.5 2.5 0 01-2.5 2.5H7.5V12h.378a2.25 2.25 0 110 1.5H6.5v-5H4.75a1 1 0 01-1-1V5.372a2.25 2.25 0 111.5 0V7.5h5A1 1 0 0011.25 6.5V5.372A2.25 2.25 0 019.5 3.25zM4 2.5a.75.75 0 100 1.5.75.75 0 000-1.5z"/></svg>;
+
 function SortableTaskCard({
   task,
   jiraProjectUrl,
@@ -256,6 +275,10 @@ function SortableTaskCard({
   onExpand,
   onNotes,
   onBlockers,
+  onPlayClick,
+  onWorkerClick,
+  onWorkerArchive,
+  onWorkerDelete,
 }: {
   task: Task;
   jiraProjectUrl?: string;
@@ -266,6 +289,10 @@ function SortableTaskCard({
   onExpand: () => void;
   onNotes: () => void;
   onBlockers: () => void;
+  onPlayClick?: () => void;
+  onWorkerClick?: () => void;
+  onWorkerArchive?: () => void;
+  onWorkerDelete?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
@@ -299,6 +326,11 @@ function SortableTaskCard({
         blockerCount={task.blocker_count}
         keyFocuses={task.key_focuses}
         dragListeners={listeners}
+        worker={task.worker ?? undefined}
+        onPlayClick={onPlayClick}
+        onWorkerClick={onWorkerClick}
+        onWorkerArchive={onWorkerArchive}
+        onWorkerDelete={onWorkerDelete}
       />
     </div>
   );
@@ -313,6 +345,10 @@ export default function TaskBoard() {
   const [selectedDate, setSelectedDate] = useState(() => new Date(prefs.selectedDate + 'T00:00:00'));
   const [scope, setScope] = useState<'daily' | 'weekly' | 'all'>(prefs.scope);
   const [doneMode, setDoneMode] = useState<DoneMode>(prefs.doneMode);
+
+  const [filterType, setFilterType] = useState<TaskType | 'all'>('all');
+  const [filterWorker, setFilterWorker] = useState<'all' | 'with' | 'without'>('all');
+  const [filterWorkerState, setFilterWorkerState] = useState<string>('all');
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -348,6 +384,35 @@ export default function TaskBoard() {
   const [notePanelTask, setNotePanelTask] = useState<Task | null>(null);
   const [blockerPanelTask, setBlockerPanelTask] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+
+  // Worker creation from task card
+  const [workerCreateTask, setWorkerCreateTask] = useState<Task | null>(null);
+  const [workerRepoIds, setWorkerRepoIds] = useState<number[]>([]);
+
+  const { data: repositories = [] } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: listRepositories,
+    enabled: workerCreateTask !== null,
+  });
+
+  const createWorkerMutation = useMutation({
+    mutationFn: createWorker,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setWorkerCreateTask(null);
+      setWorkerRepoIds([]);
+    },
+  });
+
+  const archiveWorkerMutation = useMutation({
+    mutationFn: (workerId: string) => updateWorker(workerId, { state: 'archived' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+
+  const deleteWorkerMutation = useMutation({
+    mutationFn: deleteWorker,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  });
 
   const [showCalendar, setShowCalendar] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -400,6 +465,7 @@ export default function TaskBoard() {
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks', dateStr, scope],
     queryFn: () => listTasks({ date: dateStr, scope }),
+    refetchInterval: 5000,
   });
 
   const [manualOrder, setManualOrder] = useState<number[] | null>(null);
@@ -417,9 +483,14 @@ export default function TaskBoard() {
     return [...tasks].sort((a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9));
   }, [tasks, manualOrder]);
 
-  const visibleTasks = doneMode === 'hide'
-    ? sortedTasks.filter((t) => t.status !== 'done')
-    : sortedTasks;
+  const visibleTasks = sortedTasks.filter((t) => {
+    if (doneMode === 'hide' && t.status === 'done') return false;
+    if (filterType !== 'all' && t.type !== filterType) return false;
+    if (filterWorker === 'with' && !t.worker) return false;
+    if (filterWorker === 'without' && t.worker) return false;
+    if (filterWorkerState !== 'all' && t.worker?.effective_state !== filterWorkerState) return false;
+    return true;
+  });
 
   const { data: daily } = useQuery({
     queryKey: ['daily', dateStr],
@@ -788,14 +859,15 @@ export default function TaskBoard() {
         <div className="task-board__toolbar-left">
           <button
             type="button"
-            className="task-board__create-btn"
+            className="create-btn"
             onClick={() => { setShowCreateForm(true); setEditingTask(null); resetForm(); }}
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M8 2V14M2 8H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             Create
           </button>
+          <DateNavPrev selectedDate={selectedDate} onDateChange={handleDateChange} scope={scope} />
           <div className="task-board__calendar-dropdown" ref={calendarRef}>
             <button
               type="button"
@@ -824,8 +896,55 @@ export default function TaskBoard() {
               </div>
             )}
           </div>
+          <DateNavNext selectedDate={selectedDate} onDateChange={handleDateChange} scope={scope} />
+          <DateNavToday selectedDate={selectedDate} onDateChange={handleDateChange} />
         </div>
         <div className="task-board__toolbar-right">
+          <div className="task-board__filter-tabs" role="tablist" aria-label="Type filter">
+            {([
+              { value: 'all', label: 'All', color: '' },
+              { value: 'refinement', label: 'Refinement', color: '#3b82f6' },
+              { value: 'implementation', label: 'Impl.', color: '#f97316' },
+              { value: 'review', label: 'Review', color: '#ef4444' },
+            ] as const).map((opt) => (
+              <button key={opt.value} type="button" role="tab" aria-selected={filterType === opt.value}
+                className={`task-board__filter-tab${filterType === opt.value ? ' task-board__filter-tab--active' : ''}`}
+                style={filterType === opt.value && opt.color ? { color: opt.color, borderColor: `${opt.color}40`, background: `${opt.color}0d` } : undefined}
+                onClick={() => setFilterType(opt.value)}
+              >{opt.label}</button>
+            ))}
+          </div>
+          <div className="task-board__filter-tabs" role="tablist" aria-label="Worker filter">
+            {([
+              { value: 'all', label: 'All', color: '' },
+              { value: 'with', label: 'Worker', color: '#7b2fff' },
+              { value: 'without', label: 'No worker', color: '#6b7280' },
+            ] as const).map((opt) => (
+              <button key={opt.value} type="button" role="tab" aria-selected={filterWorker === opt.value}
+                className={`task-board__filter-tab${filterWorker === opt.value ? ' task-board__filter-tab--active' : ''}`}
+                style={filterWorker === opt.value && opt.color ? { color: opt.color, borderColor: `${opt.color}40`, background: `${opt.color}0d` } : undefined}
+                onClick={() => { setFilterWorker(opt.value); if (opt.value !== 'with') setFilterWorkerState('all'); }}
+              >{opt.label}</button>
+            ))}
+          </div>
+          {filterWorker === 'with' && (
+            <div className="task-board__filter-tabs" role="tablist" aria-label="Worker state filter">
+              {([
+                { value: 'all', label: 'Any', color: '' },
+                { value: 'working', label: 'Active', color: '#3b82f6' },
+                { value: 'waiting_for_human', label: 'Waiting', color: '#ef4444' },
+                { value: 'initialized', label: 'Init', color: '#6b7280' },
+                { value: 'done', label: 'Done', color: '#10b981' },
+                { value: 'archived', label: 'Off', color: '#374151' },
+              ] as const).map((opt) => (
+                <button key={opt.value} type="button" role="tab" aria-selected={filterWorkerState === opt.value}
+                  className={`task-board__filter-tab${filterWorkerState === opt.value ? ' task-board__filter-tab--active' : ''}`}
+                  style={filterWorkerState === opt.value && opt.color ? { color: opt.color, borderColor: `${opt.color}40`, background: `${opt.color}0d` } : undefined}
+                  onClick={() => setFilterWorkerState(opt.value)}
+                >{opt.label}</button>
+              ))}
+            </div>
+          )}
           <div className="task-board__scope-tabs" role="tablist" aria-label="Scope filter">
             {SCOPE_OPTIONS.map((opt) => (
               <button
@@ -1587,6 +1706,12 @@ export default function TaskBoard() {
                   onExpand={() => handleExpandBoardTask(task)}
                   onNotes={() => setNotePanelTask(task)}
                   onBlockers={() => setBlockerPanelTask(task)}
+                  onPlayClick={!task.worker ? () => setWorkerCreateTask(task) : undefined}
+                  onWorkerClick={task.worker ? () => {
+                    getWorkerVscodeUri(task.worker!.id).then(({ uri }) => { window.location.href = uri; });
+                  } : undefined}
+                  onWorkerArchive={task.worker && task.worker.effective_state !== 'archived' ? () => archiveWorkerMutation.mutate(task.worker!.id) : undefined}
+                  onWorkerDelete={task.worker ? () => { if (confirm('Delete this worker and its Kubernetes resources?')) deleteWorkerMutation.mutate(task.worker!.id); } : undefined}
                 />
               ))}
               {visibleTasks.length === 0 && (
@@ -1621,6 +1746,42 @@ export default function TaskBoard() {
           />
         )}
       </section>
+
+      {/* Worker creation dialog from task card */}
+      {workerCreateTask && (
+        <div className="task-board__confirm-overlay" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); }}>
+          <div className="task-board__confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <p>Create worker for <strong>{workerCreateTask.title}</strong>?</p>
+            {repositories.length > 0 && (
+              <div className="task-board__worker-repo-picker">
+                <p className="task-board__worker-repo-label">Repositories:</p>
+                {repositories.map((repo: Repository) => {
+                  const sel = workerRepoIds.includes(repo.id);
+                  return (
+                    <button key={repo.id} type="button" className={`task-board__worker-repo-card${sel ? ' task-board__worker-repo-card--selected' : ''}`} onClick={() => setWorkerRepoIds(prev => prev.includes(repo.id) ? prev.filter(r => r !== repo.id) : [...prev, repo.id])}>
+                      <span className="task-board__worker-repo-icon">{isGitHub(repo.git_url) ? <GitHubMini /> : <GitBranchMini />}</span>
+                      <span className="task-board__worker-repo-info">
+                        <span className="task-board__worker-repo-name">{extractRepoName(repo.git_url)}</span>
+                        {extractOwner(repo.git_url) && <span className="task-board__worker-repo-owner">{extractOwner(repo.git_url)}</span>}
+                      </span>
+                      <span className="task-board__worker-repo-branch"><GitBranchMini /> {repo.branch}</span>
+                      <span className="task-board__worker-repo-check">{sel ? '✓' : ''}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="task-board__confirm-actions">
+              <Button onClick={() => createWorkerMutation.mutate({ task_id: workerCreateTask.id, repository_ids: workerRepoIds })}>
+                Create Worker
+              </Button>
+              <Button variant="ghost" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); }}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Task deletion confirmation */}
       {deletingTask && (

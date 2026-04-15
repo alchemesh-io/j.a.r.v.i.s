@@ -151,3 +151,52 @@ The `GET /api/v1/workers/{id}` response SHALL include an `effective_state` field
 #### Scenario: Archived worker
 - **WHEN** a worker has DB state `archived`
 - **THEN** the response includes `"effective_state": "archived"` without querying the pod
+
+## Implementation Additions
+
+### Requirement: RepositoryResponse includes worker counts
+The `RepositoryResponse` Pydantic schema SHALL include `worker_count` (total number of workers using this repository) and `active_worker_count` (number of non-archived workers using this repository) fields. Repository routes SHALL use `selectinload(Repository.workers)` for eager loading to compute these counts efficiently.
+
+#### Scenario: Repository with workers returns counts
+- **WHEN** `GET /api/v1/repositories/{id}` is called for a repository used by 3 workers (2 active, 1 archived)
+- **THEN** the response includes `"worker_count": 3` and `"active_worker_count": 2`
+
+#### Scenario: Repository with no workers returns zero counts
+- **WHEN** `GET /api/v1/repositories/{id}` is called for a repository with no workers
+- **THEN** the response includes `"worker_count": 0` and `"active_worker_count": 0`
+
+### Requirement: Dedicated jarvis-jaw-secret for worker credentials
+Worker pods SHALL source credentials from a dedicated Kubernetes Secret named `jarvis-jaw-secret` containing keys: `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, and `GITHUB_TOKEN`. This Secret SHALL be separate from the backend secret (`jarvis-backend-secret`). The Secret template SHALL be documented in `secrets/jaw-secret.example.yaml` and the actual file (`secrets/jaw-secret.yaml`) SHALL be gitignored.
+
+#### Scenario: Worker pod mounts jaw-secret
+- **WHEN** a worker pod is created by the backend
+- **THEN** the pod spec references `jarvis-jaw-secret` for environment variables, not `jarvis-backend-secret`
+
+#### Scenario: JAW secret deployed via Makefile
+- **WHEN** `make deploy` or `make deploy-local` is executed
+- **THEN** the `_deploy-jaw-secrets` target applies `secrets/jaw-secret.yaml` to the cluster
+
+### Requirement: KUBE_CONTEXT env var for backend
+The backend configuration SHALL include a `KUBE_CONTEXT` setting (default `"minikube"`) used to generate VSCode Dev Containers URIs. This value SHALL be configurable via the `backend-configmap.yaml` Helm template.
+
+#### Scenario: KUBE_CONTEXT used in VSCode URI
+- **WHEN** the backend generates a VSCode URI with `KUBE_CONTEXT=minikube`
+- **THEN** the hex-encoded URI payload includes the `minikube` context string
+
+### Requirement: WORKER_IMAGE and WORKER_IMAGE_PULL_POLICY env vars
+The backend configuration SHALL include `WORKER_IMAGE` (the Docker image reference for worker pods) and `WORKER_IMAGE_PULL_POLICY` (the Kubernetes image pull policy, e.g., `Never`, `Always`, `IfNotPresent`) settings. These SHALL be configurable via `backend-configmap.yaml` and used by `k8s.py` when creating worker pods, rather than hardcoding image references.
+
+#### Scenario: Worker pod uses configured image
+- **WHEN** a worker pod is created with `WORKER_IMAGE=ghcr.io/org/worker:v1.2.3` and `WORKER_IMAGE_PULL_POLICY=Always`
+- **THEN** the pod spec contains `image: ghcr.io/org/worker:v1.2.3` and `imagePullPolicy: Always`
+
+#### Scenario: Default local image
+- **WHEN** `WORKER_IMAGE` is set to `jarvis-worker:latest` and `WORKER_IMAGE_PULL_POLICY` is `Never`
+- **THEN** the pod uses the locally loaded image without pulling from a registry
+
+### Requirement: httpx as runtime dependency
+The `httpx` Python package SHALL be listed as a main (non-dev) dependency in `backend/pyproject.toml` because it is used at runtime by `k8s.py` for HTTP calls to worker status endpoints.
+
+#### Scenario: httpx importable at runtime
+- **WHEN** the backend application starts
+- **THEN** `import httpx` succeeds without requiring dev dependencies

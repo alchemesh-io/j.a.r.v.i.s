@@ -1,0 +1,50 @@
+.date-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.date-nav__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 6px;
+  color: var(--color-text-muted, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.date-nav__btn:hover {
+  background: rgba(0, 212, 255, 0.08);
+  border-color: rgba(0, 212, 255, 0.3);
+  color: var(--color-text, #e2e8f0);
+}
+
+.date-nav__today {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 6px;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--jads-font-family, inherit);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.date-nav__today:hover {
+  background: rgba(0, 212, 255, 0.08);
+  border-color: rgba(0, 212, 255, 0.3);
+  color: var(--color-text, #e2e8f0);
+}
+
+.date-nav__today--active {
+  background: rgba(0, 212, 255, 0.12);
+  border-color: rgba(0, 212, 255, 0.4);
+  color: var(--color-accent-cyan, #00d4ff);
+}

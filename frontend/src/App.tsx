@@ -5,7 +5,10 @@ import Dashboard from './pages/Dashboard/Dashboard';
 import TaskBoard from './pages/TaskBoard/TaskBoard';
 import KeyFocusBoard from './pages/KeyFocusBoard/KeyFocusBoard';
 import Reports from './pages/Reports/Reports';
+import Workers from './pages/Workers/Workers';
+import Repositories from './pages/Repositories/Repositories';
 import ParticlesBackground from './components/ParticlesBackground';
+import { MiniHeart } from './components/MiniHeart';
 import './App.css';
 
 const queryClient = new QueryClient({
@@ -23,6 +26,11 @@ const BOARD_TABS = [
   { path: '/reports', label: 'Reports' },
 ];
 
+const WORKER_TABS = [
+  { path: '/workers', label: 'Workers' },
+  { path: '/repositories', label: 'Repositories' },
+];
+
 function InvalidateOnRouteChange() {
   const location = useLocation();
   const qc = useQueryClient();
@@ -36,11 +44,11 @@ function InvalidateOnRouteChange() {
   return null;
 }
 
-function BoardNav() {
+function TabNav({ tabs }: { tabs: { path: string; label: string }[] }) {
   const location = useLocation();
   return (
     <div className="board-nav" role="tablist" aria-label="Board navigation">
-      {BOARD_TABS.map((tab) => (
+      {tabs.map((tab) => (
         <Link
           key={tab.path}
           to={tab.path}
@@ -55,6 +63,14 @@ function BoardNav() {
   );
 }
 
+function BoardNav() {
+  return <TabNav tabs={BOARD_TABS} />;
+}
+
+function WorkerNav() {
+  return <TabNav tabs={WORKER_TABS} />;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -64,11 +80,12 @@ export default function App() {
         <div className="app">
           <header className="app-header">
             <Link to="/" className="logo" aria-label="J.A.R.V.I.S">
-              J.A.R.V.I.S
+              <MiniHeart />
             </Link>
             <nav aria-label="Main navigation">
               <Link to="/">Dashboard</Link>
               <Link to="/tasks">Tasks</Link>
+              <Link to="/workers">Workers</Link>
             </nav>
           </header>
 
@@ -78,6 +95,8 @@ export default function App() {
               <Route path="/tasks" element={<><BoardNav /><TaskBoard /></>} />
               <Route path="/key-focuses" element={<><BoardNav /><KeyFocusBoard /></>} />
               <Route path="/reports" element={<><BoardNav /><Reports /></>} />
+              <Route path="/workers" element={<><WorkerNav /><Workers /></>} />
+              <Route path="/repositories" element={<><WorkerNav /><Repositories /></>} />
             </Routes>
           </main>
 
