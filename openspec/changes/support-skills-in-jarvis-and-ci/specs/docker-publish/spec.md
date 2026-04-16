@@ -1,0 +1,26 @@
+# Spec: docker-publish (delta)
+
+## Purpose
+
+Extends the Docker publish spec to ensure skill Dockerfiles are covered by the artifact publishing pipeline without affecting the main backend/frontend publish workflow.
+
+## MODIFIED Requirements
+
+### Requirement: GitHub Actions workflow builds and publishes Docker images
+The system SHALL provide GitHub Actions workflows that automatically build and push Docker images for the backend, frontend, and skill artifacts to GitHub Container Registry (GHCR). Backend and frontend images are published via `docker-publish.yml` on push to `main`. Skill images are published via `artifacts-publish.yml` on push to `main` when `artifacts/skills/**` changes.
+
+#### Scenario: Image published on push to main
+- **WHEN** a commit is pushed to the `main` branch
+- **THEN** GitHub Actions builds the backend and frontend Docker images and pushes them to `ghcr.io/<org>/jarvis-backend:<sha>` and `ghcr.io/<org>/jarvis-frontend:<sha>` respectively
+
+#### Scenario: Image tagged with git SHA
+- **WHEN** the workflow publishes an image
+- **THEN** the image is tagged with both the short git commit SHA and `latest`
+
+#### Scenario: Workflow uses GITHUB_TOKEN for authentication
+- **WHEN** the workflow pushes to GHCR
+- **THEN** it authenticates using the built-in `GITHUB_TOKEN` secret without requiring any manually configured credentials
+
+#### Scenario: Skill images published via artifacts workflow
+- **WHEN** a commit is pushed to `main` that modifies files under `artifacts/skills/`
+- **THEN** the `artifacts-publish.yml` workflow builds and pushes skill images to GHCR using `arctl skill build --push`

@@ -50,6 +50,7 @@ import {
   updateWorker,
   deleteWorker,
   listRepositories,
+  listSkills,
   getWorkerVscodeUri,
   type Task,
   type TaskType,
@@ -57,6 +58,7 @@ import {
   type CalendarEvent,
   type KeyFocus,
   type Repository,
+  type SkillRef,
 } from '../../api/client';
 import { NotePanel } from './NotePanel';
 import { BlockerPanel } from './BlockerPanel';
@@ -388,6 +390,7 @@ export default function TaskBoard() {
   // Worker creation from task card
   const [workerCreateTask, setWorkerCreateTask] = useState<Task | null>(null);
   const [workerRepoIds, setWorkerRepoIds] = useState<number[]>([]);
+  const [workerSkills, setWorkerSkills] = useState<SkillRef[]>([]);
 
   const { data: repositories = [] } = useQuery({
     queryKey: ['repositories'],
@@ -395,12 +398,27 @@ export default function TaskBoard() {
     enabled: workerCreateTask !== null,
   });
 
+  const { data: availableSkills = [] } = useQuery({
+    queryKey: ['skills'],
+    queryFn: listSkills,
+    enabled: workerCreateTask !== null,
+  });
+
+  const toggleSkill = useCallback((skill: SkillRef) => {
+    setWorkerSkills(prev =>
+      prev.some(s => s.name === skill.name)
+        ? prev.filter(s => s.name !== skill.name)
+        : [...prev, skill]
+    );
+  }, []);
+
   const createWorkerMutation = useMutation({
     mutationFn: createWorker,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       setWorkerCreateTask(null);
       setWorkerRepoIds([]);
+      setWorkerSkills([]);
     },
   });
 
@@ -1749,7 +1767,7 @@ export default function TaskBoard() {
 
       {/* Worker creation dialog from task card */}
       {workerCreateTask && (
-        <div className="task-board__confirm-overlay" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); }}>
+        <div className="task-board__confirm-overlay" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); }}>
           <div className="task-board__confirm-dialog" onClick={(e) => e.stopPropagation()}>
             <p>Create worker for <strong>{workerCreateTask.title}</strong>?</p>
             {repositories.length > 0 && (
@@ -1771,11 +1789,29 @@ export default function TaskBoard() {
                 })}
               </div>
             )}
+            {availableSkills.length > 0 && (
+              <div className="task-board__worker-repo-picker">
+                <p className="task-board__worker-repo-label">Skills:</p>
+                {availableSkills.map((skill: SkillRef) => {
+                  const sel = workerSkills.some(s => s.name === skill.name);
+                  return (
+                    <button key={skill.name} type="button" className={`task-board__worker-repo-card${sel ? ' task-board__worker-repo-card--selected' : ''}`} onClick={() => toggleSkill(skill)}>
+                      <span className="task-board__worker-repo-icon">⚡</span>
+                      <span className="task-board__worker-repo-info">
+                        <span className="task-board__worker-repo-name">{skill.name}</span>
+                      </span>
+                      <span className="task-board__worker-repo-branch">{skill.version}</span>
+                      <span className="task-board__worker-repo-check">{sel ? '✓' : ''}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="task-board__confirm-actions">
-              <Button onClick={() => createWorkerMutation.mutate({ task_id: workerCreateTask.id, repository_ids: workerRepoIds })}>
+              <Button onClick={() => createWorkerMutation.mutate({ task_id: workerCreateTask.id, repository_ids: workerRepoIds, skills: workerSkills.length > 0 ? workerSkills : undefined })}>
                 Create Worker
               </Button>
-              <Button variant="ghost" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); }}>
+              <Button variant="ghost" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); }}>
                 Cancel
               </Button>
             </div>

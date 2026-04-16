@@ -39,11 +39,19 @@ if [ -n "$REPOSITORIES" ]; then
     done
 fi
 
-# Step 4: Pull skills from JAAR
-if [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
+# Step 4: Pull skills from JAAR (selective by name@version)
+if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
     echo "[worker] Pulling skills from JAAR..."
-    arctl skill pull --all --registry "$JAAR_URL" 2>&1 || \
-        echo "[worker] WARNING: Failed to pull skills from JAAR"
+    IFS=',' read -ra SKILL_REFS <<< "$SKILLS"
+    for skill_ref in "${SKILL_REFS[@]}"; do
+        skill_name="${skill_ref%@*}"
+        skill_version="${skill_ref#*@}"
+        echo "[worker] Pulling skill $skill_name (version: $skill_version)"
+        arctl skill pull "$skill_name" --version "$skill_version" --registry "$JAAR_URL" 2>&1 || \
+            echo "[worker] WARNING: Failed to pull skill $skill_name@$skill_version"
+    done
+elif [ -z "$SKILLS" ]; then
+    echo "[worker] No skills configured (SKILLS env var empty), skipping skill pull"
 fi
 
 # Step 5: Start all processes

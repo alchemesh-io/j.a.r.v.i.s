@@ -6,9 +6,15 @@ from app.models.enums import WorkerState, WorkerType
 from app.schemas.repository import RepositoryResponse
 
 
+class SkillRef(BaseModel):
+    name: str
+    version: str = "latest"
+
+
 class WorkerCreate(BaseModel):
     task_id: int
     repository_ids: list[int] = []
+    skills: list[SkillRef] = []
     type: WorkerType = WorkerType.claude_code
 
 
@@ -36,3 +42,4 @@ class WorkerResponse(BaseModel):
     created_at: datetime.datetime
     updated_at: datetime.datetime
     repositories: list[RepositoryResponse] = []
+    skills: list[SkillRef] = []

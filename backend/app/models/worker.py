@@ -26,6 +26,7 @@ class Worker(Base):
     updated_at: Mapped[datetime.datetime] = mapped_column(
         sa.DateTime, nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()
     )
+    skills: Mapped[list] = mapped_column(sa.JSON, nullable=False, default=list)
 
     task: Mapped["Task"] = relationship("Task", back_populates="worker")
     repositories: Mapped[list["Repository"]] = relationship(

@@ -44,6 +44,7 @@ def create_worker_pod(
     task_id: int,
     worker_image: str,
     repositories: list[dict[str, str]],
+    skills: list[dict[str, str]] | None = None,
     resource_requests: dict[str, str] | None = None,
     resource_limits: dict[str, str] | None = None,
     image_pull_policy: str = "IfNotPresent",
@@ -56,6 +57,9 @@ def create_worker_pod(
     limits = resource_limits or {"memory": "1Gi", "cpu": "1000m"}
 
     repo_env = ",".join(f"{r['git_url']}@{r['branch']}" for r in repositories)
+    skills_env = ",".join(
+        f"{s['name']}@{s.get('version', 'latest')}" for s in (skills or [])
+    )
 
     pod = client.V1Pod(
         metadata=client.V1ObjectMeta(
@@ -81,6 +85,7 @@ def create_worker_pod(
                         client.V1EnvVar(name="WORKER_ID", value=worker_id),
                         client.V1EnvVar(name="TASK_ID", value=str(task_id)),
                         client.V1EnvVar(name="REPOSITORIES", value=repo_env),
+                        client.V1EnvVar(name="SKILLS", value=skills_env),
                         client.V1EnvVar(name="BACKEND_URL", value=f"http://jarvis-backend.{NAMESPACE}.svc:8000"),
                         client.V1EnvVar(
                             name="ANTHROPIC_API_KEY",

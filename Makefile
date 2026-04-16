@@ -18,7 +18,7 @@ DATA_MOUNT_TARGET   := /mnt/jarvis-data
 GHCR_ORG            := alchemesh-io
 
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp build-worker setup-worker-ssh sync-claude-config _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update _tls-secret
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers sync-artifacts-skills db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp build-worker setup-worker-ssh sync-claude-config _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update _tls-secret
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -369,7 +369,7 @@ dev-backend:
 ## Sync all artifacts to the Agent Registry (publish remote GHCR versions + local images)
 ## Requires JAAR to be running. Override registry URL: make sync-artifacts JAAR_URL=http://...
 JAAR_URL ?= http://jaar.jarvis.io
-sync-artifacts: sync-artifacts-servers
+sync-artifacts: sync-artifacts-servers sync-artifacts-skills
 
 ## Publish all MCP servers to Agent Registry — all remote tags from GHCR + local git SHA
 sync-artifacts-servers:
@@ -404,6 +404,43 @@ sync-artifacts-servers:
 			--version "$(LOCAL_TAG)" \
 			--type oci \
 			--package-id "$${IMAGE}:$(LOCAL_TAG)" || \
+			echo "    Skipped local"; \
+	done
+	@echo "==> Done."
+
+## Publish all skills to Agent Registry — all remote tags from GHCR + local git SHA
+sync-artifacts-skills:
+	@echo "==> Syncing skills to Agent Registry ($(JAAR_URL))..."
+	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
+	@for dir in artifacts/skills/*/; do \
+		skill_md="$${dir}SKILL.md"; \
+		if [ ! -f "$$skill_md" ]; then continue; fi; \
+		if [ ! -f "$${dir}Dockerfile" ]; then continue; fi; \
+		DIR_NAME=$$(basename "$$dir"); \
+		NAME=$$(echo "$$DIR_NAME" | tr '_' '-' | sed 's/--/-/g'); \
+		DESC=$$(grep -m1 '^description:' "$$skill_md" | sed 's/^description:[[:space:]]*//' || echo ""); \
+		IMAGE="ghcr.io/$(GHCR_ORG)/$$NAME"; \
+		echo "  --- $${NAME} ---"; \
+		echo "  Fetching remote tags from GHCR..."; \
+		TAGS=$$(docker images --format '{{.Tag}}' "$$IMAGE" 2>/dev/null; \
+			curl -sf "https://ghcr.io/v2/$(GHCR_ORG)/$${NAME}/tags/list" \
+				-H "Authorization: Bearer $$(curl -sf "https://ghcr.io/token?scope=repository:$(GHCR_ORG)/$${NAME}:pull&service=ghcr.io" | jq -r '.token')" \
+				2>/dev/null | jq -r '.tags[]' 2>/dev/null) || true; \
+		for TAG in $$TAGS; do \
+			echo "  Publishing $${NAME}:$${TAG}..."; \
+			arctl skill publish $${NAME} \
+				--registry-url "$(JAAR_URL)" \
+				--description "$$DESC" \
+				--version "$$TAG" \
+				--docker-image "$${IMAGE}:$${TAG}" || \
+				echo "    Skipped $${TAG}"; \
+		done; \
+		echo "  Publishing local $${NAME}:$(LOCAL_TAG)..."; \
+		arctl skill publish $${NAME} \
+			--registry-url "$(JAAR_URL)" \
+			--description "$$DESC" \
+			--version "$(LOCAL_TAG)" \
+			--docker-image "$${IMAGE}:$(LOCAL_TAG)" || \
 			echo "    Skipped local"; \
 	done
 	@echo "==> Done."

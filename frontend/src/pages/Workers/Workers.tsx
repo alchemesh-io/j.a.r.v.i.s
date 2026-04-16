@@ -4,6 +4,7 @@ import { Button, IconButton, WorkerBrain } from '@jarvis/jads';
 import {
   listWorkers,
   listRepositories,
+  listSkills,
   listTasks,
   createWorker,
   updateWorker,
@@ -12,6 +13,7 @@ import {
   type Worker,
   type Repository,
   type Task,
+  type SkillRef,
 } from '../../api/client';
 import './Workers.css';
 
@@ -64,12 +66,14 @@ export default function Workers() {
 
   const { data: workers = [] } = useQuery({ queryKey: ['workers'], queryFn: listWorkers, refetchInterval: 5000 });
   const { data: repos = [] } = useQuery({ queryKey: ['repositories'], queryFn: listRepositories });
+  const { data: availableSkills = [] } = useQuery({ queryKey: ['skills'], queryFn: listSkills });
   const { data: tasks = [] } = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks() });
 
   const [filterState, setFilterState] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<number | ''>('');
   const [selectedRepoIds, setSelectedRepoIds] = useState<number[]>([]);
+  const [selectedSkills, setSelectedSkills] = useState<SkillRef[]>([]);
   const [createError, setCreateError] = useState('');
 
   const createWorkerMutation = useMutation({
@@ -88,10 +92,14 @@ export default function Workers() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); queryClient.invalidateQueries({ queryKey: ['tasks'] }); },
   });
 
-  const resetCreateForm = useCallback(() => { setShowCreate(false); setSelectedTaskId(''); setSelectedRepoIds([]); setCreateError(''); }, []);
+  const resetCreateForm = useCallback(() => { setShowCreate(false); setSelectedTaskId(''); setSelectedRepoIds([]); setSelectedSkills([]); setCreateError(''); }, []);
 
   const toggleRepoId = useCallback((id: number) => {
     setSelectedRepoIds((prev) => prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]);
+  }, []);
+
+  const toggleSkill = useCallback((skill: SkillRef) => {
+    setSelectedSkills((prev) => prev.some(s => s.name === skill.name) ? prev.filter(s => s.name !== skill.name) : [...prev, skill]);
   }, []);
 
   const availableTasks = tasks.filter((t: Task) => !t.worker);
@@ -233,10 +241,32 @@ export default function Workers() {
                 </div>
               )}
             </div>
+            <div className="workers__create-field">
+              <label>Skills</label>
+              {availableSkills.length === 0 ? (
+                <p className="workers__repo-empty">No skills available in the registry</p>
+              ) : (
+                <div className="workers__repo-picker">
+                  {availableSkills.map((skill: SkillRef) => {
+                    const selected = selectedSkills.some(s => s.name === skill.name);
+                    return (
+                      <button key={skill.name} type="button" className={`workers__repo-card${selected ? ' workers__repo-card--selected' : ''}`} onClick={() => toggleSkill(skill)}>
+                        <span className="workers__repo-card-icon">⚡</span>
+                        <span className="workers__repo-card-info">
+                          <span className="workers__repo-card-name">{skill.name}</span>
+                        </span>
+                        <span className="workers__repo-card-branch">{skill.version}</span>
+                        <span className="workers__repo-card-check">{selected ? '✓' : ''}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             {createError && <div className="workers__error">{createError}</div>}
             <div className="workers__create-actions">
               <Button onClick={resetCreateForm}>Cancel</Button>
-              <Button onClick={() => { if (selectedTaskId) createWorkerMutation.mutate({ task_id: selectedTaskId as number, repository_ids: selectedRepoIds }); }} disabled={!selectedTaskId}>Create Worker</Button>
+              <Button onClick={() => { if (selectedTaskId) createWorkerMutation.mutate({ task_id: selectedTaskId as number, repository_ids: selectedRepoIds, skills: selectedSkills.length > 0 ? selectedSkills : undefined }); }} disabled={!selectedTaskId}>Create Worker</Button>
             </div>
           </div>
         </div>

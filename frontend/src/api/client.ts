@@ -449,9 +449,19 @@ export function createKeyFocusBlocker(keyFocusId: number, body: { title: string;
 
 // --- Worker API ---
 
+export interface SkillRef {
+  name: string;
+  version: string;
+}
+
+export function listSkills(): Promise<SkillRef[]> {
+  return request('/skills');
+}
+
 export function createWorker(body: {
   task_id: number;
   repository_ids?: number[];
+  skills?: { name: string; version: string }[];
   type?: WorkerType;
 }): Promise<Worker> {
   return request('/workers', { method: 'POST', body: JSON.stringify(body) });

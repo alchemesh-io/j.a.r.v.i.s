@@ -72,6 +72,53 @@ def test_create_worker_pod_calls_api(mock_client, mock_config):
 
 @patch("app.services.k8s.config")
 @patch("app.services.k8s.client")
+def test_create_worker_pod_with_skills_env_var(mock_client, mock_config):
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_client.CoreV1Api.return_value = mock_api
+    mock_client.CustomObjectsApi.return_value = MagicMock()
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    k8s.create_worker_pod(
+        "abc123",
+        42,
+        "worker:latest",
+        [],
+        skills=[
+            {"name": "planner-daily-wrap-up", "version": "0.1.0"},
+            {"name": "code-reviewer", "version": "latest"},
+        ],
+    )
+    mock_api.create_namespaced_pod.assert_called_once()
+    # Verify V1EnvVar was called with SKILLS env var
+    env_calls = mock_client.V1EnvVar.call_args_list
+    skills_calls = [c for c in env_calls if c.kwargs.get("name") == "SKILLS"]
+    assert len(skills_calls) == 1
+    assert skills_calls[0].kwargs["value"] == "planner-daily-wrap-up@0.1.0,code-reviewer@latest"
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_without_skills_has_empty_env(mock_client, mock_config):
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_client.CoreV1Api.return_value = mock_api
+    mock_client.CustomObjectsApi.return_value = MagicMock()
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [])
+    env_calls = mock_client.V1EnvVar.call_args_list
+    skills_calls = [c for c in env_calls if c.kwargs.get("name") == "SKILLS"]
+    assert len(skills_calls) == 1
+    assert skills_calls[0].kwargs["value"] == ""
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
 def test_create_worker_service_calls_api(mock_client, mock_config):
     mock_config.ConfigException = Exception
     mock_api = MagicMock()
