@@ -22,12 +22,14 @@ def list_skills():
         logger.warning("Failed to fetch skills from JAAR at %s", JAAR_URL)
         return []
 
+    items = data.get("skills", data) if isinstance(data, dict) else data
+
     return [
         {
             "name": item["skill"]["name"],
             "description": item["skill"].get("description", ""),
             "version": item["skill"].get("version", "latest"),
         }
-        for item in data
+        for item in items
         if "skill" in item
     ]

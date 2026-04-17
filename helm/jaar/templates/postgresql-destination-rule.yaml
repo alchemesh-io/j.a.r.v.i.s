@@ -1,0 +1,10 @@
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: {{ .Release.Name }}-postgresql-plaintext
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: {{ .Release.Name }}-agentregistry-postgresql.{{ .Release.Namespace }}.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: DISABLE
