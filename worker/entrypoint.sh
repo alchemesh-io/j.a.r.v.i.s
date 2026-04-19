@@ -39,15 +39,17 @@ if [ -n "$REPOSITORIES" ]; then
     done
 fi
 
-# Step 4: Pull skills from JAAR (selective by name@version)
+# Step 4: Pull skills from JAAR (selective by name@version) into Claude Code skills dir
 if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
     echo "[worker] Pulling skills from JAAR..."
+    mkdir -p ~/.claude/skills
     IFS=',' read -ra SKILL_REFS <<< "$SKILLS"
     for skill_ref in "${SKILL_REFS[@]}"; do
         skill_name="${skill_ref%@*}"
         skill_version="${skill_ref#*@}"
-        echo "[worker] Pulling skill $skill_name (version: $skill_version)"
-        arctl skill pull "$skill_name" --version "$skill_version" --registry "$JAAR_URL" 2>&1 || \
+        skill_dir="$HOME/.claude/skills/$skill_name"
+        echo "[worker] Pulling skill $skill_name (version: $skill_version) to $skill_dir"
+        arctl skill pull "$skill_name" "$skill_dir" --version "$skill_version" --registry "$JAAR_URL" 2>&1 || \
             echo "[worker] WARNING: Failed to pull skill $skill_name@$skill_version"
     done
 elif [ -z "$SKILLS" ]; then
