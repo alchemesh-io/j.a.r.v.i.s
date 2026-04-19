@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 
-JAAR_URL = os.getenv("JAAR_URL", "http://jaar-agentregistry.jaar.svc:12121")
+JAAR_URL = os.getenv("JAAR_URL", "")
 
 
 @router.get("")
