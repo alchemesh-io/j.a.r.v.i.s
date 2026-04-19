@@ -49,7 +49,7 @@ if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
         skill_version="${skill_ref#*@}"
         skill_dir="$HOME/.claude/skills/$skill_name"
         echo "[worker] Pulling skill $skill_name (version: $skill_version) to $skill_dir"
-        arctl skill pull "$skill_name" "$skill_dir" --version "$skill_version" --registry "$JAAR_URL" 2>&1 || \
+        arctl skill pull "$skill_name" "$skill_dir" --version "$skill_version" --registry-url "$JAAR_URL" 2>&1 || \
             echo "[worker] WARNING: Failed to pull skill $skill_name@$skill_version"
     done
 elif [ -z "$SKILLS" ]; then
