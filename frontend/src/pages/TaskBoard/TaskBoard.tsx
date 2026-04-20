@@ -1831,7 +1831,7 @@ export default function TaskBoard() {
                           onChange={(e) => changeSkillVersion(name, e.target.value)}
                           onClick={(e) => e.stopPropagation()}
                           disabled={!sel}
-                          className="task-board__worker-repo-branch"
+                          className="task-board__worker-repo-branch task-board__worker-skill-select"
                           style={{ cursor: sel ? 'pointer' : 'default' }}
                         >
                           {versions.map(v => (

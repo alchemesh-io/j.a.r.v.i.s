@@ -389,22 +389,30 @@ sync-artifacts-servers:
 				2>/dev/null | jq -r '.tags[]' 2>/dev/null) || true; \
 		for TAG in $$TAGS; do \
 			echo "  Publishing $${NAME}:$${TAG}..."; \
-			arctl mcp publish $(GHCR_ORG)/$${NAME} \
+			OUT=$$(arctl mcp publish $(GHCR_ORG)/$${NAME} \
 				--registry-url "$(JAAR_URL)" \
 				--description "$$DESC" \
 				--version "$$TAG" \
 				--type oci \
-				--package-id "$${IMAGE}:$${TAG}" || \
-				echo "    Skipped $${TAG}"; \
+				--package-id "$${IMAGE}:$${TAG}" 2>&1); \
+			if echo "$$OUT" | grep -q "already exists"; then \
+				echo "    (already published)"; \
+			else \
+				echo "$$OUT"; \
+			fi; \
 		done; \
 		echo "  Publishing local $${NAME}:$(LOCAL_TAG)..."; \
-		arctl mcp publish $(GHCR_ORG)/$${NAME} \
+		OUT=$$(arctl mcp publish $(GHCR_ORG)/$${NAME} \
 			--registry-url "$(JAAR_URL)" \
 			--description "$$DESC" \
 			--version "$(LOCAL_TAG)" \
 			--type oci \
-			--package-id "$${IMAGE}:$(LOCAL_TAG)" || \
-			echo "    Skipped local"; \
+			--package-id "$${IMAGE}:$(LOCAL_TAG)" 2>&1); \
+		if echo "$$OUT" | grep -q "already exists"; then \
+			echo "    (already published)"; \
+		else \
+			echo "$$OUT"; \
+		fi; \
 	done
 	@echo "==> Done."
 
@@ -428,23 +436,31 @@ sync-artifacts-skills:
 				2>/dev/null | jq -r '.tags[]' 2>/dev/null) || true; \
 		for TAG in $$TAGS; do \
 			echo "  Publishing $${NAME}:$${TAG}..."; \
-			arctl skill publish $${NAME} \
+			OUT=$$(arctl skill publish $${NAME} \
 				--registry-url "$(JAAR_URL)" \
 				--description "$$DESC" \
 				--version "$$TAG" \
-				--docker-image "$${IMAGE}:$${TAG}" || \
-				echo "    Skipped $${TAG}"; \
+				--docker-image "$${IMAGE}:$${TAG}" 2>&1); \
+			if echo "$$OUT" | grep -qE "already exists|duplicate version"; then \
+				echo "    (already published)"; \
+			else \
+				echo "$$OUT"; \
+			fi; \
 		done; \
-		echo "  Building and pushing $${NAME}:$(LOCAL_TAG) to GHCR..."; \
-		arctl skill build "$$dir" --image "$${IMAGE}:$(LOCAL_TAG)" --push 2>&1 || \
+		echo "  Building and pushing $${NAME}:$(LOCAL_TAG) to GHCR (platform: linux/amd64)..."; \
+		arctl skill build "$$dir" --image "$${IMAGE}:$(LOCAL_TAG)" --platform linux/amd64 --push 2>&1 || \
 			echo "    WARNING: skill build/push failed (is docker logged into ghcr.io?)"; \
 		echo "  Publishing local $${NAME}:$(LOCAL_TAG) to JAAR..."; \
-		arctl skill publish $${NAME} \
+		OUT=$$(arctl skill publish $${NAME} \
 			--registry-url "$(JAAR_URL)" \
 			--description "$$DESC" \
 			--version "$(LOCAL_TAG)" \
-			--docker-image "$${IMAGE}:$(LOCAL_TAG)" || \
-			echo "    Skipped local"; \
+			--docker-image "$${IMAGE}:$(LOCAL_TAG)" 2>&1); \
+		if echo "$$OUT" | grep -qE "already exists|duplicate version"; then \
+			echo "    (already published)"; \
+		else \
+			echo "$$OUT"; \
+		fi; \
 	done
 	@echo "==> Done."
 

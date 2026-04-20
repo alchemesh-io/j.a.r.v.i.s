@@ -57,9 +57,10 @@ else
     echo "$SETTINGS" > "$SETTINGS_FILE"
 fi
 
-if [ -n "$BACKEND_URL" ]; then
-    MCP_CONFIG="{\"mcpServers\":{\"jarvis\":{\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-fetch\"],\"env\":{\"BACKEND_URL\":\"$BACKEND_URL\"}}}}"
+if [ -n "$JARVIS_MCP_URL" ]; then
+    MCP_CONFIG="{\"mcpServers\":{\"jarvis\":{\"type\":\"http\",\"url\":\"$JARVIS_MCP_URL\"}}}"
     jq --argjson mcp "$MCP_CONFIG" '. * $mcp' "$SETTINGS_FILE" > /tmp/settings.json && mv /tmp/settings.json "$SETTINGS_FILE"
+    echo "[setup-claude] JARVIS MCP configured at $JARVIS_MCP_URL"
 fi
 
 # --- Pre-trust workspace ---

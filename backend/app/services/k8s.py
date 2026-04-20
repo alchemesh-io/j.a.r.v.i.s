@@ -89,6 +89,7 @@ def create_worker_pod(
                         client.V1EnvVar(name="REPOSITORIES", value=repo_env),
                         client.V1EnvVar(name="SKILLS", value=skills_env),
                         client.V1EnvVar(name="JAAR_URL", value=os.getenv("JAAR_URL", "")),
+                        client.V1EnvVar(name="JARVIS_MCP_URL", value=os.getenv("JARVIS_MCP_URL", "")),
                         client.V1EnvVar(name="BACKEND_URL", value=f"http://jarvis-backend.{NAMESPACE}.svc:8000"),
                         client.V1EnvVar(
                             name="ANTHROPIC_API_KEY",
