@@ -66,7 +66,13 @@ fi
 if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
     echo "[worker] Starting rootless dockerd for skill pulls..."
     mkdir -p "$XDG_RUNTIME_DIR"
-    dockerd-rootless.sh > /tmp/dockerd.log 2>&1 &
+    # On Alpine the script is shipped as `dockerd-rootless` (no .sh suffix);
+    # on other distros it's `dockerd-rootless.sh`.
+    if command -v dockerd-rootless >/dev/null 2>&1; then
+        dockerd-rootless > /tmp/dockerd.log 2>&1 &
+    else
+        dockerd-rootless.sh > /tmp/dockerd.log 2>&1 &
+    fi
     DOCKERD_PID=$!
 
     # Wait for rootless docker socket to be ready (up to 30s)
