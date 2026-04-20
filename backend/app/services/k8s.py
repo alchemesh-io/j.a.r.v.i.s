@@ -84,6 +84,13 @@ def create_worker_pod(
                     name="worker",
                     image=worker_image,
                     image_pull_policy=image_pull_policy,
+                    # Rootless dockerd + slirp4netns needs /dev/net/tun and CAP_NET_ADMIN
+                    # to set up the TAP device inside its user namespace.
+                    security_context=client.V1SecurityContext(
+                        capabilities=client.V1Capabilities(
+                            add=["NET_ADMIN", "SYS_ADMIN"],
+                        ),
+                    ),
                     ports=[
                         client.V1ContainerPort(container_port=3000, name="ui"),
                         client.V1ContainerPort(container_port=8080, name="status"),
@@ -146,6 +153,10 @@ def create_worker_pod(
                             mount_path="/etc/gws",
                             read_only=True,
                         ),
+                        client.V1VolumeMount(
+                            name="dev-net-tun",
+                            mount_path="/dev/net/tun",
+                        ),
                     ],
                 ),
             ],
@@ -168,6 +179,14 @@ def create_worker_pod(
                                 path="credentials.json",
                             ),
                         ],
+                    ),
+                ),
+                # Required by rootless dockerd + slirp4netns to create the TAP device
+                client.V1Volume(
+                    name="dev-net-tun",
+                    host_path=client.V1HostPathVolumeSource(
+                        path="/dev/net/tun",
+                        type="CharDevice",
                     ),
                 ),
             ],
