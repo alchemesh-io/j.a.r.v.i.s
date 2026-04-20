@@ -29,6 +29,9 @@ def list_skills():
             "name": item["skill"]["name"],
             "description": item["skill"].get("description", ""),
             "version": item["skill"].get("version", "latest"),
+            "is_latest": item.get("_meta", {})
+                            .get("io.modelcontextprotocol.registry/official", {})
+                            .get("isLatest", False),
         }
         for item in items
         if "skill" in item

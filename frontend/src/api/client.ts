@@ -452,6 +452,8 @@ export function createKeyFocusBlocker(keyFocusId: number, body: { title: string;
 export interface SkillRef {
   name: string;
   version: string;
+  description?: string;
+  is_latest?: boolean;
 }
 
 export function listSkills(): Promise<SkillRef[]> {

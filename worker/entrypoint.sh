@@ -54,11 +54,14 @@ if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
         sleep 1
     done
 
-    # Authenticate with GHCR so arctl can pull private skill images
+    # Authenticate with GHCR so arctl can pull private skill images.
+    # Username for GHCR with a PAT can be any non-empty string; the token does the work
+    # as long as it has the `read:packages` scope.
     if [ -n "$GITHUB_TOKEN" ]; then
-        echo "[worker] Logging into ghcr.io..."
-        echo "$GITHUB_TOKEN" | sudo docker login ghcr.io -u jarvis-worker --password-stdin 2>&1 || \
-            echo "[worker] WARNING: docker login failed"
+        GHCR_USER="${GHCR_USERNAME:-USERNAME}"
+        echo "[worker] Logging into ghcr.io as ${GHCR_USER}..."
+        echo "$GITHUB_TOKEN" | sudo docker login ghcr.io -u "${GHCR_USER}" --password-stdin 2>&1 || \
+            echo "[worker] WARNING: docker login failed — ensure GITHUB_TOKEN has read:packages scope"
     fi
 
     echo "[worker] Pulling skills from JAAR..."
