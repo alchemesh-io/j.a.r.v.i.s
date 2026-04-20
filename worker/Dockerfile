@@ -1,11 +1,15 @@
 FROM docker@sha256:4d2c6e334de4b26d492c0a8cc5438e3dbf1a02eee899fc0d4d39b96202c943a7 AS base
 
 # Alpine-based docker:dind already includes dockerd + docker CLI.
-# Install the remaining runtime dependencies: Node.js, Python, git, jq, sudo, etc.
+# Install runtime deps + the packages required for rootless dockerd:
+#   - shadow, shadow-uidmap: newuidmap/newgidmap for user-namespace mapping
+#   - slirp4netns:           network backend used by rootlesskit
+#   - fuse-overlayfs:        storage driver that works rootless
 RUN apk add --no-cache \
     bash \
     ca-certificates \
     curl \
+    fuse-overlayfs \
     git \
     jq \
     nodejs \
@@ -14,18 +18,27 @@ RUN apk add --no-cache \
     python3 \
     py3-pip \
     shadow \
-    sudo \
+    shadow-uidmap \
+    slirp4netns \
     tar
 
-# Create a non-root 'node' user (UID 1000) to match the previous Debian layout
+# Create a non-root 'node' user (UID 1000) + allocate a subuid/subgid range for
+# rootless user-namespace mapping (required by dockerd-rootless.sh).
 RUN addgroup -g 1000 node && \
     adduser -u 1000 -G node -s /bin/bash -D node && \
     mkdir -p /home/node/jarvis /home/node/.claude && \
-    chown -R node:node /home/node
+    chown -R node:node /home/node && \
+    echo 'node:100000:65536' >> /etc/subuid && \
+    echo 'node:100000:65536' >> /etc/subgid
 
-# Allow the node user to run any command as root without a password prompt.
-# The worker pod runs with privileged: true so dockerd can start.
-RUN echo "node ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/node-docker
+# Rootless dockerd configuration.
+# - slirp4netns keeps dockerd's network changes isolated from the pod (no
+#   iptables / bridge / DNS pollution that breaks outbound DNS).
+# - DOCKER_HOST points docker CLI / arctl to the rootless socket created by
+#   dockerd-rootless.sh (started in the entrypoint).
+ENV DOCKERD_ROOTLESS_ROOTLESSKIT_NET=slirp4netns
+ENV DOCKER_HOST=unix:///run/user/1000/docker.sock
+ENV XDG_RUNTIME_DIR=/run/user/1000
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
