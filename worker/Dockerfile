@@ -1,6 +1,7 @@
-FROM node:22-slim AS base
+FROM node:22 AS base
 
-# Install system dependencies
+# Install system dependencies + Docker Engine (docker.io) for dockerd + CLI inside the container.
+# The worker pod must run with privileged: true to start dockerd.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
@@ -9,7 +10,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
     ca-certificates \
+    docker.io \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
+
+# Allow the node user to run dockerd / arctl / docker as root without a password prompt
+RUN echo "node ALL=(ALL) NOPASSWD: /usr/sbin/dockerd, /usr/bin/docker, /root/.local/bin/arctl, /bin/kill, /bin/chown" \
+    > /etc/sudoers.d/node-docker
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh

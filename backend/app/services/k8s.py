@@ -78,6 +78,7 @@ def create_worker_pod(
                     name="worker",
                     image=worker_image,
                     image_pull_policy=image_pull_policy,
+                    security_context=client.V1SecurityContext(privileged=True),
                     ports=[
                         client.V1ContainerPort(container_port=3000, name="ui"),
                         client.V1ContainerPort(container_port=8080, name="status"),

@@ -41,6 +41,19 @@ fi
 
 # Step 4: Pull skills from JAAR (selective by name@version) into Claude Code skills dir
 if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
+    echo "[worker] Starting dockerd for skill pulls..."
+    sudo dockerd > /var/log/dockerd.log 2>&1 &
+    DOCKERD_PID=$!
+
+    # Wait for dockerd socket to be ready (up to 15s)
+    for i in $(seq 1 15); do
+        if sudo docker info >/dev/null 2>&1; then
+            echo "[worker] dockerd ready"
+            break
+        fi
+        sleep 1
+    done
+
     echo "[worker] Pulling skills from JAAR..."
     mkdir -p ~/.claude/skills
     IFS=',' read -ra SKILL_REFS <<< "$SKILLS"
@@ -49,9 +62,13 @@ if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
         skill_version="${skill_ref#*@}"
         skill_dir="$HOME/.claude/skills/$skill_name"
         echo "[worker] Pulling skill $skill_name (version: $skill_version) to $skill_dir"
-        arctl skill pull "$skill_name" "$skill_dir" --version "$skill_version" --registry-url "$JAAR_URL" 2>&1 || \
+        sudo arctl skill pull "$skill_name" "$skill_dir" --version "$skill_version" --registry-url "$JAAR_URL" 2>&1 || \
             echo "[worker] WARNING: Failed to pull skill $skill_name@$skill_version"
+        sudo chown -R node:node "$skill_dir" 2>/dev/null || true
     done
+
+    # Stop dockerd — no longer needed after skills are pulled
+    sudo kill $DOCKERD_PID 2>/dev/null || true
 elif [ -z "$SKILLS" ]; then
     echo "[worker] No skills configured (SKILLS env var empty), skipping skill pull"
 fi
