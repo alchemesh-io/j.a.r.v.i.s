@@ -54,8 +54,8 @@ def create_worker_pod(
     if not _init_client():
         raise RuntimeError("Kubernetes cluster not available")
 
-    requests = resource_requests or {"memory": "256Mi", "cpu": "250m"}
-    limits = resource_limits or {"memory": "1Gi", "cpu": "1000m"}
+    requests = resource_requests or {"memory": "1Gi", "cpu": "500m"}
+    limits = resource_limits or {"memory": "4Gi", "cpu": "2000m"}
 
     repo_env = ",".join(f"{r['git_url']}@{r['branch']}" for r in repositories)
     skills_env = ",".join(
@@ -69,6 +69,12 @@ def create_worker_pod(
             labels={
                 "app": WORKER_LABEL,
                 "worker-id": worker_id,
+            },
+            annotations={
+                # Wait for istio-proxy to be ready before starting the worker container,
+                # otherwise outbound DNS (github.com, GHCR, etc.) fails with
+                # "Could not resolve host" during the first few seconds of the pod's life.
+                "proxy.istio.io/config": '{"holdApplicationUntilProxyStarts": true}',
             },
         ),
         spec=client.V1PodSpec(

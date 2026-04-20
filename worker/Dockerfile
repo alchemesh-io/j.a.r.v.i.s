@@ -24,10 +24,12 @@ RUN apk add --no-cache \
 
 # Create a non-root 'node' user (UID 1000) + allocate a subuid/subgid range for
 # rootless user-namespace mapping (required by dockerd-rootless.sh).
+# Also create /run/user/1000 (XDG_RUNTIME_DIR) so dockerd-rootless.sh can place its socket.
 RUN addgroup -g 1000 node && \
     adduser -u 1000 -G node -s /bin/bash -D node && \
-    mkdir -p /home/node/jarvis /home/node/.claude && \
-    chown -R node:node /home/node && \
+    mkdir -p /home/node/jarvis /home/node/.claude /run/user/1000 && \
+    chown -R node:node /home/node /run/user/1000 && \
+    chmod 700 /run/user/1000 && \
     echo 'node:100000:65536' >> /etc/subuid && \
     echo 'node:100000:65536' >> /etc/subgid
 
