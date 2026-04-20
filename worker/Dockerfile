@@ -2,13 +2,15 @@ FROM docker@sha256:4d2c6e334de4b26d492c0a8cc5438e3dbf1a02eee899fc0d4d39b96202c94
 
 # Alpine-based docker:dind already includes dockerd + docker CLI.
 # Install runtime deps + the packages required for rootless dockerd:
-#   - shadow, shadow-uidmap: newuidmap/newgidmap for user-namespace mapping
-#   - slirp4netns:           network backend used by rootlesskit
-#   - fuse-overlayfs:        storage driver that works rootless
+#   - shadow, shadow-uidmap:     newuidmap/newgidmap for user-namespace mapping
+#   - slirp4netns:               network backend used by rootlesskit
+#   - fuse-overlayfs:            storage driver that works rootless
+#   - docker-rootless-extras:    dockerd-rootless.sh + rootlesskit
 RUN apk add --no-cache \
     bash \
     ca-certificates \
     curl \
+    docker-rootless-extras \
     fuse-overlayfs \
     git \
     jq \
