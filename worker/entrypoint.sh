@@ -54,6 +54,13 @@ if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
         sleep 1
     done
 
+    # Authenticate with GHCR so arctl can pull private skill images
+    if [ -n "$GITHUB_TOKEN" ]; then
+        echo "[worker] Logging into ghcr.io..."
+        echo "$GITHUB_TOKEN" | sudo docker login ghcr.io -u jarvis-worker --password-stdin 2>&1 || \
+            echo "[worker] WARNING: docker login failed"
+    fi
+
     echo "[worker] Pulling skills from JAAR..."
     mkdir -p ~/.claude/skills
     IFS=',' read -ra SKILL_REFS <<< "$SKILLS"

@@ -435,7 +435,10 @@ sync-artifacts-skills:
 				--docker-image "$${IMAGE}:$${TAG}" || \
 				echo "    Skipped $${TAG}"; \
 		done; \
-		echo "  Publishing local $${NAME}:$(LOCAL_TAG)..."; \
+		echo "  Building and pushing $${NAME}:$(LOCAL_TAG) to GHCR..."; \
+		arctl skill build "$$dir" --image "$${IMAGE}:$(LOCAL_TAG)" --push 2>&1 || \
+			echo "    WARNING: skill build/push failed (is docker logged into ghcr.io?)"; \
+		echo "  Publishing local $${NAME}:$(LOCAL_TAG) to JAAR..."; \
 		arctl skill publish $${NAME} \
 			--registry-url "$(JAAR_URL)" \
 			--description "$$DESC" \
