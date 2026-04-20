@@ -57,18 +57,21 @@ else
     echo "$SETTINGS" > "$SETTINGS_FILE"
 fi
 
-if [ -n "$JARVIS_MCP_URL" ]; then
-    MCP_CONFIG="{\"mcpServers\":{\"jarvis\":{\"type\":\"http\",\"url\":\"$JARVIS_MCP_URL\"}}}"
-    jq --argjson mcp "$MCP_CONFIG" '. * $mcp' "$SETTINGS_FILE" > /tmp/settings.json && mv /tmp/settings.json "$SETTINGS_FILE"
-    echo "[setup-claude] JARVIS MCP configured at $JARVIS_MCP_URL"
-fi
-
 # --- Pre-trust workspace ---
 
-if [ -f "$CLAUDE_JSON" ]; then
-    jq --arg ws "$WORKSPACE" '.projects[$ws].hasTrustDialogAccepted = true' "$CLAUDE_JSON" > /tmp/claude.json && mv /tmp/claude.json "$CLAUDE_JSON"
-else
-    echo "{\"projects\":{\"$WORKSPACE\":{\"hasTrustDialogAccepted\":true}}}" > "$CLAUDE_JSON"
+if [ ! -f "$CLAUDE_JSON" ]; then
+    echo '{}' > "$CLAUDE_JSON"
+fi
+
+jq --arg ws "$WORKSPACE" '.projects[$ws].hasTrustDialogAccepted = true' "$CLAUDE_JSON" \
+    > /tmp/claude.json && mv /tmp/claude.json "$CLAUDE_JSON"
+
+# --- Configure JARVIS MCP (HTTP) via the Claude Code CLI ---
+
+if [ -n "$JARVIS_MCP_URL" ]; then
+    claude mcp remove jarvis --scope user 2>/dev/null || true
+    claude mcp add --transport http --scope user jarvis "$JARVIS_MCP_URL" 2>&1 && \
+        echo "[setup-claude] JARVIS MCP configured at $JARVIS_MCP_URL"
 fi
 
 echo "[setup-claude] Settings, hooks, and workspace trust configured"

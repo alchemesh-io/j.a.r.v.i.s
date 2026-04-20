@@ -46,22 +46,8 @@ RUN ARCH=$(uname -m) && \
       -o /usr/local/bin/arctl \
     && chmod 755 /usr/local/bin/arctl
 
-# Install gws (Google Workspace CLI) from the official GitHub releases
-ARG GWS_VERSION=v0.22.5
-RUN ARCH=$(uname -m) && \
-    case "$ARCH" in \
-      x86_64) GWS_TARGET=x86_64-unknown-linux-gnu ;; \
-      aarch64|arm64) GWS_TARGET=aarch64-unknown-linux-gnu ;; \
-      *) echo "unsupported arch: $ARCH" && exit 1 ;; \
-    esac && \
-    curl -fsSL "https://github.com/googleworkspace/cli/releases/download/${GWS_VERSION}/google-workspace-cli-${GWS_TARGET}.tar.gz" \
-      -o /tmp/gws.tar.gz \
-    && mkdir -p /tmp/gws-extract \
-    && tar -xzf /tmp/gws.tar.gz -C /tmp/gws-extract \
-    && find /tmp/gws-extract -name 'gws' -type f -exec mv {} /usr/local/bin/gws \; \
-    && chmod 755 /usr/local/bin/gws \
-    && rm -rf /tmp/gws.tar.gz /tmp/gws-extract \
-    && chown root:root /tmp && chmod 1777 /tmp
+# Install gws (Google Workspace CLI) via npm
+RUN npm install -g @googleworkspace/cli@0.22.5
 
 # Copy status server
 COPY --chown=node:node status-server/ /home/node/status-server/
