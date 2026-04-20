@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Allow the node user to run dockerd / arctl / docker as root without a password prompt
-RUN echo "node ALL=(ALL) NOPASSWD: /usr/sbin/dockerd, /usr/bin/docker, /root/.local/bin/arctl, /bin/kill, /bin/chown" \
+RUN echo "node ALL=(ALL) NOPASSWD: /usr/sbin/dockerd, /usr/bin/docker, /usr/local/bin/arctl, /bin/kill, /bin/chown" \
     > /etc/sudoers.d/node-docker
 
 # Install uv
@@ -25,9 +25,10 @@ ENV PATH="/root/.local/bin:$PATH"
 # Install Claude Code (pinned version — npm package still available for Docker/Linux)
 RUN npm install -g @anthropic-ai/claude-code@2.1.104
 
-# Install arctl
+# Install arctl into /usr/local/bin so the non-root node user can execute it
 RUN curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry/main/scripts/get-arctl | bash \
-    || echo "arctl install failed — continuing without it"
+    && mv /root/.local/bin/arctl /usr/local/bin/arctl \
+    && chmod 755 /usr/local/bin/arctl
 
 # Reuse the existing node user (UID 1000) from node:22-slim
 RUN mkdir -p /home/node/jarvis /home/node/.claude && \
