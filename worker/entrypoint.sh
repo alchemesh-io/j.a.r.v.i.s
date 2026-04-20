@@ -42,8 +42,8 @@ fi
 # Step 4: Pull skills from JAAR (selective by name@version) into Claude Code skills dir
 if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
     echo "[worker] Starting dockerd for skill pulls..."
-    sudo dockerd > /var/log/dockerd.log 2>&1 &
-    DOCKERD_PID=$!
+    sudo sh -c 'dockerd > /var/log/dockerd.log 2>&1 &'
+    sleep 1
 
     # Wait for dockerd socket to be ready (up to 15s)
     for i in $(seq 1 15); do
@@ -68,7 +68,7 @@ if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
     done
 
     # Stop dockerd — no longer needed after skills are pulled
-    sudo kill $DOCKERD_PID 2>/dev/null || true
+    sudo pkill -x dockerd 2>/dev/null || true
 elif [ -z "$SKILLS" ]; then
     echo "[worker] No skills configured (SKILLS env var empty), skipping skill pull"
 fi
