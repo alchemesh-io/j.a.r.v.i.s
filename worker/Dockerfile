@@ -56,10 +56,12 @@ RUN ARCH=$(uname -m) && \
     esac && \
     curl -fsSL "https://github.com/googleworkspace/cli/releases/download/${GWS_VERSION}/google-workspace-cli-${GWS_TARGET}.tar.gz" \
       -o /tmp/gws.tar.gz \
-    && tar -xzf /tmp/gws.tar.gz -C /tmp \
-    && find /tmp -name 'gws' -type f -exec mv {} /usr/local/bin/gws \; \
+    && mkdir -p /tmp/gws-extract \
+    && tar -xzf /tmp/gws.tar.gz -C /tmp/gws-extract \
+    && find /tmp/gws-extract -name 'gws' -type f -exec mv {} /usr/local/bin/gws \; \
     && chmod 755 /usr/local/bin/gws \
-    && rm -rf /tmp/gws.tar.gz /tmp/google-workspace-cli-*
+    && rm -rf /tmp/gws.tar.gz /tmp/gws-extract \
+    && chown root:root /tmp && chmod 1777 /tmp
 
 # Copy status server
 COPY --chown=node:node status-server/ /home/node/status-server/
