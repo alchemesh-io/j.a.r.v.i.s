@@ -25,9 +25,12 @@ ENV PATH="/root/.local/bin:$PATH"
 # Install Claude Code (pinned version — npm package still available for Docker/Linux)
 RUN npm install -g @anthropic-ai/claude-code@2.1.104
 
-# Install arctl into /usr/local/bin so the non-root node user can execute it
-RUN curl -fsSL https://raw.githubusercontent.com/agentregistry-dev/agentregistry/main/scripts/get-arctl | bash \
-    && mv /root/.local/bin/arctl /usr/local/bin/arctl \
+# Install arctl directly from GitHub releases into /usr/local/bin
+# (skipping the get-arctl helper because its checksum verification fails silently in this base image)
+ARG ARCTL_VERSION=v0.3.3
+RUN ARCH=$(dpkg --print-architecture) && \
+    curl -fsSL "https://github.com/agentregistry-dev/agentregistry/releases/download/${ARCTL_VERSION}/arctl-linux-${ARCH}" \
+      -o /usr/local/bin/arctl \
     && chmod 755 /usr/local/bin/arctl
 
 # Reuse the existing node user (UID 1000) from node:22-slim
