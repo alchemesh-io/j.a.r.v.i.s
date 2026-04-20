@@ -98,8 +98,33 @@ export default function Workers() {
     setSelectedRepoIds((prev) => prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]);
   }, []);
 
-  const toggleSkill = useCallback((skill: SkillRef) => {
-    setSelectedSkills((prev) => prev.some(s => s.name === skill.name) ? prev.filter(s => s.name !== skill.name) : [...prev, skill]);
+  const skillsByName = useMemo(() => {
+    const map = new Map<string, SkillRef[]>();
+    for (const skill of availableSkills) {
+      const arr = map.get(skill.name) ?? [];
+      arr.push(skill);
+      map.set(skill.name, arr);
+    }
+    return map;
+  }, [availableSkills]);
+
+  const defaultSkillVersion = useCallback((name: string): SkillRef | undefined => {
+    const versions = skillsByName.get(name) ?? [];
+    return versions.find(v => v.is_latest) ?? versions[0];
+  }, [skillsByName]);
+
+  const toggleSkill = useCallback((name: string) => {
+    setSelectedSkills(prev => {
+      if (prev.some(s => s.name === name)) {
+        return prev.filter(s => s.name !== name);
+      }
+      const def = defaultSkillVersion(name);
+      return def ? [...prev, def] : prev;
+    });
+  }, [defaultSkillVersion]);
+
+  const changeSkillVersion = useCallback((name: string, version: string) => {
+    setSelectedSkills(prev => prev.map(s => s.name === name ? { ...s, version } : s));
   }, []);
 
   const availableTasks = tasks.filter((t: Task) => !t.worker);
@@ -193,6 +218,19 @@ export default function Workers() {
                   </div>
                 )}
 
+                {/* Skills */}
+                {worker.skills && worker.skills.length > 0 && (
+                  <div className="worker-card__repos">
+                    {worker.skills.map((skill) => (
+                      <div key={`${skill.name}@${skill.version}`} className="worker-card__repo">
+                        <span className="worker-card__repo-icon">⚡</span>
+                        <span className="worker-card__repo-name">{skill.name}</span>
+                        <span className="worker-card__repo-branch">{skill.version}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Footer meta */}
                 <div className="worker-card__footer">
                   <span className="worker-card__id">{worker.id.slice(0, 12)}</span>
@@ -243,21 +281,42 @@ export default function Workers() {
             </div>
             <div className="workers__create-field">
               <label>Skills</label>
-              {availableSkills.length === 0 ? (
+              {skillsByName.size === 0 ? (
                 <p className="workers__repo-empty">No skills available in the registry</p>
               ) : (
                 <div className="workers__repo-picker">
-                  {availableSkills.map((skill: SkillRef) => {
-                    const selected = selectedSkills.some(s => s.name === skill.name);
+                  {Array.from(skillsByName.entries()).map(([name, versions]) => {
+                    const selected = selectedSkills.find(s => s.name === name);
+                    const sel = selected !== undefined;
+                    const currentVersion = selected?.version ?? (defaultSkillVersion(name)?.version ?? '');
                     return (
-                      <button key={skill.name} type="button" className={`workers__repo-card${selected ? ' workers__repo-card--selected' : ''}`} onClick={() => toggleSkill(skill)}>
-                        <span className="workers__repo-card-icon">⚡</span>
-                        <span className="workers__repo-card-info">
-                          <span className="workers__repo-card-name">{skill.name}</span>
-                        </span>
-                        <span className="workers__repo-card-branch">{skill.version}</span>
-                        <span className="workers__repo-card-check">{selected ? '✓' : ''}</span>
-                      </button>
+                      <div key={name} className={`workers__repo-card${sel ? ' workers__repo-card--selected' : ''}`}>
+                        <button type="button" onClick={() => toggleSkill(name)} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                          <span className="workers__repo-card-icon">⚡</span>
+                          <span className="workers__repo-card-info">
+                            <span className="workers__repo-card-name">{name}</span>
+                          </span>
+                        </button>
+                        {versions.length > 1 ? (
+                          <select
+                            value={currentVersion}
+                            onChange={(e) => changeSkillVersion(name, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            disabled={!sel}
+                            className="workers__repo-card-branch workers__skill-select"
+                            style={{ cursor: sel ? 'pointer' : 'default' }}
+                          >
+                            {versions.map(v => (
+                              <option key={v.version} value={v.version}>
+                                {v.version}{v.is_latest ? ' (latest)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="workers__repo-card-branch">{currentVersion}</span>
+                        )}
+                        <span className="workers__repo-card-check">{sel ? '✓' : ''}</span>
+                      </div>
                     );
                   })}
                 </div>

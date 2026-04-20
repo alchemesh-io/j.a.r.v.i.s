@@ -68,6 +68,7 @@ export interface Worker {
   created_at: string;
   updated_at: string;
   repositories: Repository[];
+  skills: SkillRef[];
 }
 
 export interface KeyFocus {

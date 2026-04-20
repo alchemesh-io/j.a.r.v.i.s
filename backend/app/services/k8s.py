@@ -121,6 +121,10 @@ def create_worker_pod(
                                 )
                             ),
                         ),
+                        client.V1EnvVar(
+                            name="GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
+                            value="/etc/gws/credentials.json",
+                        ),
                     ],
                     resources=client.V1ResourceRequirements(
                         requests=requests,
@@ -132,6 +136,11 @@ def create_worker_pod(
                             mount_path="/init-claude-config",
                             read_only=True,
                         ),
+                        client.V1VolumeMount(
+                            name="gws-credentials",
+                            mount_path="/etc/gws",
+                            read_only=True,
+                        ),
                     ],
                 ),
             ],
@@ -141,6 +150,19 @@ def create_worker_pod(
                     config_map=client.V1ConfigMapVolumeSource(
                         name="jarvis-claude-config",
                         optional=True,
+                    ),
+                ),
+                client.V1Volume(
+                    name="gws-credentials",
+                    secret=client.V1SecretVolumeSource(
+                        secret_name="jarvis-jaw-secret",
+                        optional=True,
+                        items=[
+                            client.V1KeyToPath(
+                                key="GOOGLE_WORKSPACE_CLI_CREDENTIALS",
+                                path="credentials.json",
+                            ),
+                        ],
                     ),
                 ),
             ],
