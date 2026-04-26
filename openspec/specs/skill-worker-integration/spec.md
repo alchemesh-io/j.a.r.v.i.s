@@ -4,7 +4,7 @@
 
 Defines the requirements for storing JAAR skill references (name + version) on workers and passing them to worker pods for selective skill pulling.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Worker model stores skill references as JSON
 The `Worker` model SHALL include a `skills` column (`sa.JSON`, default `[]`) storing a list of skill reference objects. Each object contains `name` (string) and `version` (string). These reference skills registered in the JAAR (AgentRegistry) — no local `Skill` table exists.
@@ -60,3 +60,26 @@ The worker entrypoint SHALL parse the `SKILLS` env var, splitting on commas and 
 #### Scenario: No skills configured
 - **WHEN** the worker starts with `SKILLS` empty or unset
 - **THEN** the entrypoint skips skill pulling entirely
+
+### Requirement: Worker card renders skill references with consistent iconography
+The Workers page worker card SHALL render each skill reference as a row visually consistent with repository rows but visually distinct as a different artifact type. The icon SHALL be a monochrome SVG (not an emoji) using `currentColor` so it inherits the surrounding text color, mirroring the repository icon style. Skill rows SHALL use an amber accent (`#f59e0b`) for the icon and version badge to differentiate them from the cyan-accented repository rows. The version SHALL be displayed in monospace to match commit/identifier styling elsewhere on the card.
+
+#### Scenario: Skill row uses SVG icon, not emoji
+- **WHEN** a worker with one or more skills is rendered on the Workers page
+- **THEN** each skill row displays a `SkillBoltIcon` SVG (lightning bolt) styled with `currentColor` rather than the `⚡` emoji
+
+#### Scenario: Skill rows are visually distinct from repository rows
+- **WHEN** a worker has both repositories and skills
+- **THEN** repository rows use the cyan accent (`var(--color-accent-cyan)`) and skill rows use the amber accent (`#f59e0b`) for the icon and version badge
+
+#### Scenario: Skill version displayed in monospace
+- **WHEN** a skill row is rendered
+- **THEN** the version badge text uses monospace font, matching the worker ID styling in the card footer
+
+#### Scenario: Create-worker skill picker uses the same SVG icon
+- **WHEN** the Create Worker overlay renders the skill picker (on the Workers page or the Task Board worker-create flow)
+- **THEN** each selectable skill entry uses the `SkillBoltIcon` SVG, not the `⚡` emoji, for visual consistency with the worker card
+
+#### Scenario: TaskBoard worker-create skill picker uses the amber accent
+- **WHEN** the Task Board's inline worker-create panel renders the skill picker
+- **THEN** the skill icon is rendered with the amber accent (`#f59e0b`) via the `task-board__worker-skill-icon` class, mirroring the Workers page styling

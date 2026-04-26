@@ -51,6 +51,16 @@ The worker pod receives a `SKILLS` environment variable (comma-separated `name@v
 
 Mirrors the existing `sync-artifacts-servers` pattern. Queries GHCR for all skill image tags, publishes each to JAAR via `arctl skill publish`. Wired into the existing `sync-artifacts` target.
 
+### 6. Worker card renders skills as SVG-iconed rows with an amber accent
+
+The Workers page renders each worker's skills below its repositories using the same row layout (`worker-card__repo` class) so the visual rhythm of the card stays consistent. The icon is a `SkillBoltIcon` SVG using `currentColor`, not the `⚡` emoji.
+
+**Why an SVG over the `⚡` emoji:** Emojis render with platform-specific colored glyphs (typically yellow on macOS) and inconsistent sizing relative to the 14px monochrome SVGs used for repos. They cannot be styled via CSS `color`, breaking the design system's `currentColor` convention. An SVG using `currentColor` inherits the row color and lets us apply theming.
+
+**Why an amber (`#f59e0b`) accent for skills:** Repositories already own the cyan accent (`var(--color-accent-cyan)`). Reusing cyan for skills would make the two artifact types visually indistinguishable. Amber preserves the spark/lightning metaphor of the original emoji while remaining theme-consistent and giving users a fast visual cue to differentiate skills from repos. The version badge uses monospace to match the worker ID in the card footer (both are immutable identifiers).
+
+The Create Worker overlay's skill picker uses the same SVG for consistency between the picker and the rendered card.
+
 ## Risks / Trade-offs
 
 **[Skill reference typos]** → Worker creation accepts any name/version pair with no validation against JAAR. A typo means `arctl skill pull` fails silently at worker startup. **Mitigation:** The worker entrypoint already logs pull failures as warnings. Future improvement: validate references against JAAR API at creation time.

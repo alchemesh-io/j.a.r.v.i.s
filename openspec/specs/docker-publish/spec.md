@@ -7,7 +7,7 @@ Defines the requirements for the GitHub Actions CI/CD workflow that builds and p
 ## Requirements
 
 ### Requirement: GitHub Actions workflow builds and publishes Docker images
-The system SHALL provide GitHub Actions workflows that automatically build and push Docker images for the backend and frontend to GitHub Container Registry (GHCR) on every push to `main`.
+The system SHALL provide GitHub Actions workflows that automatically build and push Docker images for the backend, frontend, and skill artifacts to GitHub Container Registry (GHCR). Backend and frontend images are published via `docker-publish.yml` on push to `main`. Skill images are published via `artifacts-publish.yml` on push to `main` when `artifacts/skills/**` changes.
 
 #### Scenario: Image published on push to main
 - **WHEN** a commit is pushed to the `main` branch
@@ -20,6 +20,10 @@ The system SHALL provide GitHub Actions workflows that automatically build and p
 #### Scenario: Workflow uses GITHUB_TOKEN for authentication
 - **WHEN** the workflow pushes to GHCR
 - **THEN** it authenticates using the built-in `GITHUB_TOKEN` secret without requiring any manually configured credentials
+
+#### Scenario: Skill images published via artifacts workflow
+- **WHEN** a commit is pushed to `main` that modifies files under `artifacts/skills/`
+- **THEN** the `artifacts-publish.yml` workflow builds and pushes skill images to GHCR using `arctl skill build --push`
 
 ### Requirement: Workflow fails fast on build errors
 The CI workflow SHALL fail and report an error if either Docker image fails to build.
