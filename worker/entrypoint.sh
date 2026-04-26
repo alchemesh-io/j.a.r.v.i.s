@@ -64,65 +64,42 @@ fi
 # Rootless dockerd — uses slirp4netns for network isolation so the pod's DNS/iptables
 # stay clean. No sudo, no privileged: true on the pod.
 if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
-    echo "[worker] Starting rootless dockerd for skill pulls..."
-    mkdir -p "$XDG_RUNTIME_DIR"
-    # On Alpine the script is shipped as `dockerd-rootless` (no .sh suffix);
-    # on other distros it's `dockerd-rootless.sh`.
-    if command -v dockerd-rootless >/dev/null 2>&1; then
-        dockerd-rootless > /tmp/dockerd.log 2>&1 &
-    else
-        dockerd-rootless.sh > /tmp/dockerd.log 2>&1 &
-    fi
-    DOCKERD_PID=$!
+    echo "[worker] Starting dockerd for skill pulls..."
+    sudo sh -c 'dockerd > /var/log/dockerd.log 2>&1 &'
+    sleep 1
 
-    # Wait for rootless docker socket to be ready (up to 30s)
-    DOCKERD_READY=0
-    for i in $(seq 1 30); do
-        if docker info >/dev/null 2>&1; then
-            echo "[worker] rootless dockerd ready"
-            DOCKERD_READY=1
-            break
-        fi
-        # Bail early if dockerd crashed so we can show the log
-        if ! kill -0 "$DOCKERD_PID" 2>/dev/null; then
-            echo "[worker] rootless dockerd crashed — dumping log:"
-            cat /tmp/dockerd.log 2>&1 || true
+    # Wait for dockerd socket to be ready (up to 15s)
+    for i in $(seq 1 15); do
+        if sudo docker info >/dev/null 2>&1; then
+            echo "[worker] dockerd ready"
             break
         fi
         sleep 1
     done
 
-    if [ "$DOCKERD_READY" != "1" ]; then
-        echo "[worker] WARNING: rootless dockerd did not become ready — dumping last 40 lines of log:"
-        tail -40 /tmp/dockerd.log 2>&1 || true
-        echo "[worker] Skipping skill pull"
-    else
-        # Authenticate with GHCR so arctl can pull private skill images.
-        # Username for GHCR with a PAT can be any non-empty string; the token does the work
-        # as long as it has the `read:packages` scope.
-        if [ -n "$GITHUB_TOKEN" ]; then
-            GHCR_USER="${GHCR_USERNAME:-USERNAME}"
-            echo "[worker] Logging into ghcr.io as ${GHCR_USER}..."
-            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin 2>&1 || \
-                echo "[worker] WARNING: docker login failed — ensure GITHUB_TOKEN has read:packages scope"
-        fi
-
-        echo "[worker] Pulling skills from JAAR..."
-        mkdir -p ~/.claude/skills
-        IFS=',' read -ra SKILL_REFS <<< "$SKILLS"
-        for skill_ref in "${SKILL_REFS[@]}"; do
-            skill_name="${skill_ref%@*}"
-            skill_version="${skill_ref#*@}"
-            skill_dir="$HOME/.claude/skills/$skill_name"
-            echo "[worker] Pulling skill $skill_name (version: $skill_version) to $skill_dir"
-            arctl skill pull "$skill_name" "$skill_dir" --version "$skill_version" --registry-url "$JAAR_URL" 2>&1 || \
-                echo "[worker] WARNING: Failed to pull skill $skill_name@$skill_version"
-        done
+    # Authenticate with GHCR so arctl can pull private skill images.
+    if [ -n "$GITHUB_TOKEN" ]; then
+        GHCR_USER="${GHCR_USERNAME:-USERNAME}"
+        echo "[worker] Logging into ghcr.io as ${GHCR_USER}..."
+        echo "$GITHUB_TOKEN" | sudo docker login ghcr.io -u "${GHCR_USER}" --password-stdin 2>&1 || \
+            echo "[worker] WARNING: docker login failed — ensure GITHUB_TOKEN has read:packages scope"
     fi
 
-    # Stop rootless dockerd — no longer needed after skills are pulled
-    pkill -x dockerd 2>/dev/null || true
-    pkill -x rootlesskit 2>/dev/null || true
+    echo "[worker] Pulling skills from JAAR..."
+    mkdir -p ~/.claude/skills
+    IFS=',' read -ra SKILL_REFS <<< "$SKILLS"
+    for skill_ref in "${SKILL_REFS[@]}"; do
+        skill_name="${skill_ref%@*}"
+        skill_version="${skill_ref#*@}"
+        skill_dir="$HOME/.claude/skills/$skill_name"
+        echo "[worker] Pulling skill $skill_name (version: $skill_version) to $skill_dir"
+        sudo arctl skill pull "$skill_name" "$skill_dir" --version "$skill_version" --registry-url "$JAAR_URL" 2>&1 || \
+            echo "[worker] WARNING: Failed to pull skill $skill_name@$skill_version"
+        sudo chown -R node:node "$skill_dir" 2>/dev/null || true
+    done
+
+    # Stop dockerd — no longer needed after skills are pulled
+    sudo pkill -x dockerd 2>/dev/null || true
 elif [ -z "$SKILLS" ]; then
     echo "[worker] No skills configured (SKILLS env var empty), skipping skill pull"
 fi

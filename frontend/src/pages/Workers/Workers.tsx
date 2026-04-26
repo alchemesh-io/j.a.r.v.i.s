@@ -43,6 +43,12 @@ const GitBranchIcon = () => (
   </svg>
 );
 
+const SkillBoltIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M9.5 1L3 9h4l-1 6 6.5-8h-4l1-6z" />
+  </svg>
+);
+
 const STATE_FILTER_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'all', label: 'All', color: '' },
   { value: 'working', label: 'Active', color: '#3b82f6' },
@@ -222,10 +228,10 @@ export default function Workers() {
                 {worker.skills && worker.skills.length > 0 && (
                   <div className="worker-card__repos">
                     {worker.skills.map((skill) => (
-                      <div key={`${skill.name}@${skill.version}`} className="worker-card__repo">
-                        <span className="worker-card__repo-icon">⚡</span>
+                      <div key={`${skill.name}@${skill.version}`} className="worker-card__repo worker-card__skill">
+                        <span className="worker-card__repo-icon worker-card__skill-icon"><SkillBoltIcon /></span>
                         <span className="worker-card__repo-name">{skill.name}</span>
-                        <span className="worker-card__repo-branch">{skill.version}</span>
+                        <span className="worker-card__repo-branch worker-card__skill-version">{skill.version}</span>
                       </div>
                     ))}
                   </div>
@@ -292,7 +298,7 @@ export default function Workers() {
                     return (
                       <div key={name} className={`workers__repo-card${sel ? ' workers__repo-card--selected' : ''}`}>
                         <button type="button" onClick={() => toggleSkill(name)} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
-                          <span className="workers__repo-card-icon">⚡</span>
+                          <span className="workers__repo-card-icon"><SkillBoltIcon /></span>
                           <span className="workers__repo-card-info">
                             <span className="workers__repo-card-name">{name}</span>
                           </span>
