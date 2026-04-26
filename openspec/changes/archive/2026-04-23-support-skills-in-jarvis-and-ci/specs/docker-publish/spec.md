@@ -1,10 +1,10 @@
-# Spec: docker-publish
+# Spec: docker-publish (delta)
 
 ## Purpose
 
-Defines the requirements for the GitHub Actions CI/CD workflow that builds and publishes Docker images for both the backend and frontend to GitHub Container Registry (GHCR).
+Extends the Docker publish spec to ensure skill Dockerfiles are covered by the artifact publishing pipeline without affecting the main backend/frontend publish workflow.
 
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: GitHub Actions workflow builds and publishes Docker images
 The system SHALL provide GitHub Actions workflows that automatically build and push Docker images for the backend, frontend, and skill artifacts to GitHub Container Registry (GHCR). Backend and frontend images are published via `docker-publish.yml` on push to `main`. Skill images are published via `artifacts-publish.yml` on push to `main` when `artifacts/skills/**` changes.
@@ -24,17 +24,3 @@ The system SHALL provide GitHub Actions workflows that automatically build and p
 #### Scenario: Skill images published via artifacts workflow
 - **WHEN** a commit is pushed to `main` that modifies files under `artifacts/skills/`
 - **THEN** the `artifacts-publish.yml` workflow builds and pushes skill images to GHCR using `arctl skill build --push`
-
-### Requirement: Workflow fails fast on build errors
-The CI workflow SHALL fail and report an error if either Docker image fails to build.
-
-#### Scenario: Build failure stops the workflow
-- **WHEN** the Docker build step exits non-zero for either service
-- **THEN** the GitHub Actions job is marked as failed and no image is pushed
-
-### Requirement: Images are publicly pullable
-Images published to GHCR SHALL be publicly accessible without authentication.
-
-#### Scenario: Public image pull
-- **WHEN** a user runs `docker pull ghcr.io/<org>/jarvis-backend:latest`
-- **THEN** the image is downloaded without requiring a login
