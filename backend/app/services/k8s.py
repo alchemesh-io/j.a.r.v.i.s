@@ -1,4 +1,5 @@
 import logging
+import os
 
 import httpx
 from kubernetes import client, config
@@ -44,6 +45,7 @@ def create_worker_pod(
     task_id: int,
     worker_image: str,
     repositories: list[dict[str, str]],
+    skills: list[dict[str, str]] | None = None,
     resource_requests: dict[str, str] | None = None,
     resource_limits: dict[str, str] | None = None,
     image_pull_policy: str = "IfNotPresent",
@@ -52,10 +54,13 @@ def create_worker_pod(
     if not _init_client():
         raise RuntimeError("Kubernetes cluster not available")
 
-    requests = resource_requests or {"memory": "256Mi", "cpu": "250m"}
-    limits = resource_limits or {"memory": "1Gi", "cpu": "1000m"}
+    requests = resource_requests or {"memory": "1Gi", "cpu": "500m"}
+    limits = resource_limits or {"memory": "4Gi", "cpu": "2000m"}
 
     repo_env = ",".join(f"{r['git_url']}@{r['branch']}" for r in repositories)
+    skills_env = ",".join(
+        f"{s['name']}@{s.get('version', 'latest')}" for s in (skills or [])
+    )
 
     pod = client.V1Pod(
         metadata=client.V1ObjectMeta(
@@ -65,6 +70,12 @@ def create_worker_pod(
                 "app": WORKER_LABEL,
                 "worker-id": worker_id,
             },
+            annotations={
+                # Wait for istio-proxy to be ready before starting the worker container,
+                # otherwise outbound DNS (github.com, GHCR, etc.) fails with
+                # "Could not resolve host" during the first few seconds of the pod's life.
+                "proxy.istio.io/config": '{"holdApplicationUntilProxyStarts": true}',
+            },
         ),
         spec=client.V1PodSpec(
             service_account_name="jarvis-backend",
@@ -73,6 +84,7 @@ def create_worker_pod(
                     name="worker",
                     image=worker_image,
                     image_pull_policy=image_pull_policy,
+                    security_context=client.V1SecurityContext(privileged=True),
                     ports=[
                         client.V1ContainerPort(container_port=3000, name="ui"),
                         client.V1ContainerPort(container_port=8080, name="status"),
@@ -81,6 +93,9 @@ def create_worker_pod(
                         client.V1EnvVar(name="WORKER_ID", value=worker_id),
                         client.V1EnvVar(name="TASK_ID", value=str(task_id)),
                         client.V1EnvVar(name="REPOSITORIES", value=repo_env),
+                        client.V1EnvVar(name="SKILLS", value=skills_env),
+                        client.V1EnvVar(name="JAAR_URL", value=os.getenv("JAAR_URL", "")),
+                        client.V1EnvVar(name="JARVIS_MCP_URL", value=os.getenv("JARVIS_MCP_URL", "")),
                         client.V1EnvVar(name="BACKEND_URL", value=f"http://jarvis-backend.{NAMESPACE}.svc:8000"),
                         client.V1EnvVar(
                             name="ANTHROPIC_API_KEY",
@@ -112,6 +127,10 @@ def create_worker_pod(
                                 )
                             ),
                         ),
+                        client.V1EnvVar(
+                            name="GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
+                            value="/etc/gws/credentials.json",
+                        ),
                     ],
                     resources=client.V1ResourceRequirements(
                         requests=requests,
@@ -123,6 +142,11 @@ def create_worker_pod(
                             mount_path="/init-claude-config",
                             read_only=True,
                         ),
+                        client.V1VolumeMount(
+                            name="gws-credentials",
+                            mount_path="/etc/gws",
+                            read_only=True,
+                        ),
                     ],
                 ),
             ],
@@ -132,6 +156,19 @@ def create_worker_pod(
                     config_map=client.V1ConfigMapVolumeSource(
                         name="jarvis-claude-config",
                         optional=True,
+                    ),
+                ),
+                client.V1Volume(
+                    name="gws-credentials",
+                    secret=client.V1SecretVolumeSource(
+                        secret_name="jarvis-jaw-secret",
+                        optional=True,
+                        items=[
+                            client.V1KeyToPath(
+                                key="GOOGLE_WORKSPACE_CLI_CREDENTIALS",
+                                path="credentials.json",
+                            ),
+                        ],
                     ),
                 ),
             ],

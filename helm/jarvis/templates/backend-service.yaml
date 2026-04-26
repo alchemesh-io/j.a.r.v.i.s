@@ -10,6 +10,7 @@ spec:
   selector:
     app: {{ .Release.Name }}-backend
   ports:
-    - port: {{ .Values.backend.service.port }}
+    - name: http
+      port: {{ .Values.backend.service.port }}
       targetPort: 8000
       protocol: TCP

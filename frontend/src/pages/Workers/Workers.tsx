@@ -4,6 +4,7 @@ import { Button, IconButton, WorkerBrain } from '@jarvis/jads';
 import {
   listWorkers,
   listRepositories,
+  listSkills,
   listTasks,
   createWorker,
   updateWorker,
@@ -12,6 +13,7 @@ import {
   type Worker,
   type Repository,
   type Task,
+  type SkillRef,
 } from '../../api/client';
 import './Workers.css';
 
@@ -41,6 +43,12 @@ const GitBranchIcon = () => (
   </svg>
 );
 
+const SkillBoltIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M9.5 1L3 9h4l-1 6 6.5-8h-4l1-6z" />
+  </svg>
+);
+
 const STATE_FILTER_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'all', label: 'All', color: '' },
   { value: 'working', label: 'Active', color: '#3b82f6' },
@@ -64,12 +72,14 @@ export default function Workers() {
 
   const { data: workers = [] } = useQuery({ queryKey: ['workers'], queryFn: listWorkers, refetchInterval: 5000 });
   const { data: repos = [] } = useQuery({ queryKey: ['repositories'], queryFn: listRepositories });
+  const { data: availableSkills = [] } = useQuery({ queryKey: ['skills'], queryFn: listSkills });
   const { data: tasks = [] } = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks() });
 
   const [filterState, setFilterState] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<number | ''>('');
   const [selectedRepoIds, setSelectedRepoIds] = useState<number[]>([]);
+  const [selectedSkills, setSelectedSkills] = useState<SkillRef[]>([]);
   const [createError, setCreateError] = useState('');
 
   const createWorkerMutation = useMutation({
@@ -88,10 +98,39 @@ export default function Workers() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); queryClient.invalidateQueries({ queryKey: ['tasks'] }); },
   });
 
-  const resetCreateForm = useCallback(() => { setShowCreate(false); setSelectedTaskId(''); setSelectedRepoIds([]); setCreateError(''); }, []);
+  const resetCreateForm = useCallback(() => { setShowCreate(false); setSelectedTaskId(''); setSelectedRepoIds([]); setSelectedSkills([]); setCreateError(''); }, []);
 
   const toggleRepoId = useCallback((id: number) => {
     setSelectedRepoIds((prev) => prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]);
+  }, []);
+
+  const skillsByName = useMemo(() => {
+    const map = new Map<string, SkillRef[]>();
+    for (const skill of availableSkills) {
+      const arr = map.get(skill.name) ?? [];
+      arr.push(skill);
+      map.set(skill.name, arr);
+    }
+    return map;
+  }, [availableSkills]);
+
+  const defaultSkillVersion = useCallback((name: string): SkillRef | undefined => {
+    const versions = skillsByName.get(name) ?? [];
+    return versions.find(v => v.is_latest) ?? versions[0];
+  }, [skillsByName]);
+
+  const toggleSkill = useCallback((name: string) => {
+    setSelectedSkills(prev => {
+      if (prev.some(s => s.name === name)) {
+        return prev.filter(s => s.name !== name);
+      }
+      const def = defaultSkillVersion(name);
+      return def ? [...prev, def] : prev;
+    });
+  }, [defaultSkillVersion]);
+
+  const changeSkillVersion = useCallback((name: string, version: string) => {
+    setSelectedSkills(prev => prev.map(s => s.name === name ? { ...s, version } : s));
   }, []);
 
   const availableTasks = tasks.filter((t: Task) => !t.worker);
@@ -185,6 +224,19 @@ export default function Workers() {
                   </div>
                 )}
 
+                {/* Skills */}
+                {worker.skills && worker.skills.length > 0 && (
+                  <div className="worker-card__repos">
+                    {worker.skills.map((skill) => (
+                      <div key={`${skill.name}@${skill.version}`} className="worker-card__repo worker-card__skill">
+                        <span className="worker-card__repo-icon worker-card__skill-icon"><SkillBoltIcon /></span>
+                        <span className="worker-card__repo-name">{skill.name}</span>
+                        <span className="worker-card__repo-branch worker-card__skill-version">{skill.version}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Footer meta */}
                 <div className="worker-card__footer">
                   <span className="worker-card__id">{worker.id.slice(0, 12)}</span>
@@ -233,10 +285,53 @@ export default function Workers() {
                 </div>
               )}
             </div>
+            <div className="workers__create-field">
+              <label>Skills</label>
+              {skillsByName.size === 0 ? (
+                <p className="workers__repo-empty">No skills available in the registry</p>
+              ) : (
+                <div className="workers__repo-picker">
+                  {Array.from(skillsByName.entries()).map(([name, versions]) => {
+                    const selected = selectedSkills.find(s => s.name === name);
+                    const sel = selected !== undefined;
+                    const currentVersion = selected?.version ?? (defaultSkillVersion(name)?.version ?? '');
+                    return (
+                      <div key={name} className={`workers__repo-card${sel ? ' workers__repo-card--selected' : ''}`}>
+                        <button type="button" onClick={() => toggleSkill(name)} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                          <span className="workers__repo-card-icon"><SkillBoltIcon /></span>
+                          <span className="workers__repo-card-info">
+                            <span className="workers__repo-card-name">{name}</span>
+                          </span>
+                        </button>
+                        {versions.length > 1 ? (
+                          <select
+                            value={currentVersion}
+                            onChange={(e) => changeSkillVersion(name, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            disabled={!sel}
+                            className="workers__repo-card-branch workers__skill-select"
+                            style={{ cursor: sel ? 'pointer' : 'default' }}
+                          >
+                            {versions.map(v => (
+                              <option key={v.version} value={v.version}>
+                                {v.version}{v.is_latest ? ' (latest)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="workers__repo-card-branch">{currentVersion}</span>
+                        )}
+                        <span className="workers__repo-card-check">{sel ? '✓' : ''}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             {createError && <div className="workers__error">{createError}</div>}
             <div className="workers__create-actions">
               <Button onClick={resetCreateForm}>Cancel</Button>
-              <Button onClick={() => { if (selectedTaskId) createWorkerMutation.mutate({ task_id: selectedTaskId as number, repository_ids: selectedRepoIds }); }} disabled={!selectedTaskId}>Create Worker</Button>
+              <Button onClick={() => { if (selectedTaskId) createWorkerMutation.mutate({ task_id: selectedTaskId as number, repository_ids: selectedRepoIds, skills: selectedSkills.length > 0 ? selectedSkills : undefined }); }} disabled={!selectedTaskId}>Create Worker</Button>
             </div>
           </div>
         </div>

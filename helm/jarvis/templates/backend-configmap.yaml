@@ -12,6 +12,8 @@ data:
   WORKER_IMAGE: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
   WORKER_IMAGE_PULL_POLICY: {{ .Values.worker.image.pullPolicy | default "IfNotPresent" | quote }}
   KUBE_CONTEXT: {{ .Values.worker.kubeContext | default "minikube" | quote }}
+  JAAR_URL: {{ .Values.backend.config.jaarUrl | default "http://jaar-agentregistry.jaar.svc:12121" | quote }}
+  JARVIS_MCP_URL: {{ .Values.backend.config.jarvisMcpUrl | default (printf "http://%s-mcp.%s.svc:8080/mcp" .Release.Name .Release.Namespace) | quote }}
   {{- if .Values.backend.config.jiraProjectUrl }}
   JIRA_PROJECT_URL: {{ .Values.backend.config.jiraProjectUrl | quote }}
   {{- end }}

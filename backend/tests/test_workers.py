@@ -244,3 +244,52 @@ def test_task_deletion_without_worker(mock_task_k8s, client):
     resp = client.delete(f"/api/v1/tasks/{task['id']}")
     assert resp.status_code == 204
     mock_task_k8s.delete_worker_resources.assert_not_called()
+
+
+@patch("app.routes.workers.k8s")
+def test_create_worker_with_skills(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    resp = client.post(
+        "/api/v1/workers",
+        json={
+            "task_id": task["id"],
+            "skills": [
+                {"name": "planner-daily-wrap-up", "version": "0.1.0"},
+                {"name": "code-reviewer"},
+            ],
+        },
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert len(data["skills"]) == 2
+    assert data["skills"][0]["name"] == "planner-daily-wrap-up"
+    assert data["skills"][0]["version"] == "0.1.0"
+    assert data["skills"][1]["name"] == "code-reviewer"
+    assert data["skills"][1]["version"] == "latest"
+
+
+@patch("app.routes.workers.k8s")
+def test_create_worker_without_skills_defaults_empty(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    resp = client.post("/api/v1/workers", json={"task_id": task["id"]})
+    assert resp.status_code == 201
+    assert resp.json()["skills"] == []
+
+
+@patch("app.routes.workers.k8s")
+def test_create_worker_with_skills_passes_to_k8s(mock_k8s, client):
+    mock_k8s.is_available.return_value = True
+    task = _create_task(client).json()
+    resp = client.post(
+        "/api/v1/workers",
+        json={
+            "task_id": task["id"],
+            "skills": [{"name": "planner-daily-wrap-up", "version": "0.1.0"}],
+        },
+    )
+    assert resp.status_code == 201
+    mock_k8s.create_worker_pod.assert_called_once()
+    call_kwargs = mock_k8s.create_worker_pod.call_args
+    assert call_kwargs.kwargs["skills"] == [{"name": "planner-daily-wrap-up", "version": "0.1.0"}]

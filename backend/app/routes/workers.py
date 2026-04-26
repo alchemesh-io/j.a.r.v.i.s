@@ -44,6 +44,7 @@ def _worker_to_response(worker: Worker, effective_state: WorkerState | None = No
         "created_at": worker.created_at,
         "updated_at": worker.updated_at,
         "repositories": worker.repositories,
+        "skills": worker.skills or [],
     }
     return WorkerResponse.model_validate(data)
 
@@ -74,6 +75,7 @@ def create_worker(body: WorkerCreate, db: Session = Depends(get_db)):
         task_id=body.task_id,
         type=body.type,
         state=WorkerState.initialized,
+        skills=[s.model_dump() for s in body.skills],
     )
     worker.repositories = list(repos)
     db.add(worker)
@@ -83,7 +85,8 @@ def create_worker(body: WorkerCreate, db: Session = Depends(get_db)):
     if k8s.is_available():
         try:
             repo_data = [{"git_url": r.git_url, "branch": r.branch} for r in repos]
-            k8s.create_worker_pod(worker_id, body.task_id, WORKER_IMAGE, repo_data, image_pull_policy=WORKER_IMAGE_PULL_POLICY)
+            skill_data = [s.model_dump() for s in body.skills]
+            k8s.create_worker_pod(worker_id, body.task_id, WORKER_IMAGE, repo_data, skills=skill_data, image_pull_policy=WORKER_IMAGE_PULL_POLICY)
             k8s.create_worker_service(worker_id)
         except Exception:
             logger.exception("Failed to create K8s resources for worker %s", worker_id)

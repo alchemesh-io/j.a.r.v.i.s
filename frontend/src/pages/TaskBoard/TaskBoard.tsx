@@ -50,6 +50,7 @@ import {
   updateWorker,
   deleteWorker,
   listRepositories,
+  listSkills,
   getWorkerVscodeUri,
   type Task,
   type TaskType,
@@ -57,6 +58,7 @@ import {
   type CalendarEvent,
   type KeyFocus,
   type Repository,
+  type SkillRef,
 } from '../../api/client';
 import { NotePanel } from './NotePanel';
 import { BlockerPanel } from './BlockerPanel';
@@ -388,6 +390,7 @@ export default function TaskBoard() {
   // Worker creation from task card
   const [workerCreateTask, setWorkerCreateTask] = useState<Task | null>(null);
   const [workerRepoIds, setWorkerRepoIds] = useState<number[]>([]);
+  const [workerSkills, setWorkerSkills] = useState<SkillRef[]>([]);
 
   const { data: repositories = [] } = useQuery({
     queryKey: ['repositories'],
@@ -395,12 +398,48 @@ export default function TaskBoard() {
     enabled: workerCreateTask !== null,
   });
 
+  const { data: availableSkills = [] } = useQuery({
+    queryKey: ['skills'],
+    queryFn: listSkills,
+    enabled: workerCreateTask !== null,
+  });
+
+  const skillsByName = useMemo(() => {
+    const map = new Map<string, SkillRef[]>();
+    for (const skill of availableSkills) {
+      const arr = map.get(skill.name) ?? [];
+      arr.push(skill);
+      map.set(skill.name, arr);
+    }
+    return map;
+  }, [availableSkills]);
+
+  const defaultSkillVersion = useCallback((name: string): SkillRef | undefined => {
+    const versions = skillsByName.get(name) ?? [];
+    return versions.find(v => v.is_latest) ?? versions[0];
+  }, [skillsByName]);
+
+  const toggleSkill = useCallback((name: string) => {
+    setWorkerSkills(prev => {
+      if (prev.some(s => s.name === name)) {
+        return prev.filter(s => s.name !== name);
+      }
+      const def = defaultSkillVersion(name);
+      return def ? [...prev, def] : prev;
+    });
+  }, [defaultSkillVersion]);
+
+  const changeSkillVersion = useCallback((name: string, version: string) => {
+    setWorkerSkills(prev => prev.map(s => s.name === name ? { ...s, version } : s));
+  }, []);
+
   const createWorkerMutation = useMutation({
     mutationFn: createWorker,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       setWorkerCreateTask(null);
       setWorkerRepoIds([]);
+      setWorkerSkills([]);
     },
   });
 
@@ -1749,7 +1788,7 @@ export default function TaskBoard() {
 
       {/* Worker creation dialog from task card */}
       {workerCreateTask && (
-        <div className="task-board__confirm-overlay" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); }}>
+        <div className="task-board__confirm-overlay" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); }}>
           <div className="task-board__confirm-dialog" onClick={(e) => e.stopPropagation()}>
             <p>Create worker for <strong>{workerCreateTask.title}</strong>?</p>
             {repositories.length > 0 && (
@@ -1771,11 +1810,50 @@ export default function TaskBoard() {
                 })}
               </div>
             )}
+            {skillsByName.size > 0 && (
+              <div className="task-board__worker-repo-picker">
+                <p className="task-board__worker-repo-label">Skills:</p>
+                {Array.from(skillsByName.entries()).map(([name, versions]) => {
+                  const selected = workerSkills.find(s => s.name === name);
+                  const sel = selected !== undefined;
+                  const currentVersion = selected?.version ?? (defaultSkillVersion(name)?.version ?? '');
+                  return (
+                    <div key={name} className={`task-board__worker-repo-card${sel ? ' task-board__worker-repo-card--selected' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button type="button" onClick={() => toggleSkill(name)} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                        <span className="task-board__worker-repo-icon">⚡</span>
+                        <span className="task-board__worker-repo-info">
+                          <span className="task-board__worker-repo-name">{name}</span>
+                        </span>
+                      </button>
+                      {versions.length > 1 ? (
+                        <select
+                          value={currentVersion}
+                          onChange={(e) => changeSkillVersion(name, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          disabled={!sel}
+                          className="task-board__worker-repo-branch task-board__worker-skill-select"
+                          style={{ cursor: sel ? 'pointer' : 'default' }}
+                        >
+                          {versions.map(v => (
+                            <option key={v.version} value={v.version}>
+                              {v.version}{v.is_latest ? ' (latest)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="task-board__worker-repo-branch">{currentVersion}</span>
+                      )}
+                      <span className="task-board__worker-repo-check">{sel ? '✓' : ''}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <div className="task-board__confirm-actions">
-              <Button onClick={() => createWorkerMutation.mutate({ task_id: workerCreateTask.id, repository_ids: workerRepoIds })}>
+              <Button onClick={() => createWorkerMutation.mutate({ task_id: workerCreateTask.id, repository_ids: workerRepoIds, skills: workerSkills.length > 0 ? workerSkills : undefined })}>
                 Create Worker
               </Button>
-              <Button variant="ghost" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); }}>
+              <Button variant="ghost" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); }}>
                 Cancel
               </Button>
             </div>

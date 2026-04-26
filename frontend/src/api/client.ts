@@ -68,6 +68,7 @@ export interface Worker {
   created_at: string;
   updated_at: string;
   repositories: Repository[];
+  skills: SkillRef[];
 }
 
 export interface KeyFocus {
@@ -449,9 +450,21 @@ export function createKeyFocusBlocker(keyFocusId: number, body: { title: string;
 
 // --- Worker API ---
 
+export interface SkillRef {
+  name: string;
+  version: string;
+  description?: string;
+  is_latest?: boolean;
+}
+
+export function listSkills(): Promise<SkillRef[]> {
+  return request('/skills');
+}
+
 export function createWorker(body: {
   task_id: number;
   repository_ids?: number[];
+  skills?: { name: string; version: string }[];
   type?: WorkerType;
 }): Promise<Worker> {
   return request('/workers', { method: 'POST', body: JSON.stringify(body) });
