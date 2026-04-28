@@ -61,6 +61,7 @@ import {
   type KeyFocus,
   type Repository,
   type SkillRef,
+  type WorkerMode,
 } from '../../api/client';
 import { NotePanel } from './NotePanel';
 import { BlockerPanel } from './BlockerPanel';
@@ -400,6 +401,7 @@ export default function TaskBoard() {
   const [workerCreateTask, setWorkerCreateTask] = useState<Task | null>(null);
   const [workerRepoIds, setWorkerRepoIds] = useState<number[]>([]);
   const [workerSkills, setWorkerSkills] = useState<SkillRef[]>([]);
+  const [workerMode, setWorkerMode] = useState<WorkerMode>('ephemeral');
 
   const { data: repositories = [] } = useQuery({
     queryKey: ['repositories'],
@@ -449,6 +451,7 @@ export default function TaskBoard() {
       setWorkerCreateTask(null);
       setWorkerRepoIds([]);
       setWorkerSkills([]);
+      setWorkerMode('ephemeral');
     },
   });
 
@@ -1809,9 +1812,34 @@ export default function TaskBoard() {
 
       {/* Worker creation dialog from task card */}
       {workerCreateTask && (
-        <div className="task-board__confirm-overlay" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); }}>
+        <div className="task-board__confirm-overlay" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); setWorkerMode('ephemeral');}}>
           <div className="task-board__confirm-dialog" onClick={(e) => e.stopPropagation()}>
             <p>Create worker for <strong>{workerCreateTask.title}</strong>?</p>
+            <div className="task-board__worker-mode-picker">
+              <span className="task-board__worker-repo-label">
+                Mode
+                <span
+                  className="task-board__worker-mode-help"
+                  title="Stateful workers persist /home/node on a per-worker PVC, so cloned repos and Claude sessions survive pause/resume and pod failures. Ephemeral workers lose all data when the pod stops."
+                >
+                  ⓘ
+                </span>
+              </span>
+              <div className="task-board__worker-mode-toggle" role="radiogroup" aria-label="Worker mode">
+                {(['ephemeral', 'stateful'] as WorkerMode[]).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={workerMode === m}
+                    className={`task-board__worker-mode-option${workerMode === m ? ' task-board__worker-mode-option--selected' : ''}`}
+                    onClick={() => setWorkerMode(m)}
+                  >
+                    {m === 'stateful' ? 'Stateful' : 'Ephemeral'}
+                  </button>
+                ))}
+              </div>
+            </div>
             {repositories.length > 0 && (
               <div className="task-board__worker-repo-picker">
                 <p className="task-board__worker-repo-label">Repositories:</p>
@@ -1871,10 +1899,10 @@ export default function TaskBoard() {
               </div>
             )}
             <div className="task-board__confirm-actions">
-              <Button onClick={() => createWorkerMutation.mutate({ task_id: workerCreateTask.id, repository_ids: workerRepoIds, skills: workerSkills.length > 0 ? workerSkills : undefined })}>
+              <Button onClick={() => createWorkerMutation.mutate({ task_id: workerCreateTask.id, repository_ids: workerRepoIds, skills: workerSkills.length > 0 ? workerSkills : undefined, mode: workerMode })}>
                 Create Worker
               </Button>
-              <Button variant="ghost" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); }}>
+              <Button variant="ghost" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); setWorkerMode('ephemeral');}}>
                 Cancel
               </Button>
             </div>
