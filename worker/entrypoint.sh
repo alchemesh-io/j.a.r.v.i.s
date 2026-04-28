@@ -28,7 +28,7 @@ fi
 
 # Step 2: Configure Claude Code (hooks, MCP, workspace trust). Idempotent — merges into existing
 # settings.json when present, never touches ~/.claude/projects/.
-~/setup-claude.sh
+/opt/jarvis-worker/setup-claude.sh
 
 # Step 3: Clone repositories (with DNS retry — Istio sidecar may not be ready immediately)
 REPOS_CACHED=0
@@ -155,7 +155,7 @@ fi
 
 # Step 5: Start all processes
 echo "[worker] Starting status server on port 8080..."
-node ~/status-server/index.js &
+node /opt/jarvis-worker/status-server/index.js &
 STATUS_PID=$!
 
 # Convert 32-char hex worker ID to UUID format (8-4-4-4-12)

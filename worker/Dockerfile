@@ -52,13 +52,18 @@ RUN ARCH=$(uname -m) && \
 # Install gws (Google Workspace CLI) via npm
 RUN npm install -g @googleworkspace/cli@0.22.5
 
+# Worker scripts and status-server live OUTSIDE /home/node so a stateful PVC mounted
+# at /home/node does not shadow them. /opt/jarvis-worker is owned by the node user but
+# treated as read-only worker code, while /home/node holds user data only.
+RUN mkdir -p /opt/jarvis-worker && chown -R node:node /opt/jarvis-worker
+
 # Copy status server
-COPY --chown=node:node status-server/ /home/node/status-server/
+COPY --chown=node:node status-server/ /opt/jarvis-worker/status-server/
 
 # Copy scripts
-COPY --chown=node:node setup-claude.sh /home/node/setup-claude.sh
-COPY --chown=node:node entrypoint.sh /home/node/entrypoint.sh
-RUN chmod +x /home/node/entrypoint.sh /home/node/setup-claude.sh
+COPY --chown=node:node setup-claude.sh /opt/jarvis-worker/setup-claude.sh
+COPY --chown=node:node entrypoint.sh /opt/jarvis-worker/entrypoint.sh
+RUN chmod +x /opt/jarvis-worker/entrypoint.sh /opt/jarvis-worker/setup-claude.sh
 
 # Switch to non-root user (UID 1000)
 USER node
@@ -66,4 +71,4 @@ WORKDIR /home/node/jarvis
 
 EXPOSE 8080
 
-ENTRYPOINT ["/home/node/entrypoint.sh"]
+ENTRYPOINT ["/opt/jarvis-worker/entrypoint.sh"]
