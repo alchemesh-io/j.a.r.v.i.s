@@ -47,7 +47,14 @@ class WorkerState(str, Enum):
     waiting_for_human = "waiting_for_human"
     done = "done"
     archived = "archived"
+    paused = "paused"
+    error = "error"
 
 
 class WorkerType(str, Enum):
     claude_code = "claude_code"
+
+
+class WorkerMode(str, Enum):
+    ephemeral = "ephemeral"
+    stateful = "stateful"

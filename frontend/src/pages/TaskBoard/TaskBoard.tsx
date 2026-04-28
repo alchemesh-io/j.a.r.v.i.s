@@ -49,6 +49,8 @@ import {
   createWorker,
   updateWorker,
   deleteWorker,
+  pauseWorker,
+  resumeWorker,
   listRepositories,
   listSkills,
   getWorkerVscodeUri,
@@ -282,6 +284,8 @@ function SortableTaskCard({
   onWorkerClick,
   onWorkerArchive,
   onWorkerDelete,
+  onWorkerPause,
+  onWorkerResume,
 }: {
   task: Task;
   jiraProjectUrl?: string;
@@ -296,6 +300,8 @@ function SortableTaskCard({
   onWorkerClick?: () => void;
   onWorkerArchive?: () => void;
   onWorkerDelete?: () => void;
+  onWorkerPause?: () => void;
+  onWorkerResume?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
@@ -334,6 +340,8 @@ function SortableTaskCard({
         onWorkerClick={onWorkerClick}
         onWorkerArchive={onWorkerArchive}
         onWorkerDelete={onWorkerDelete}
+        onWorkerPause={onWorkerPause}
+        onWorkerResume={onWorkerResume}
       />
     </div>
   );
@@ -451,6 +459,16 @@ export default function TaskBoard() {
 
   const deleteWorkerMutation = useMutation({
     mutationFn: deleteWorker,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+
+  const pauseWorkerMutation = useMutation({
+    mutationFn: pauseWorker,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+
+  const resumeWorkerMutation = useMutation({
+    mutationFn: resumeWorker,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
@@ -1752,6 +1770,8 @@ export default function TaskBoard() {
                   } : undefined}
                   onWorkerArchive={task.worker && task.worker.effective_state !== 'archived' ? () => archiveWorkerMutation.mutate(task.worker!.id) : undefined}
                   onWorkerDelete={task.worker ? () => { if (confirm('Delete this worker and its Kubernetes resources?')) deleteWorkerMutation.mutate(task.worker!.id); } : undefined}
+                  onWorkerPause={task.worker ? () => pauseWorkerMutation.mutate(task.worker!.id) : undefined}
+                  onWorkerResume={task.worker ? () => resumeWorkerMutation.mutate(task.worker!.id) : undefined}
                 />
               ))}
               {visibleTasks.length === 0 && (

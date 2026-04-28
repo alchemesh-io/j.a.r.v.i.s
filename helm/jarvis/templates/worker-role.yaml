@@ -9,3 +9,6 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "services"]
     verbs: ["create", "get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create", "get", "list", "delete"]

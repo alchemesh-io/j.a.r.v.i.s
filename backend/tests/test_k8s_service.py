@@ -191,3 +191,217 @@ def test_get_worker_pod_status_unreachable(mock_client, mock_config, mock_httpx)
 
     result = k8s.get_worker_pod_status("abc123")
     assert result is None
+
+
+# --- Stateful mode tests ---
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_stateful_adds_pvc_volume(mock_client, mock_config):
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_client.CoreV1Api.return_value = mock_api
+    mock_client.CustomObjectsApi.return_value = MagicMock()
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    k8s.create_worker_pod(
+        "abc123",
+        42,
+        "worker:latest",
+        [],
+        stateful=True,
+    )
+    mock_api.create_namespaced_pod.assert_called_once()
+
+    # Verify a PVC volume was added
+    pvc_volume_calls = [
+        c for c in mock_client.V1Volume.call_args_list
+        if c.kwargs.get("name") == "jarvis-data"
+    ]
+    assert len(pvc_volume_calls) == 1
+    # Verify a /home/node mount was added
+    home_mount_calls = [
+        c for c in mock_client.V1VolumeMount.call_args_list
+        if c.kwargs.get("mount_path") == "/home/node"
+    ]
+    assert len(home_mount_calls) == 1
+    # Verify fsGroup was set
+    mock_client.V1PodSecurityContext.assert_called_once_with(fs_group=1000)
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_ephemeral_does_not_mount_pvc(mock_client, mock_config):
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_client.CoreV1Api.return_value = mock_api
+    mock_client.CustomObjectsApi.return_value = MagicMock()
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    k8s.create_worker_pod(
+        "abc123",
+        42,
+        "worker:latest",
+        [],
+        stateful=False,
+    )
+
+    pvc_volume_calls = [
+        c for c in mock_client.V1Volume.call_args_list
+        if c.kwargs.get("name") == "jarvis-data"
+    ]
+    assert len(pvc_volume_calls) == 0
+    home_mount_calls = [
+        c for c in mock_client.V1VolumeMount.call_args_list
+        if c.kwargs.get("mount_path") == "/home/node"
+    ]
+    assert len(home_mount_calls) == 0
+    mock_client.V1PodSecurityContext.assert_not_called()
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_passes_worker_mode_env(mock_client, mock_config):
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_client.CoreV1Api.return_value = mock_api
+    mock_client.CustomObjectsApi.return_value = MagicMock()
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [], stateful=True)
+    mode_calls = [
+        c for c in mock_client.V1EnvVar.call_args_list
+        if c.kwargs.get("name") == "WORKER_MODE"
+    ]
+    assert len(mode_calls) == 1
+    assert mode_calls[0].kwargs["value"] == "stateful"
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pvc_calls_api(mock_client, mock_config):
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_client.CoreV1Api.return_value = mock_api
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    k8s.create_worker_pvc("abc123", "5Gi", "fast-ssd")
+    mock_api.create_namespaced_persistent_volume_claim.assert_called_once()
+    call_kwargs = mock_api.create_namespaced_persistent_volume_claim.call_args
+    assert call_kwargs.kwargs["namespace"] == "jarvis"
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pvc_idempotent_on_409(mock_client, mock_config):
+    from kubernetes.client.exceptions import ApiException
+
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_api.create_namespaced_persistent_volume_claim.side_effect = ApiException(status=409)
+    mock_client.CoreV1Api.return_value = mock_api
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    # Should not raise
+    k8s.create_worker_pvc("abc123", "5Gi", "fast-ssd")
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_delete_worker_pvc_idempotent_on_404(mock_client, mock_config):
+    from kubernetes.client.exceptions import ApiException
+
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_api.delete_namespaced_persistent_volume_claim.side_effect = ApiException(status=404)
+    mock_client.CoreV1Api.return_value = mock_api
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    k8s.delete_worker_pvc("abc123")  # Should not raise
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_delete_worker_resources_with_delete_pvc(mock_client, mock_config):
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_client.CoreV1Api.return_value = mock_api
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    k8s.delete_worker_resources("abc123", delete_pvc=True)
+    mock_api.delete_namespaced_pod.assert_called_once()
+    mock_api.delete_namespaced_service.assert_called_once()
+    mock_api.delete_namespaced_persistent_volume_claim.assert_called_once()
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_delete_worker_resources_default_keeps_pvc(mock_client, mock_config):
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_client.CoreV1Api.return_value = mock_api
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    k8s.delete_worker_resources("abc123")  # default delete_pvc=False
+    mock_api.delete_namespaced_pod.assert_called_once()
+    mock_api.delete_namespaced_service.assert_called_once()
+    mock_api.delete_namespaced_persistent_volume_claim.assert_not_called()
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_get_pod_phase_returns_phase_and_exit_code(mock_client, mock_config):
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+
+    pod = MagicMock()
+    pod.status.phase = "Failed"
+    cs = MagicMock()
+    cs.name = "worker"
+    cs.state.terminated.exit_code = 1
+    pod.status.container_statuses = [cs]
+    mock_api.read_namespaced_pod.return_value = pod
+
+    mock_client.CoreV1Api.return_value = mock_api
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    phase, exit_code = k8s.get_pod_phase("abc123")
+    assert phase == "Failed"
+    assert exit_code == 1
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_get_pod_phase_returns_none_on_404(mock_client, mock_config):
+    from kubernetes.client.exceptions import ApiException
+
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_api.read_namespaced_pod.side_effect = ApiException(status=404)
+    mock_client.CoreV1Api.return_value = mock_api
+
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+
+    phase, exit_code = k8s.get_pod_phase("abc123")
+    assert phase is None
+    assert exit_code is None

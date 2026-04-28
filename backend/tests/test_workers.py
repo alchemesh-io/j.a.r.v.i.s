@@ -90,6 +90,7 @@ def test_list_workers_empty(mock_k8s, client):
 def test_get_worker(mock_k8s, client):
     mock_k8s.is_available.return_value = False
     mock_k8s.get_worker_pod_status.return_value = None
+    mock_k8s.get_pod_phase.return_value = (None, None)
     task = _create_task(client).json()
     worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
     resp = client.get(f"/api/v1/workers/{worker['id']}")
@@ -118,6 +119,7 @@ def test_get_worker_pod_unreachable(mock_k8s, client):
     worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
 
     mock_k8s.get_worker_pod_status.return_value = None
+    mock_k8s.get_pod_phase.return_value = (None, None)
     resp = client.get(f"/api/v1/workers/{worker['id']}")
     assert resp.status_code == 200
     assert resp.json()["pod_status"] == "unreachable"
@@ -149,7 +151,7 @@ def test_archive_worker_deletes_k8s_resources(mock_k8s, client):
     resp = client.patch(f"/api/v1/workers/{worker['id']}", json={"state": "archived"})
     assert resp.status_code == 200
     assert resp.json()["state"] == "archived"
-    mock_k8s.delete_worker_resources.assert_called_with(worker["id"])
+    mock_k8s.delete_worker_resources.assert_called_with(worker["id"], delete_pvc=False)
 
 
 @patch("app.routes.workers.k8s")
@@ -160,7 +162,7 @@ def test_delete_worker(mock_k8s, client):
 
     resp = client.delete(f"/api/v1/workers/{worker['id']}")
     assert resp.status_code == 204
-    mock_k8s.delete_worker_resources.assert_called_with(worker["id"])
+    mock_k8s.delete_worker_resources.assert_called_with(worker["id"], delete_pvc=False)
     assert client.get(f"/api/v1/workers/{worker['id']}").status_code == 404
 
 
@@ -235,7 +237,7 @@ def test_task_deletion_cleans_up_worker_k8s(mock_worker_k8s, mock_task_k8s, clie
 
     resp = client.delete(f"/api/v1/tasks/{task['id']}")
     assert resp.status_code == 204
-    mock_task_k8s.delete_worker_resources.assert_called_with(worker["id"])
+    mock_task_k8s.delete_worker_resources.assert_called_with(worker["id"], delete_pvc=False)
 
 
 @patch("app.routes.tasks.k8s")
@@ -293,3 +295,191 @@ def test_create_worker_with_skills_passes_to_k8s(mock_k8s, client):
     mock_k8s.create_worker_pod.assert_called_once()
     call_kwargs = mock_k8s.create_worker_pod.call_args
     assert call_kwargs.kwargs["skills"] == [{"name": "planner-daily-wrap-up", "version": "0.1.0"}]
+
+
+# --- Stateful mode tests ---
+
+
+@patch("app.routes.workers.k8s")
+def test_create_worker_defaults_to_ephemeral(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    resp = client.post("/api/v1/workers", json={"task_id": task["id"]})
+    assert resp.status_code == 201
+    assert resp.json()["mode"] == "ephemeral"
+
+
+@patch("app.routes.workers.k8s")
+def test_create_stateful_worker_response_includes_mode(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    resp = client.post("/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"})
+    assert resp.status_code == 201
+    assert resp.json()["mode"] == "stateful"
+
+
+@patch("app.routes.workers.k8s")
+def test_create_stateful_worker_provisions_pvc_and_passes_stateful_to_pod(mock_k8s, client):
+    mock_k8s.is_available.return_value = True
+    task = _create_task(client).json()
+    resp = client.post("/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"})
+    assert resp.status_code == 201
+    mock_k8s.create_worker_pvc.assert_called_once()
+    mock_k8s.create_worker_pod.assert_called_once()
+    assert mock_k8s.create_worker_pod.call_args.kwargs["stateful"] is True
+
+
+@patch("app.routes.workers.k8s")
+def test_create_ephemeral_worker_does_not_provision_pvc(mock_k8s, client):
+    mock_k8s.is_available.return_value = True
+    task = _create_task(client).json()
+    resp = client.post("/api/v1/workers", json={"task_id": task["id"], "mode": "ephemeral"})
+    assert resp.status_code == 201
+    mock_k8s.create_worker_pvc.assert_not_called()
+    assert mock_k8s.create_worker_pod.call_args.kwargs["stateful"] is False
+
+
+@patch("app.routes.workers.k8s")
+def test_pause_ephemeral_worker_returns_409(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
+    resp = client.post(f"/api/v1/workers/{worker['id']}/pause")
+    assert resp.status_code == 409
+
+
+@patch("app.routes.workers.k8s")
+def test_pause_stateful_worker(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post(
+        "/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"}
+    ).json()
+    # Move worker to working state so pause is valid
+    client.patch(f"/api/v1/workers/{worker['id']}", json={"state": "working"})
+
+    resp = client.post(f"/api/v1/workers/{worker['id']}/pause")
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "paused"
+    mock_k8s.delete_worker_pod_only.assert_called_once_with(worker["id"])
+    mock_k8s.delete_worker_service.assert_called_once_with(worker["id"])
+    mock_k8s.delete_worker_pvc.assert_not_called()
+
+
+@patch("app.routes.workers.k8s")
+def test_pause_is_idempotent_on_already_paused(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post(
+        "/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"}
+    ).json()
+    client.patch(f"/api/v1/workers/{worker['id']}", json={"state": "working"})
+    client.post(f"/api/v1/workers/{worker['id']}/pause")
+    mock_k8s.reset_mock()
+
+    resp = client.post(f"/api/v1/workers/{worker['id']}/pause")
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "paused"
+    mock_k8s.delete_worker_pod_only.assert_not_called()
+    mock_k8s.delete_worker_service.assert_not_called()
+
+
+@patch("app.routes.workers.k8s")
+def test_resume_ephemeral_worker_returns_409(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
+    resp = client.post(f"/api/v1/workers/{worker['id']}/resume")
+    assert resp.status_code == 409
+
+
+@patch("app.routes.workers.k8s")
+def test_resume_rejected_from_invalid_state(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post(
+        "/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"}
+    ).json()
+    # Worker is in 'initialized' state — resume should be rejected
+    resp = client.post(f"/api/v1/workers/{worker['id']}/resume")
+    assert resp.status_code == 409
+
+
+@patch("app.routes.workers.k8s")
+def test_resume_paused_worker_recreates_pod_and_service(mock_k8s, client):
+    mock_k8s.is_available.return_value = True
+    task = _create_task(client).json()
+    worker = client.post(
+        "/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"}
+    ).json()
+    client.patch(f"/api/v1/workers/{worker['id']}", json={"state": "paused"})
+    mock_k8s.reset_mock()
+    mock_k8s.is_available.return_value = True
+
+    resp = client.post(f"/api/v1/workers/{worker['id']}/resume")
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "initialized"
+    mock_k8s.create_worker_pvc.assert_called_once()  # idempotent — re-uses existing PVC
+    mock_k8s.create_worker_pod.assert_called_once()
+    assert mock_k8s.create_worker_pod.call_args.kwargs["stateful"] is True
+    mock_k8s.create_worker_service.assert_called_once_with(worker["id"])
+
+
+@patch("app.routes.workers.k8s")
+def test_resume_errored_worker(mock_k8s, client):
+    mock_k8s.is_available.return_value = True
+    task = _create_task(client).json()
+    worker = client.post(
+        "/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"}
+    ).json()
+    client.patch(f"/api/v1/workers/{worker['id']}", json={"state": "error"})
+    mock_k8s.reset_mock()
+    mock_k8s.is_available.return_value = True
+
+    resp = client.post(f"/api/v1/workers/{worker['id']}/resume")
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "initialized"
+
+
+@patch("app.routes.workers.k8s")
+def test_archive_stateful_worker_deletes_pvc(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post(
+        "/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"}
+    ).json()
+
+    resp = client.patch(f"/api/v1/workers/{worker['id']}", json={"state": "archived"})
+    assert resp.status_code == 200
+    mock_k8s.delete_worker_resources.assert_called_with(worker["id"], delete_pvc=True)
+
+
+@patch("app.routes.workers.k8s")
+def test_delete_stateful_worker_deletes_pvc(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post(
+        "/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"}
+    ).json()
+
+    resp = client.delete(f"/api/v1/workers/{worker['id']}")
+    assert resp.status_code == 204
+    mock_k8s.delete_worker_resources.assert_called_with(worker["id"], delete_pvc=True)
+
+
+@patch("app.routes.workers.k8s")
+def test_get_worker_marks_failed_pod_as_error(mock_k8s, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post(
+        "/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"}
+    ).json()
+
+    mock_k8s.get_worker_pod_status.return_value = None
+    mock_k8s.get_pod_phase.return_value = ("Failed", 1)
+    resp = client.get(f"/api/v1/workers/{worker['id']}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["state"] == "error"
+    assert data["effective_state"] == "error"
+    assert data["pod_status"] == "failed"

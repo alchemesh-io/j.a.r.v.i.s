@@ -20,5 +20,8 @@ export type { TaskCardProps, WorkerInfo, WorkerEffectiveState } from './componen
 
 export { WorkerBrain } from './components/TaskCard/WorkerBrain';
 
+export { WorkerModeBadge } from './components/WorkerModeBadge/WorkerModeBadge';
+export type { WorkerModeBadgeProps, WorkerMode as WorkerModeBadgeMode } from './components/WorkerModeBadge/WorkerModeBadge';
+
 export { Calendar } from './components/Calendar/Calendar';
 export type { CalendarProps } from './components/Calendar/Calendar';

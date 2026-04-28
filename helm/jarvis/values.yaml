@@ -67,6 +67,12 @@ worker:
     remoteSettings: ""
     claudeJson: ""
     settings: ""
+  # Per-worker PVC for stateful workers. The PVC is created at runtime by the
+  # backend (one per stateful worker), so values here apply at PVC-creation time.
+  # The selected storage class MUST honour fsGroup so /home/node ends up owned by uid 1000.
+  persistence:
+    size: 2Gi
+    storageClass: standard
 
 gateway:
   name: jarvis-gateway

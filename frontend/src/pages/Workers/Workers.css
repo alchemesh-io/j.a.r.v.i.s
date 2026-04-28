@@ -215,6 +215,7 @@
 /* --- Worker Card --- */
 
 .worker-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -253,6 +254,74 @@
 .worker-card--archived {
   border-left: 3px solid #374151;
   opacity: 0.6;
+}
+
+.worker-card--paused {
+  border-left: 3px solid #a78bfa;
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.06) 0%, transparent 60%);
+}
+
+.worker-card--error {
+  border-left: 3px solid #dc2626;
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.1) 0%, transparent 60%);
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.15);
+}
+
+.worker-card--error::before {
+  content: '⚠';
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.worker-card__badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.worker-card__mode-badge {
+  margin-left: auto;
+}
+
+/* Mode toggle in Create Worker overlay */
+.workers__field-help {
+  margin-left: 6px;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.85em;
+  cursor: help;
+}
+
+.workers__mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-surface-2, #0b1220);
+}
+
+.workers__mode-option {
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.workers__mode-option:hover {
+  color: var(--color-text, #e2e8f0);
+}
+
+.workers__mode-option--selected {
+  background: rgba(167, 139, 250, 0.15);
+  color: #a78bfa;
 }
 
 /* Title row */

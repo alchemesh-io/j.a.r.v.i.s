@@ -9,11 +9,21 @@ export interface KeyFocusBadge {
   kind: 'delivery' | 'learning' | 'support' | 'operational' | 'side_quest';
 }
 
-export type WorkerEffectiveState = 'initialized' | 'working' | 'waiting_for_human' | 'done' | 'archived';
+export type WorkerEffectiveState =
+  | 'initialized'
+  | 'working'
+  | 'waiting_for_human'
+  | 'done'
+  | 'archived'
+  | 'paused'
+  | 'error';
+
+export type WorkerMode = 'ephemeral' | 'stateful';
 
 export interface WorkerInfo {
   id: string;
   effective_state: WorkerEffectiveState;
+  mode?: WorkerMode;
 }
 
 export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
@@ -40,6 +50,8 @@ export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   onWorkerClick?: () => void;
   onWorkerArchive?: () => void;
   onWorkerDelete?: () => void;
+  onWorkerPause?: () => void;
+  onWorkerResume?: () => void;
 }
 
 const EditIcon = () => (
@@ -125,6 +137,19 @@ const PlayIcon = () => (
   </svg>
 );
 
+const PauseIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <rect x="4" y="3" width="3" height="10" rx="0.5" />
+    <rect x="9" y="3" width="3" height="10" rx="0.5" />
+  </svg>
+);
+
+const ResumeIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M4 3l9 5-9 5V3z" />
+  </svg>
+);
+
 const UndoIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M4 6L2 8L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -161,6 +186,8 @@ export function TaskCard({
   onWorkerClick,
   onWorkerArchive,
   onWorkerDelete,
+  onWorkerPause,
+  onWorkerResume,
   className = '',
   ...props
 }: TaskCardProps) {
@@ -223,6 +250,16 @@ export function TaskCard({
           {worker && (
             <div className="jads-task-card__worker-row">
               <div className="jads-task-card__worker-controls">
+                {onWorkerPause && worker.mode === 'stateful' && (worker.effective_state === 'working' || worker.effective_state === 'waiting_for_human' || worker.effective_state === 'initialized') && (
+                  <IconButton aria-label="Pause worker" variant="ghost" size="sm" onClick={onWorkerPause} className="jads-task-card__worker-pause">
+                    <PauseIcon />
+                  </IconButton>
+                )}
+                {onWorkerResume && worker.mode === 'stateful' && (worker.effective_state === 'paused' || worker.effective_state === 'error') && (
+                  <IconButton aria-label="Resume worker" variant="ghost" size="sm" onClick={onWorkerResume} className="jads-task-card__worker-resume">
+                    <ResumeIcon />
+                  </IconButton>
+                )}
                 {onWorkerArchive && worker.effective_state !== 'archived' && worker.effective_state !== 'done' && (
                   <IconButton aria-label="End worker" variant="ghost" size="sm" onClick={onWorkerArchive} className="jads-task-card__worker-stop">
                     <StopIcon />
