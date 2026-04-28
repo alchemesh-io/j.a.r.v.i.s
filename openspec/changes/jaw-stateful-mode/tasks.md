@@ -57,23 +57,23 @@
 
 - [x] 7.1 Add a Mode selector to the Create Worker overlay (in `pages/Workers/Workers.tsx`) with options "Ephemeral" (default) and "Stateful", a help tooltip explaining persistence
 - [x] 7.2 Add a `WorkerModeBadge` component rendering "Ephemeral" / "Stateful" on each worker card _(JADS package)_
-- [x] 7.3 Add Pause and Restart buttons on the worker card, gated on `state` and `mode`
+- [x] 7.3 Add Stop and Restart buttons on the worker card, gated on `state` and `mode`
 - [x] 7.4 Wire those buttons to the new `stopWorker` / `restartWorker` mutations via TanStack Query, invalidating the workers list on success
 - [x] 7.5 Surface the `error` state visually (red accent + error icon) in the worker card
-- [x] 7.6 Mirror the pause/resume affordances on the Task Board worker controls (`pages/TaskBoard/`)
+- [x] 7.6 Mirror the stop/restart affordances on the Task Board worker controls (`pages/TaskBoard/`)
 - [x] 7.7 Storybook story for `WorkerModeBadge` in stateful and ephemeral variants
 
 ## 8. Tests
 
 - [x] 8.1 Backend unit test: `WorkerCreate` accepts `mode`; `WorkerResponse` returns `mode`
 - [x] 8.2 Backend unit test: stop endpoint rejects ephemeral with 409
-- [x] 8.3 Backend unit test: resume endpoint rejects ephemeral with 409 and rejects invalid states with 409
-- [x] 8.4 Backend unit test: stop is idempotent on already-paused workers
+- [x] 8.3 Backend unit test: restart endpoint rejects ephemeral with 409 and rejects archived workers with 409
+- [x] 8.4 Backend unit test: stop is idempotent on already-stopped workers
 - [x] 8.5 Backend unit test: archive of stateful worker calls `delete_worker_pvc`
 - [x] 8.6 Backend unit test: `create_worker_pod` for stateful adds the PVC volume and `/home/node` mount; ephemeral does not
 - [x] 8.7 Worker entrypoint: shell test (or in-container script) that exercises idempotent clone (run twice, verify no second `git clone` invocation)
 - [x] 8.8 Frontend test: worker card shows mode badge and correct buttons per state/mode combination _(WorkerModeBadge.test.tsx; gating logic exercised by typecheck + storybook)_
-- [ ] 8.9 Manual end-to-end on Minikube: create stateful worker → write `marker.txt` in `/home/node/jarvis` → stop → resume → verify file present and Claude session restartd _(runtime — user runs against live cluster)_
+- [ ] 8.9 Manual end-to-end on Minikube: create stateful worker → write `marker.txt` in `/home/node/jarvis` → stop → restart → verify file present and Claude session resumed _(runtime — user runs against live cluster)_
 
 ## 9. Documentation
 

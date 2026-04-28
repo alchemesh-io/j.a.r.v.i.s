@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines the stateful operating mode for JAW workers: per-worker persistent storage, stop / restart / re-run lifecycle, and the resulting worker state machine. In stateful mode, the worker's `/home/node` directory survives pod recreation so that the cloned repositories under `/home/node/jarvis/` and the Claude Code session history under `/home/node/.claude/projects/` are preserved across failures and explicit pauses.
+Defines the stateful operating mode for JAW workers: per-worker persistent storage, stop / restart / re-run lifecycle, and the resulting worker state machine. In stateful mode, the worker's `/home/node` directory survives pod recreation so that the cloned repositories under `/home/node/jarvis/` and the Claude Code session history under `/home/node/.claude/projects/` are preserved across failures and explicit stops.
 
 ## ADDED Requirements
 
@@ -27,7 +27,8 @@ A `Worker` SHALL declare a `mode` of either `ephemeral` (default) or `stateful`.
 #### Scenario: Mode is immutable
 
 - **WHEN** a client calls `PATCH /api/v1/workers/{id}` with a `mode` field
-- **THEN** the request is rejected with HTTP 400 and the worker's `mode` is unchanged
+- **THEN** the request succeeds (the inert field is ignored by the schema)
+- **AND** the worker's persisted `mode` SHALL be unchanged
 
 #### Scenario: WorkerResponse exposes mode
 
@@ -174,19 +175,19 @@ The `entrypoint.sh` script SHALL detect existing state under `/home/node` and sk
 - **AND** pulls every skill in `SKILLS`
 - **AND** writes ConfigMap settings into `/home/node/.claude/`
 
-#### Scenario: Resume with populated PVC skips re-clone
+#### Scenario: Restart with populated PVC skips re-clone
 
 - **WHEN** a stateful worker pod restarts and `/home/node/jarvis/myrepo/.git` already exists for `myrepo` in `REPOSITORIES`
 - **THEN** the entrypoint SHALL NOT run `git clone` for `myrepo`
 - **AND** the existing working tree (including uncommitted changes) is preserved
 
-#### Scenario: Resume preserves Claude session history
+#### Scenario: Restart preserves Claude session history
 
 - **WHEN** a stateful worker pod restarts and `/home/node/.claude/projects/-home-node-jarvis/<session-uuid>.jsonl` exists
 - **THEN** the entrypoint SHALL NOT delete or overwrite that file
 - **AND** the Claude Code process is started with `--resume <session-uuid>` and successfully continues the prior conversation
 
-#### Scenario: Resume re-applies updated ConfigMap settings
+#### Scenario: Restart re-applies updated ConfigMap settings
 
 - **WHEN** a stateful worker pod restarts after the host ConfigMap `jarvis-claude-config` has been updated
 - **THEN** the entrypoint copies the updated ConfigMap files into `/home/node/.claude/` and `/home/node/.claude.json`, replacing the previously persisted versions

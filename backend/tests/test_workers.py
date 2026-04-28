@@ -146,6 +146,21 @@ def test_update_worker_state(mock_k8s, client):
 
 
 @patch("app.routes.workers.k8s")
+def test_update_worker_ignores_mode_field(mock_k8s, client):
+    """Mode is immutable. PATCH with `mode` succeeds but leaves the persisted mode untouched."""
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post(
+        "/api/v1/workers", json={"task_id": task["id"], "mode": "ephemeral"}
+    ).json()
+    assert worker["mode"] == "ephemeral"
+
+    resp = client.patch(f"/api/v1/workers/{worker['id']}", json={"mode": "stateful"})
+    assert resp.status_code == 200
+    assert resp.json()["mode"] == "ephemeral"
+
+
+@patch("app.routes.workers.k8s")
 def test_archive_worker_deletes_k8s_resources(mock_k8s, client):
     mock_k8s.is_available.return_value = False
     task = _create_task(client).json()
