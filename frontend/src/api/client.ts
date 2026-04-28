@@ -27,7 +27,7 @@ export type WorkerState =
   | 'waiting_for_human'
   | 'done'
   | 'archived'
-  | 'paused'
+  | 'stopped'
   | 'error';
 export type WorkerType = 'claude_code';
 export type WorkerMode = 'ephemeral' | 'stateful';
@@ -481,12 +481,12 @@ export function createWorker(body: {
   return request('/workers', { method: 'POST', body: JSON.stringify(body) });
 }
 
-export function pauseWorker(id: string): Promise<Worker> {
-  return request(`/workers/${id}/pause`, { method: 'POST' });
+export function stopWorker(id: string): Promise<Worker> {
+  return request(`/workers/${id}/stop`, { method: 'POST' });
 }
 
-export function resumeWorker(id: string): Promise<Worker> {
-  return request(`/workers/${id}/resume`, { method: 'POST' });
+export function restartWorker(id: string): Promise<Worker> {
+  return request(`/workers/${id}/restart`, { method: 'POST' });
 }
 
 export function listWorkers(): Promise<Worker[]> {

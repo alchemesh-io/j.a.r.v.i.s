@@ -256,7 +256,7 @@
   opacity: 0.6;
 }
 
-.worker-card--paused {
+.worker-card--stopped {
   border-left: 3px solid #a78bfa;
   background: linear-gradient(135deg, rgba(167, 139, 250, 0.06) 0%, transparent 60%);
 }

@@ -4,7 +4,7 @@
 
 ### Requirement: Stateful worker entrypoint skips skill pull for already-pulled skills
 
-When the worker is in stateful mode, the entrypoint SHALL skip `arctl skill pull` for any skill whose target directory already exists with a non-empty content marker — specifically when `/home/node/.claude/skills/<skill-name>/SKILL.md` (or, failing that, any non-empty file) is present. This avoids re-pulling skills on resume and avoids overwriting user-modified skill content. Ephemeral worker behaviour is unchanged: every skill in `SKILLS` is pulled on every start.
+When the worker is in stateful mode, the entrypoint SHALL skip `arctl skill pull` for any skill whose target directory already exists with a non-empty content marker — specifically when `/home/node/.claude/skills/<skill-name>/SKILL.md` (or, failing that, any non-empty file) is present. This avoids re-pulling skills on restart and avoids overwriting user-modified skill content. Ephemeral worker behaviour is unchanged: every skill in `SKILLS` is pulled on every start.
 
 #### Scenario: Stateful resume skips already-pulled skill
 

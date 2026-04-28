@@ -4,9 +4,16 @@ set -e
 WORKER_MODE="${WORKER_MODE:-ephemeral}"
 echo "[worker] Starting worker ${WORKER_ID} for task ${TASK_ID} (mode=${WORKER_MODE})"
 
-# Step 0: Ensure the home directory layout exists. When the worker is stateful, the PVC mount
-# overlays /home/node and the directories baked into the image become invisible until we
-# re-create them on the volume. mkdir -p is a no-op when the directories already exist.
+# Step 0: Fix PVC ownership and ensure the home directory layout exists.
+# When the worker is stateful, the PVC mount overlays /home/node — and on most storage
+# classes (including minikube's hostPath) the volume root is owned root:root regardless
+# of fsGroup, so the node user (uid 1000) can't write to it. We chown the mount once at
+# startup, then mkdir -p the layout the entrypoint expects.
+if [ "$WORKER_MODE" = "stateful" ] && [ "$(stat -c %u "$HOME" 2>/dev/null || echo 0)" != "1000" ]; then
+    echo "[worker] Fixing /home/node ownership (PVC mount root owned by uid $(stat -c %u "$HOME"))"
+    sudo chown -R node:node "$HOME"
+fi
+
 mkdir -p \
     "$HOME/jarvis" \
     "$HOME/.claude" \

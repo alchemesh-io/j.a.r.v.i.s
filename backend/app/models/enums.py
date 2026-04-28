@@ -47,7 +47,7 @@ class WorkerState(str, Enum):
     waiting_for_human = "waiting_for_human"
     done = "done"
     archived = "archived"
-    paused = "paused"
+    stopped = "stopped"
     error = "error"
 
 

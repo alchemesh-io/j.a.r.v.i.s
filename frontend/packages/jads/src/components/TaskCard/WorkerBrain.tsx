@@ -48,7 +48,7 @@ const STATE_COLORS: Record<string, string> = {
   waiting_for_human: '#ef4444',
   done: '#10b981',
   archived: '#374151',
-  paused: '#a78bfa',
+  stopped: '#a78bfa',
   error: '#dc2626',
 };
 
@@ -58,7 +58,7 @@ const STATE_LABELS: Record<string, string> = {
   waiting_for_human: 'WAIT',
   done: 'DONE',
   archived: 'OFF',
-  paused: 'PAUSE',
+  stopped: 'STOP',
   error: 'ERROR',
 };
 

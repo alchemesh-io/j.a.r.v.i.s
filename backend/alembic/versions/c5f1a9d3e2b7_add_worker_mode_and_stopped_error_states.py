@@ -1,4 +1,4 @@
-"""add_worker_mode_and_paused_error_states
+"""add_worker_mode_and_stopped_error_states
 
 Revision ID: c5f1a9d3e2b7
 Revises: a1b2c3d4e5f6
@@ -18,7 +18,7 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-_NEW_STATES = ('initialized', 'working', 'waiting_for_human', 'done', 'archived', 'paused', 'error')
+_NEW_STATES = ('initialized', 'working', 'waiting_for_human', 'done', 'archived', 'stopped', 'error')
 _OLD_STATES = ('initialized', 'working', 'waiting_for_human', 'done', 'archived')
 _MODES = ('ephemeral', 'stateful')
 
@@ -28,7 +28,7 @@ def upgrade() -> None:
     dialect = bind.dialect.name
 
     if dialect == 'postgresql':
-        op.execute("ALTER TYPE workerstate ADD VALUE IF NOT EXISTS 'paused'")
+        op.execute("ALTER TYPE workerstate ADD VALUE IF NOT EXISTS 'stopped'")
         op.execute("ALTER TYPE workerstate ADD VALUE IF NOT EXISTS 'error'")
         workermode = sa.Enum(*_MODES, name='workermode')
         workermode.create(bind, checkfirst=True)
@@ -63,7 +63,7 @@ def downgrade() -> None:
         op.drop_column('worker', 'mode')
         sa.Enum(name='workermode').drop(bind, checkfirst=True)
         # Note: PostgreSQL cannot remove enum values without recreating the type.
-        # We leave 'paused' and 'error' in workerstate; they are unused after downgrade.
+        # We leave 'stopped' and 'error' in workerstate; they are unused after downgrade.
     else:
         with op.batch_alter_table('worker') as batch_op:
             batch_op.alter_column(

@@ -311,8 +311,9 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
 - Workers run in two modes: `ephemeral` (default — no persistence, all data lost on pod stop) and `stateful` (PVC mounted at `/home/node` so cloned repos, Claude Code session JSONL under `~/.claude/projects/`, and pulled skills under `~/.claude/skills/` survive pod failures and explicit pause/resume)
 - Mode is set at worker creation (`POST /api/v1/workers` body field `mode`) and is immutable
 - Stateful workers expose two extra REST actions:
-  - `POST /api/v1/workers/{id}/pause` — deletes pod + service, keeps PVC; transitions state to `paused`
-  - `POST /api/v1/workers/{id}/resume` — re-creates pod + service against the existing PVC; valid from `paused` or `error`
+  - `POST /api/v1/workers/{id}/stop` — deletes pod + service, keeps PVC; transitions state to `stopped`. Valid from any state except `archived`
+  - `POST /api/v1/workers/{id}/restart` — re-creates pod + service against the existing PVC. Valid from any state except `archived`; if a pod is still running it is deleted first
+- `archived` is the only terminal state; every other state SHALL be restartable via the `/restart` endpoint
 - The entrypoint is idempotent: it skips `git clone` when `<repo>/.git` already exists and skips `arctl skill pull` when `~/.claude/skills/<name>/SKILL.md` is present. ConfigMap-sourced settings (`policy-limits.json`, `remote-settings.json`, `settings.json`, `~/.claude.json`) are re-applied on every start so cluster-side updates take effect on resume
 - Pod failures (phase `Failed` or non-zero container exit) are mapped to DB state `error` by `get_worker` polling. Stateful workers in `error` can be resumed; ephemeral workers in `error` are terminal
 - PVC sizing: `worker.persistence.size` (default `2Gi`), `worker.persistence.storageClass` (default `standard` for Minikube). Storage class MUST honour `fsGroup` (1000) for the volume to be writable by the `node` user

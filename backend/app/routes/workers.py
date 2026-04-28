@@ -131,7 +131,7 @@ def list_workers(db: Session = Depends(get_db)):
 def get_worker(worker_id: str, db: Session = Depends(get_db)):
     worker = _load_worker(db, worker_id)
 
-    if worker.state in (WorkerState.archived, WorkerState.done, WorkerState.paused):
+    if worker.state in (WorkerState.archived, WorkerState.done, WorkerState.stopped):
         return _worker_to_response(worker)
 
     pod_status_data = k8s.get_worker_pod_status(worker_id)
@@ -186,62 +186,64 @@ def update_worker(worker_id: str, body: WorkerUpdate, db: Session = Depends(get_
 
 
 @router.post(
-    "/{worker_id}/pause",
+    "/{worker_id}/stop",
     response_model=WorkerResponse,
-    summary="Pause a stateful worker",
+    summary="Stop a stateful worker",
     description=(
         "Deletes the worker pod and service while keeping the PVC and DB row. "
-        "Only valid for stateful workers; ephemeral workers are rejected with HTTP 409."
+        "Only valid for stateful workers; ephemeral workers are rejected with HTTP 409. "
+        "Idempotent: stopping an already-stopped worker is a no-op."
     ),
 )
-def pause_worker(worker_id: str, db: Session = Depends(get_db)):
+def stop_worker(worker_id: str, db: Session = Depends(get_db)):
     worker = _load_worker(db, worker_id)
 
     if worker.mode != WorkerMode.stateful:
-        raise HTTPException(status_code=409, detail="Cannot pause an ephemeral worker")
+        raise HTTPException(status_code=409, detail="Cannot stop an ephemeral worker")
 
-    if worker.state == WorkerState.paused:
+    if worker.state == WorkerState.stopped:
         return _worker_to_response(worker)
 
-    if worker.state in (WorkerState.archived, WorkerState.done):
-        raise HTTPException(status_code=409, detail=f"Cannot pause worker in state '{worker.state.value}'")
-
-    if worker.state not in (WorkerState.working, WorkerState.waiting_for_human, WorkerState.initialized, WorkerState.error):
-        raise HTTPException(status_code=409, detail=f"Cannot pause worker in state '{worker.state.value}'")
+    if worker.state == WorkerState.archived:
+        raise HTTPException(status_code=409, detail="Cannot stop an archived worker")
 
     k8s.delete_worker_pod_only(worker_id)
     k8s.delete_worker_service(worker_id)
 
-    worker.state = WorkerState.paused
+    worker.state = WorkerState.stopped
     db.flush()
     db.refresh(worker)
     return _worker_to_response(worker)
 
 
 @router.post(
-    "/{worker_id}/resume",
+    "/{worker_id}/restart",
     response_model=WorkerResponse,
-    summary="Resume a paused or errored stateful worker",
+    summary="Restart a stateful worker",
     description=(
         "Re-creates the worker pod and service attached to the existing PVC. "
-        "Only valid for stateful workers in state 'paused' or 'error'."
+        "Valid for stateful workers in any state except 'archived'. "
+        "If a pod already exists it is deleted first."
     ),
 )
-def resume_worker(worker_id: str, db: Session = Depends(get_db)):
+def restart_worker(worker_id: str, db: Session = Depends(get_db)):
     worker = _load_worker(db, worker_id)
 
     if worker.mode != WorkerMode.stateful:
-        raise HTTPException(status_code=409, detail="Cannot resume an ephemeral worker")
+        raise HTTPException(status_code=409, detail="Cannot restart an ephemeral worker")
 
-    if worker.state not in (WorkerState.paused, WorkerState.error):
-        raise HTTPException(status_code=409, detail=f"Cannot resume worker in state '{worker.state.value}'")
+    if worker.state == WorkerState.archived:
+        raise HTTPException(status_code=409, detail="Cannot restart an archived worker")
 
     if k8s.is_available():
+        # Drop any existing pod/service so the new pod cleanly attaches to the PVC.
+        k8s.delete_worker_pod_only(worker_id)
+        k8s.delete_worker_service(worker_id)
         try:
             _provision_worker_pod(worker)
         except Exception:
-            logger.exception("Failed to resume worker %s", worker_id)
-            raise HTTPException(status_code=503, detail="Failed to resume worker Kubernetes resources")
+            logger.exception("Failed to restart worker %s", worker_id)
+            raise HTTPException(status_code=503, detail="Failed to restart worker Kubernetes resources")
 
     worker.state = WorkerState.initialized
     db.flush()

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines the stateful operating mode for JAW workers: per-worker persistent storage, pause / resume / re-run lifecycle, and the resulting worker state machine. In stateful mode, the worker's `/home/node` directory survives pod recreation so that the cloned repositories under `/home/node/jarvis/` and the Claude Code session history under `/home/node/.claude/projects/` are preserved across failures and explicit pauses.
+Defines the stateful operating mode for JAW workers: per-worker persistent storage, stop / restart / re-run lifecycle, and the resulting worker state machine. In stateful mode, the worker's `/home/node` directory survives pod recreation so that the cloned repositories under `/home/node/jarvis/` and the Claude Code session history under `/home/node/.claude/projects/` are preserved across failures and explicit pauses.
 
 ## ADDED Requirements
 
@@ -34,9 +34,9 @@ A `Worker` SHALL declare a `mode` of either `ephemeral` (default) or `stateful`.
 - **WHEN** a client calls `GET /api/v1/workers/{id}`
 - **THEN** the response body includes a `mode` field set to either `"ephemeral"` or `"stateful"`
 
-### Requirement: Worker state machine includes paused and error states
+### Requirement: Worker state machine includes stopped and error states
 
-The `WorkerState` enum SHALL include `paused` and `error` in addition to the existing `initialized`, `working`, `waiting_for_human`, `done`, and `archived` values. `paused` SHALL be entered only via the pause endpoint. `error` SHALL be entered when the worker pod terminates with a failure. `archived` SHALL remain the terminal state used when the worker is being removed.
+The `WorkerState` enum SHALL include `stopped` and `error` in addition to the existing `initialized`, `working`, `waiting_for_human`, `done`, and `archived` values. `stopped` SHALL be entered via the stop endpoint. `error` SHALL be entered when the worker pod terminates with a failure. `archived` SHALL remain the only terminal state — every other state SHALL be restartable.
 
 #### Scenario: Pod failure transitions worker to error state
 
@@ -44,72 +44,84 @@ The `WorkerState` enum SHALL include `paused` and `error` in addition to the exi
 - **THEN** the next call to `GET /api/v1/workers/{id}` SHALL return `state = "error"`
 - **AND** the persisted DB state SHALL be updated to `error`
 
-#### Scenario: Pause transitions worker to paused state
+#### Scenario: Stop transitions worker to stopped state
 
-- **WHEN** a client calls `POST /api/v1/workers/{id}/pause` on a worker whose state is `working` or `waiting_for_human`
-- **THEN** the worker's DB state becomes `paused`
+- **WHEN** a client calls `POST /api/v1/workers/{id}/stop` on a stateful worker whose state is not `archived`
+- **THEN** the worker's DB state becomes `stopped`
 
-#### Scenario: Archived state remains terminal
+#### Scenario: Archived is the only terminal state
 
 - **WHEN** a worker has state `archived`
-- **THEN** the pause and resume endpoints SHALL respond with HTTP 409 and the state SHALL NOT change
+- **THEN** the stop and restart endpoints SHALL respond with HTTP 409 and the state SHALL NOT change
 
-### Requirement: Pause endpoint deletes pod and service but keeps storage
+### Requirement: Stop endpoint deletes pod and service but keeps storage
 
-The endpoint `POST /api/v1/workers/{id}/pause` SHALL delete the worker's pod and service and SHALL set the worker's state to `paused`. For stateful workers it SHALL NOT delete the PVC. For ephemeral workers it SHALL be rejected with HTTP 409, since pausing an ephemeral worker would lose all data.
+The endpoint `POST /api/v1/workers/{id}/stop` SHALL delete the worker's pod and service and SHALL set the worker's state to `stopped`. It SHALL NOT delete the PVC. For ephemeral workers it SHALL be rejected with HTTP 409, since stopping an ephemeral worker would lose all data. For archived workers it SHALL be rejected with HTTP 409. From any other state (including `working`, `waiting_for_human`, `initialized`, `done`, `error`) the call SHALL succeed.
 
-#### Scenario: Pause stateful worker keeps PVC
+#### Scenario: Stop stateful worker keeps PVC
 
-- **WHEN** a client calls `POST /api/v1/workers/{id}/pause` on a stateful worker in state `working`
+- **WHEN** a client calls `POST /api/v1/workers/{id}/stop` on a stateful worker in state `working`
 - **THEN** the worker pod `jarvis-worker-<id>` and service `jarvis-worker-<id>` are deleted
 - **AND** the PVC `jarvis-worker-<id>-data` SHALL still exist
-- **AND** the worker DB state SHALL be `paused`
+- **AND** the worker DB state SHALL be `stopped`
 
-#### Scenario: Pause is rejected for ephemeral worker
+#### Scenario: Stop is rejected for ephemeral worker
 
-- **WHEN** a client calls `POST /api/v1/workers/{id}/pause` on an ephemeral worker
+- **WHEN** a client calls `POST /api/v1/workers/{id}/stop` on an ephemeral worker
 - **THEN** the response SHALL be HTTP 409
 - **AND** the worker's pod, service, and DB state SHALL be unchanged
 
-#### Scenario: Pause is idempotent
+#### Scenario: Stop is rejected for archived worker
 
-- **WHEN** a client calls `POST /api/v1/workers/{id}/pause` on a worker already in state `paused`
+- **WHEN** a client calls `POST /api/v1/workers/{id}/stop` on a stateful worker in state `archived`
+- **THEN** the response SHALL be HTTP 409
+
+#### Scenario: Stop is idempotent
+
+- **WHEN** a client calls `POST /api/v1/workers/{id}/stop` on a worker already in state `stopped`
 - **THEN** the response SHALL be HTTP 200
-- **AND** the worker's DB state SHALL remain `paused`
+- **AND** the worker's DB state SHALL remain `stopped`
 - **AND** no Kubernetes resources SHALL be modified
 
-### Requirement: Resume endpoint re-creates pod attached to existing PVC
+### Requirement: Restart endpoint re-creates pod attached to existing PVC
 
-The endpoint `POST /api/v1/workers/{id}/resume` SHALL be valid only for stateful workers in state `paused` or `error`. It SHALL re-create the worker's pod and service using the same configuration as initial creation (same image, env, repositories, skills) and SHALL mount the existing `jarvis-worker-<id>-data` PVC at `/home/node`. After resume the worker's state SHALL transition back to `initialized` and then progress through the normal state machine driven by the running pod.
+The endpoint `POST /api/v1/workers/{id}/restart` SHALL be valid for stateful workers in any state except `archived`. It SHALL delete any existing pod and service for that worker (idempotent), then re-create them using the same configuration as initial creation (same image, env, repositories, skills) and SHALL mount the existing `jarvis-worker-<id>-data` PVC at `/home/node`. After restart the worker's state SHALL transition back to `initialized` and then progress through the normal state machine driven by the running pod.
 
-#### Scenario: Resume from paused
+#### Scenario: Restart from stopped
 
-- **WHEN** a client calls `POST /api/v1/workers/{id}/resume` on a stateful worker in state `paused`
+- **WHEN** a client calls `POST /api/v1/workers/{id}/restart` on a stateful worker in state `stopped`
 - **THEN** a new pod `jarvis-worker-<id>` is created with the same env vars as the original creation
 - **AND** the pod mounts the existing PVC `jarvis-worker-<id>-data` at `/home/node`
 - **AND** a new service `jarvis-worker-<id>` is created
 - **AND** the worker DB state transitions to `initialized`
 
-#### Scenario: Resume from error (re-run)
+#### Scenario: Restart from error (re-run)
 
-- **WHEN** a client calls `POST /api/v1/workers/{id}/resume` on a stateful worker in state `error`
-- **THEN** the same actions as resume-from-paused are performed
+- **WHEN** a client calls `POST /api/v1/workers/{id}/restart` on a stateful worker in state `error`
+- **THEN** the same actions as restart-from-stopped are performed
 - **AND** the existing PVC is reused — the cloned repositories, Claude session history, and pulled skills are preserved
 
-#### Scenario: Resume rejected for ephemeral worker
+#### Scenario: Restart from a running state forces a fresh pod
 
-- **WHEN** a client calls `POST /api/v1/workers/{id}/resume` on an ephemeral worker
-- **THEN** the response SHALL be HTTP 409 with a message indicating that ephemeral workers cannot be resumed
+- **WHEN** a client calls `POST /api/v1/workers/{id}/restart` on a stateful worker in state `working` or `waiting_for_human`
+- **THEN** the existing pod and service are deleted first
+- **AND** a fresh pod and service are re-created against the same PVC
+- **AND** the worker DB state transitions to `initialized`
 
-#### Scenario: Resume rejected from invalid state
+#### Scenario: Restart rejected for ephemeral worker
 
-- **WHEN** a client calls `POST /api/v1/workers/{id}/resume` on a stateful worker in state `working`, `waiting_for_human`, `done`, `archived`, or `initialized`
+- **WHEN** a client calls `POST /api/v1/workers/{id}/restart` on an ephemeral worker
+- **THEN** the response SHALL be HTTP 409 with a message indicating that ephemeral workers cannot be restarted
+
+#### Scenario: Restart rejected from archived
+
+- **WHEN** a client calls `POST /api/v1/workers/{id}/restart` on a stateful worker in state `archived`
 - **THEN** the response SHALL be HTTP 409
 - **AND** no Kubernetes resources SHALL be modified
 
 ### Requirement: Stateful pod mounts the PVC at /home/node
 
-When a stateful worker pod is created (initial creation or resume), the K8s service SHALL add a volume of type `persistentVolumeClaim` referencing `jarvis-worker-<id>-data` and SHALL add a `volumeMount` on the `worker` container at path `/home/node`. The pod's `restartPolicy` SHALL remain `Never` so that pod-level failures bubble up to the backend as the `error` state, leaving recovery under explicit user control via the resume endpoint.
+When a stateful worker pod is created (initial creation or restart), the K8s service SHALL add a volume of type `persistentVolumeClaim` referencing `jarvis-worker-<id>-data` and SHALL add a `volumeMount` on the `worker` container at path `/home/node`. The pod's `restartPolicy` SHALL remain `Never` so that pod-level failures bubble up to the backend as the `error` state, leaving recovery under explicit user control via the restart endpoint.
 
 #### Scenario: Stateful pod has the PVC mount
 
@@ -125,7 +137,7 @@ When a stateful worker pod is created (initial creation or resume), the K8s serv
 
 ### Requirement: Archive and delete tear down the PVC for stateful workers
 
-When a worker is transitioned to `archived` (via `PATCH state=archived`) or deleted (via `DELETE`), the backend SHALL delete the worker's pod, service, and — for stateful workers — its PVC `jarvis-worker-<id>-data`. The pause endpoint SHALL NOT delete the PVC.
+When a worker is transitioned to `archived` (via `PATCH state=archived`) or deleted (via `DELETE`), the backend SHALL delete the worker's pod, service, and — for stateful workers — its PVC `jarvis-worker-<id>-data`. The stop endpoint SHALL NOT delete the PVC.
 
 #### Scenario: Archiving a stateful worker deletes the PVC
 
@@ -141,17 +153,17 @@ When a worker is transitioned to `archived` (via `PATCH state=archived`) or dele
 
 #### Scenario: Pausing does not delete the PVC
 
-- **WHEN** a stateful worker is paused
-- **THEN** the PVC `jarvis-worker-<id>-data` SHALL still exist after the pause completes
+- **WHEN** a stateful worker is stopped
+- **THEN** the PVC `jarvis-worker-<id>-data` SHALL still exist after the stop completes
 
-### Requirement: Worker entrypoint is idempotent on resume
+### Requirement: Worker entrypoint is idempotent on restart
 
 The `entrypoint.sh` script SHALL detect existing state under `/home/node` and skip initialization steps that would re-do work or overwrite preserved data. Specifically:
 
 1. If `/home/node/jarvis/<repo-name>/.git` exists for a repository in `REPOSITORIES`, the entrypoint SHALL skip `git clone` for that repository.
 2. If `/home/node/.claude/skills/<skill-name>/` exists for a skill in `SKILLS`, the entrypoint SHALL skip `arctl skill pull` for that skill.
 3. The entrypoint SHALL ensure `/home/node/jarvis` and `/home/node/.claude` exist (creating them if the PVC is empty on first start).
-4. ConfigMap-sourced settings (`policy-limits.json`, `remote-settings.json`, `settings.json`, `~/.claude.json`) SHALL be re-copied on every start, overwriting any prior copy in the PVC, so updates from the cluster ConfigMap take effect on resume.
+4. ConfigMap-sourced settings (`policy-limits.json`, `remote-settings.json`, `settings.json`, `~/.claude.json`) SHALL be re-copied on every start, overwriting any prior copy in the PVC, so updates from the cluster ConfigMap take effect on restart.
 5. `/home/node/.claude/projects/` and `/home/node/.claude/skills/` SHALL never be removed or overwritten by the entrypoint.
 
 #### Scenario: First start with empty PVC
@@ -164,19 +176,19 @@ The `entrypoint.sh` script SHALL detect existing state under `/home/node` and sk
 
 #### Scenario: Resume with populated PVC skips re-clone
 
-- **WHEN** a stateful worker pod resumes and `/home/node/jarvis/myrepo/.git` already exists for `myrepo` in `REPOSITORIES`
+- **WHEN** a stateful worker pod restarts and `/home/node/jarvis/myrepo/.git` already exists for `myrepo` in `REPOSITORIES`
 - **THEN** the entrypoint SHALL NOT run `git clone` for `myrepo`
 - **AND** the existing working tree (including uncommitted changes) is preserved
 
 #### Scenario: Resume preserves Claude session history
 
-- **WHEN** a stateful worker pod resumes and `/home/node/.claude/projects/-home-node-jarvis/<session-uuid>.jsonl` exists
+- **WHEN** a stateful worker pod restarts and `/home/node/.claude/projects/-home-node-jarvis/<session-uuid>.jsonl` exists
 - **THEN** the entrypoint SHALL NOT delete or overwrite that file
 - **AND** the Claude Code process is started with `--resume <session-uuid>` and successfully continues the prior conversation
 
 #### Scenario: Resume re-applies updated ConfigMap settings
 
-- **WHEN** a stateful worker pod resumes after the host ConfigMap `jarvis-claude-config` has been updated
+- **WHEN** a stateful worker pod restarts after the host ConfigMap `jarvis-claude-config` has been updated
 - **THEN** the entrypoint copies the updated ConfigMap files into `/home/node/.claude/` and `/home/node/.claude.json`, replacing the previously persisted versions
 
 ### Requirement: PVC sizing and storage class are configurable
@@ -209,29 +221,34 @@ The `jarvis-backend` ServiceAccount used by the backend (and by the K8s service 
 - **THEN** the response SHALL be HTTP 503 with a message indicating that PVC creation failed
 - **AND** no orphan pod or service SHALL remain
 
-### Requirement: UI exposes mode badge and pause / resume controls
+### Requirement: UI exposes mode badge and stop / restart controls
 
 The Workers page worker card SHALL render a mode badge ("Stateful" or "Ephemeral") and SHALL expose:
 
-- A **Pause** button on stateful workers in state `working` or `waiting_for_human`.
-- A **Resume** button on stateful workers in state `paused` or `error`.
-- No pause/resume buttons on ephemeral workers.
+- A **Stop** button on stateful workers whose state is neither `stopped` nor `archived`.
+- A **Restart** button on stateful workers in any state except `archived`.
+- No stop/restart buttons on ephemeral workers.
 - A **Mode** selector in the Create Worker overlay (Workers page and Task Board inline create), defaulting to `ephemeral`.
 
-#### Scenario: Stateful worker shows pause button
+#### Scenario: Stateful worker shows stop button
 
 - **WHEN** the Workers page renders a stateful worker in state `working`
-- **THEN** the worker card displays a "Stateful" badge and a Pause button
+- **THEN** the worker card displays a "Stateful" badge and a Stop button
 
-#### Scenario: Errored stateful worker shows resume button
+#### Scenario: Errored stateful worker shows restart button
 
 - **WHEN** the Workers page renders a stateful worker in state `error`
-- **THEN** the worker card displays a "Stateful" badge and a Resume button
+- **THEN** the worker card displays a "Stateful" badge and a Restart button
 
-#### Scenario: Ephemeral worker hides pause/resume
+#### Scenario: Stopped stateful worker hides Stop and shows Restart
+
+- **WHEN** the Workers page renders a stateful worker in state `stopped`
+- **THEN** the Stop button is hidden and the Restart button is visible
+
+#### Scenario: Ephemeral worker hides stop and restart
 
 - **WHEN** the Workers page renders an ephemeral worker
-- **THEN** the worker card SHALL display an "Ephemeral" badge and SHALL NOT display Pause or Resume buttons
+- **THEN** the worker card SHALL display an "Ephemeral" badge and SHALL NOT display Stop or Restart buttons
 
 #### Scenario: Create Worker overlay defaults to ephemeral
 

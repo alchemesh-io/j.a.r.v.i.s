@@ -9,8 +9,8 @@ import {
   createWorker,
   updateWorker,
   deleteWorker,
-  pauseWorker,
-  resumeWorker,
+  stopWorker,
+  restartWorker,
   getWorkerVscodeUri,
   type Worker,
   type WorkerMode,
@@ -57,22 +57,22 @@ const STATE_FILTER_OPTIONS: { value: string; label: string; color: string }[] = 
   { value: 'working', label: 'Active', color: '#3b82f6' },
   { value: 'waiting_for_human', label: 'Waiting', color: '#ef4444' },
   { value: 'initialized', label: 'Init', color: '#6b7280' },
-  { value: 'paused', label: 'Paused', color: '#a78bfa' },
+  { value: 'stopped', label: 'Stopped', color: '#a78bfa' },
   { value: 'error', label: 'Error', color: '#dc2626' },
   { value: 'done', label: 'Done', color: '#10b981' },
   { value: 'archived', label: 'Off', color: '#374151' },
 ];
 
-const PauseIcon = () => (
+const StopWorkerIcon = () => (
   <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-    <rect x="4" y="3" width="3" height="10" rx="0.5" />
-    <rect x="9" y="3" width="3" height="10" rx="0.5" />
+    <rect x="3" y="3" width="10" height="10" rx="1" />
   </svg>
 );
 
-const ResumeIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-    <path d="M4 3l9 5-9 5V3z" />
+const RestartIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 3v4h4" />
+    <path d="M3 7a5 5 0 1 1 1.5 3.5" />
   </svg>
 );
 
@@ -126,13 +126,13 @@ export default function Workers() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); queryClient.invalidateQueries({ queryKey: ['tasks'] }); },
   });
 
-  const pauseWorkerMutation = useMutation({
-    mutationFn: pauseWorker,
+  const stopWorkerMutation = useMutation({
+    mutationFn: stopWorker,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); queryClient.invalidateQueries({ queryKey: ['tasks'] }); },
   });
 
-  const resumeWorkerMutation = useMutation({
-    mutationFn: resumeWorker,
+  const restartWorkerMutation = useMutation({
+    mutationFn: restartWorker,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); queryClient.invalidateQueries({ queryKey: ['tasks'] }); },
   });
 
@@ -170,11 +170,11 @@ export default function Workers() {
   }, []);
 
   const availableTasks = tasks.filter((t: Task) => !t.worker);
-  const isActive = (s: string) => s !== 'archived' && s !== 'done' && s !== 'paused' && s !== 'error';
-  const canPause = (w: Worker) =>
-    w.mode === 'stateful' && (w.effective_state === 'working' || w.effective_state === 'waiting_for_human' || w.effective_state === 'initialized');
-  const canResume = (w: Worker) =>
-    w.mode === 'stateful' && (w.effective_state === 'paused' || w.effective_state === 'error');
+  const isActive = (s: string) => s !== 'archived' && s !== 'done' && s !== 'stopped' && s !== 'error';
+  const canStop = (w: Worker) =>
+    w.mode === 'stateful' && w.effective_state !== 'stopped' && w.effective_state !== 'archived';
+  const canRestart = (w: Worker) =>
+    w.mode === 'stateful' && w.effective_state !== 'archived';
 
   const visibleWorkers = useMemo(() => {
     if (filterState === 'all') return workers;
@@ -234,19 +234,19 @@ export default function Workers() {
                 {/* Brain centered */}
                 <div className="worker-card__brain-row">
                   <div className="worker-card__brain-controls">
-                    {canPause(worker) && (
-                      <IconButton aria-label="Pause worker" variant="ghost" size="sm" onClick={() => pauseWorkerMutation.mutate(worker.id)} className="worker-card__pause">
-                        <PauseIcon />
+                    {canStop(worker) && (
+                      <IconButton aria-label="Stop worker" variant="ghost" size="sm" onClick={() => stopWorkerMutation.mutate(worker.id)} className="worker-card__stop">
+                        <StopWorkerIcon />
                       </IconButton>
                     )}
-                    {canResume(worker) && (
-                      <IconButton aria-label="Resume worker" variant="ghost" size="sm" onClick={() => resumeWorkerMutation.mutate(worker.id)} className="worker-card__resume">
-                        <ResumeIcon />
+                    {canRestart(worker) && (
+                      <IconButton aria-label="Restart worker" variant="ghost" size="sm" onClick={() => restartWorkerMutation.mutate(worker.id)} className="worker-card__restart">
+                        <RestartIcon />
                       </IconButton>
                     )}
                     {isActive(worker.effective_state) && (
-                      <IconButton aria-label="Stop worker" variant="ghost" size="sm" onClick={() => archiveWorkerMutation.mutate(worker.id)} className="worker-card__stop">
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="3" y="3" width="10" height="10" rx="1" fill="currentColor" /></svg>
+                      <IconButton aria-label="Archive worker" variant="ghost" size="sm" onClick={() => archiveWorkerMutation.mutate(worker.id)} className="worker-card__archive">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 4h12v3H2zM3 7v6h10V7" stroke="currentColor" strokeWidth="1.5" fill="none" /></svg>
                       </IconButton>
                     )}
                     <IconButton aria-label="Delete worker" variant="ghost" size="sm" onClick={() => { if (confirm('Delete this worker and its resources?')) deleteWorkerMutation.mutate(worker.id); }} className="worker-card__delete-btn">
@@ -320,7 +320,7 @@ export default function Workers() {
                 Mode
                 <span
                   className="workers__field-help"
-                  title="Stateful workers persist /home/node on a per-worker PVC, so cloned repos and Claude sessions survive pause/resume and pod failures. Ephemeral workers lose all data when the pod stops."
+                  title="Stateful workers persist /home/node on a per-worker PVC, so cloned repos and Claude sessions survive stop/restart and pod failures. Ephemeral workers lose all data when the pod stops."
                 >
                   ⓘ
                 </span>

@@ -49,8 +49,8 @@ import {
   createWorker,
   updateWorker,
   deleteWorker,
-  pauseWorker,
-  resumeWorker,
+  stopWorker,
+  restartWorker,
   listRepositories,
   listSkills,
   getWorkerVscodeUri,
@@ -285,8 +285,8 @@ function SortableTaskCard({
   onWorkerClick,
   onWorkerArchive,
   onWorkerDelete,
-  onWorkerPause,
-  onWorkerResume,
+  onWorkerStop,
+  onWorkerRestart,
 }: {
   task: Task;
   jiraProjectUrl?: string;
@@ -301,8 +301,8 @@ function SortableTaskCard({
   onWorkerClick?: () => void;
   onWorkerArchive?: () => void;
   onWorkerDelete?: () => void;
-  onWorkerPause?: () => void;
-  onWorkerResume?: () => void;
+  onWorkerStop?: () => void;
+  onWorkerRestart?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
@@ -341,8 +341,8 @@ function SortableTaskCard({
         onWorkerClick={onWorkerClick}
         onWorkerArchive={onWorkerArchive}
         onWorkerDelete={onWorkerDelete}
-        onWorkerPause={onWorkerPause}
-        onWorkerResume={onWorkerResume}
+        onWorkerStop={onWorkerStop}
+        onWorkerRestart={onWorkerRestart}
       />
     </div>
   );
@@ -465,13 +465,13 @@ export default function TaskBoard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
-  const pauseWorkerMutation = useMutation({
-    mutationFn: pauseWorker,
+  const stopWorkerMutation = useMutation({
+    mutationFn: stopWorker,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
-  const resumeWorkerMutation = useMutation({
-    mutationFn: resumeWorker,
+  const restartWorkerMutation = useMutation({
+    mutationFn: restartWorker,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
@@ -1773,8 +1773,8 @@ export default function TaskBoard() {
                   } : undefined}
                   onWorkerArchive={task.worker && task.worker.effective_state !== 'archived' ? () => archiveWorkerMutation.mutate(task.worker!.id) : undefined}
                   onWorkerDelete={task.worker ? () => { if (confirm('Delete this worker and its Kubernetes resources?')) deleteWorkerMutation.mutate(task.worker!.id); } : undefined}
-                  onWorkerPause={task.worker ? () => pauseWorkerMutation.mutate(task.worker!.id) : undefined}
-                  onWorkerResume={task.worker ? () => resumeWorkerMutation.mutate(task.worker!.id) : undefined}
+                  onWorkerStop={task.worker ? () => stopWorkerMutation.mutate(task.worker!.id) : undefined}
+                  onWorkerRestart={task.worker ? () => restartWorkerMutation.mutate(task.worker!.id) : undefined}
                 />
               ))}
               {visibleTasks.length === 0 && (
@@ -1820,7 +1820,7 @@ export default function TaskBoard() {
                 Mode
                 <span
                   className="task-board__worker-mode-help"
-                  title="Stateful workers persist /home/node on a per-worker PVC, so cloned repos and Claude sessions survive pause/resume and pod failures. Ephemeral workers lose all data when the pod stops."
+                  title="Stateful workers persist /home/node on a per-worker PVC, so cloned repos and Claude sessions survive stop/restart and pod failures. Ephemeral workers lose all data when the pod stops."
                 >
                   ⓘ
                 </span>

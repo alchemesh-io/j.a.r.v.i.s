@@ -11,7 +11,7 @@ This change introduces a **stateful** mode opt-in: the backend provisions a per-
 **Goals:**
 
 - Allow workers to survive pod failures, node drains, and explicit pauses without losing the cloned working tree or Claude Code session history.
-- Provide explicit pause / resume / re-run-on-error operations on workers.
+- Provide explicit stop / restart / re-run-on-error operations on workers.
 - Keep ephemeral mode the default and unchanged: existing workers and existing tests SHALL not regress.
 - Keep the implementation surface small: reuse the existing Pod-based worker creation path, add a single optional volume + mount, and add two new API endpoints.
 
@@ -28,13 +28,13 @@ This change introduces a **stateful** mode opt-in: the backend provisions a per-
 
 ### Decision 1: Use a Pod + explicit PVC, not a StatefulSet of 1 replica
 
-**Decision:** stateful workers reuse the existing `Pod`-based path. The backend provisions a separate `PersistentVolumeClaim` named `jarvis-worker-<id>-data` (sibling resource), mounts it at `/home/node`, and explicitly deletes / re-creates the Pod and Service on pause / resume. The PVC is owned by the worker DB row, not by Kubernetes.
+**Decision:** stateful workers reuse the existing `Pod`-based path. The backend provisions a separate `PersistentVolumeClaim` named `jarvis-worker-<id>-data` (sibling resource), mounts it at `/home/node`, and explicitly deletes / re-creates the Pod and Service on stop / resume. The PVC is owned by the worker DB row, not by Kubernetes.
 
 **Why not a StatefulSet (1 replica):**
 
 - StatefulSet auto-restarts pods (`restartPolicy: Always` is enforced). For us, pod failure is a deliberate signal — it MUST surface to the user as `error`. With an STS we would have to detect failure ourselves and immediately scale to 0 to "freeze" the worker, which is more code and more racy than just letting the Pod die under `restartPolicy: Never`.
-- StatefulSet's `volumeClaimTemplates` couples PVC lifecycle to the STS. Deleting the STS leaves orphan PVCs unless `persistentVolumeClaimRetentionPolicy.whenDeleted: Delete` is set; setting it complicates pause semantics (we don't want pause to delete the PVC). Owning the PVC explicitly is simpler.
-- Pause via `kubectl scale sts ... --replicas=0` does work, but resume via `--replicas=1` triggers the same template — meaning we cannot meaningfully change image, env, or skills between pause and resume without a rolling update. Deleting and re-creating a Pod is a clean slate per resume.
+- StatefulSet's `volumeClaimTemplates` couples PVC lifecycle to the STS. Deleting the STS leaves orphan PVCs unless `persistentVolumeClaimRetentionPolicy.whenDeleted: Delete` is set; setting it complicates stop semantics (we don't want stop to delete the PVC). Owning the PVC explicitly is simpler.
+- Pause via `kubectl scale sts ... --replicas=0` does work, but resume via `--replicas=1` triggers the same template — meaning we cannot meaningfully change image, env, or skills between stop and resume without a rolling update. Deleting and re-creating a Pod is a clean slate per resume.
 - Ephemeral workers stay as Pods. Reusing the same shape (Pod) for both modes — with one branch on whether to attach a PVC — is materially simpler than maintaining two K8s shapes.
 
 **Why not Job + PVC:**
@@ -59,13 +59,13 @@ This change introduces a **stateful** mode opt-in: the backend provisions a per-
 
 ### Decision 3: Pause = delete pod + service, keep PVC. Resume = re-create pod + service.
 
-**Decision:** `POST /api/v1/workers/{id}/pause` deletes the Pod and Service (idempotent) and sets the worker DB state to `paused`. `POST /api/v1/workers/{id}/resume` creates a new Pod + Service using the same recipe as initial creation (same image, env, repositories, skills) and references the existing PVC by name.
+**Decision:** `POST /api/v1/workers/{id}/stop` deletes the Pod and Service (idempotent) and sets the worker DB state to `stopped`. `POST /api/v1/workers/{id}/restart` creates a new Pod + Service using the same recipe as initial creation (same image, env, repositories, skills) and references the existing PVC by name.
 
 **Why:**
 
 - The PVC is the durable state; everything else can be regenerated from the worker row.
 - We already build the pod spec from the `Worker` model in `routes/workers.py` for `create_worker`. Resume reuses the same builder. The only new bit is "do not provision a PVC if one already exists with this name".
-- Keeping the Service intact during pause is tempting but costs nothing to recreate, and recreating it makes the pause/resume code path symmetric.
+- Keeping the Service intact during stop is tempting but costs nothing to recreate, and recreating it makes the pause/resume code path symmetric.
 
 **Trade-offs:**
 
@@ -92,12 +92,12 @@ This change introduces a **stateful** mode opt-in: the backend provisions a per-
 
 **Why:**
 
-- Persisted state (cloned repos, pulled skills, `~/.claude/projects/`) belongs to the worker. Re-doing the work on resume would be slow and could destroy uncommitted edits or live session JSONL files that Claude is appending to.
+- Persisted state (cloned repos, pulled skills, `~/.claude/projects/`) belongs to the worker. Re-doing the work on restart would be slow and could destroy uncommitted edits or live session JSONL files that Claude is appending to.
 - ConfigMap files (`settings.json`, `policy-limits.json`, etc.) are managed by the cluster operator and may have changed since the worker was created. Reapplying them on every start lets us push policy changes without recreating workers.
 
 **Trade-offs:**
 
-- If a user has manually edited `~/.claude/settings.json` inside a stateful worker, those edits are overwritten on resume. Acceptable; settings are operator-managed.
+- If a user has manually edited `~/.claude/settings.json` inside a stateful worker, those edits are overwritten on restart. Acceptable; settings are operator-managed.
 
 ### Decision 6: Mode is immutable
 
@@ -115,27 +115,27 @@ This change introduces a **stateful** mode opt-in: the backend provisions a per-
 - **[Risk] `fsGroup` doesn't match container UID on some storage classes** → some storage classes (e.g., NFS) ignore `fsGroup`. **Mitigation:** Minikube's `standard` (hostPath) honours it. Document the requirement in the Helm `values.yaml` comment.
 - **[Risk] Resume race with HTTPRoute / Service** → tearing down and re-creating the Service may leave the `HTTPRoute` momentarily pointing at a missing backend. **Mitigation:** transient 503s are acceptable; the frontend already retries; the gap is < 1 second in practice.
 - **[Risk] Stateful workers accumulate disk over time** → `git pull`, `npm install`, etc. inside `/home/node/jarvis` grow the PVC. **Mitigation:** out of scope; users can manually delete and recreate workers; future work could add a "reset workspace" action.
-- **[Risk] Concurrent resume on the same PVC** → `ReadWriteOnce` would block a second pod; if a stale paused pod has not finished terminating, the new pod stays `Pending`. **Mitigation:** the pause endpoint waits for pod deletion (or marks the worker `paused` only after `delete_namespaced_pod` returns); the resume endpoint refuses to act on a worker whose pod is still in `Terminating`.
+- **[Risk] Concurrent resume on the same PVC** → `ReadWriteOnce` would block a second pod; if a stale stopped pod has not finished terminating, the new pod stays `Pending`. **Mitigation:** the stop endpoint waits for pod deletion (or marks the worker `stopped` only after `delete_namespaced_pod` returns); the restart endpoint refuses to act on a worker whose pod is still in `Terminating`.
 - **[Trade-off] We persist `~/.claude/`, including `~/.claude/skills/`** → this means the JAAR skill registry effectively becomes unauthoritative for stateful workers (we won't re-pull). This is intentional (avoid clobbering skill edits, keep resume fast) and lives in the modified `skill-worker-integration` spec.
 
 ## Migration Plan
 
 1. **Backend & worker code shipped together** (single PR / single Helm release):
-   - Alembic migration: add `mode` column with default `ephemeral`; expand `worker_state` enum to include `paused` and `error`. Existing rows are unaffected.
+   - Alembic migration: add `mode` column with default `ephemeral`; expand `worker_state` enum to include `stopped` and `error`. Existing rows are unaffected.
    - Roll out the new backend and worker images. Existing workers (if any) are ephemeral by default and behave identically.
 2. **Helm chart bump**:
    - `helm/jarvis/values.yaml`: new `worker.persistence` block.
    - `helm/jarvis/templates/worker-role.yaml`: new RBAC verbs for `persistentvolumeclaims`. ArgoCD sync applies them.
    - `helm/jarvis/templates/backend-configmap.yaml`: new env vars `WORKER_PVC_SIZE`, `WORKER_PVC_STORAGE_CLASS`.
 3. **Rollback**:
-   - The `mode` column and the new enum values are additive; rollback to the previous backend leaves them unused (the older code never reads `mode` and never writes `paused`/`error`). No data migration is required to roll back.
+   - The `mode` column and the new enum values are additive; rollback to the previous backend leaves them unused (the older code never reads `mode` and never writes `stopped`/`error`). No data migration is required to roll back.
    - Stateful workers created before rollback would lose their pause/resume affordances on the older backend, but their PVCs remain (we don't delete them on rollback). After rollback, the old `DELETE` handler does not delete PVCs; an operator may need to clean them up manually.
 4. **Validation**:
    - On a Minikube cluster, create a stateful worker, verify the PVC is bound, write a marker file in `/home/node/jarvis/.marker`, pause, resume, verify the marker is preserved and the worker pod sees the same Claude session UUID.
-   - Verify ephemeral worker creation, pause attempt (rejected), and delete (no PVC created or deleted).
+   - Verify ephemeral worker creation, stop attempt (rejected), and delete (no PVC created or deleted).
 
 ## Open Questions
 
-- **Should pause forcibly terminate the Claude process gracefully?** We currently rely on `kubectl delete pod` triggering SIGTERM with the default `terminationGracePeriodSeconds` (30s). Claude Code is not designed for graceful shutdown; the JSONL file might be left mid-write. We assume the JSONL is self-healing across restarts (the next `--resume` ignores the trailing partial line). Validate this empirically during implementation.
-- **Should the backend reject pause if the worker has uncommitted git changes?** Probably not — the entire point is to preserve them. But we may want a UI hint.
+- **Should stop forcibly terminate the Claude process gracefully?** We currently rely on `kubectl delete pod` triggering SIGTERM with the default `terminationGracePeriodSeconds` (30s). Claude Code is not designed for graceful shutdown; the JSONL file might be left mid-write. We assume the JSONL is self-healing across restarts (the next `--resume` ignores the trailing partial line). Validate this empirically during implementation.
+- **Should the backend reject stop if the worker has uncommitted git changes?** Probably not — the entire point is to preserve them. But we may want a UI hint.
 - **Should the resume re-issue `git pull` for repositories whose remote has new commits?** No, by default. But a "Sync repos" button on the worker card may be useful future work.
