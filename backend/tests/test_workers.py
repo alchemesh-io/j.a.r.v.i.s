@@ -104,6 +104,7 @@ def test_get_worker_with_live_status(mock_k8s, client):
     task = _create_task(client).json()
     worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
 
+    mock_k8s.get_pod_phase.return_value = ("Running", None)
     mock_k8s.get_worker_pod_status.return_value = {"state": "working"}
     resp = client.get(f"/api/v1/workers/{worker['id']}")
     assert resp.status_code == 200
@@ -113,7 +114,7 @@ def test_get_worker_with_live_status(mock_k8s, client):
 
 
 @patch("app.routes.workers.k8s")
-def test_get_worker_pod_unreachable(mock_k8s, client):
+def test_get_worker_no_pod_marks_stopped(mock_k8s, client):
     mock_k8s.is_available.return_value = False
     task = _create_task(client).json()
     worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
@@ -122,7 +123,9 @@ def test_get_worker_pod_unreachable(mock_k8s, client):
     mock_k8s.get_pod_phase.return_value = (None, None)
     resp = client.get(f"/api/v1/workers/{worker['id']}")
     assert resp.status_code == 200
-    assert resp.json()["pod_status"] == "unreachable"
+    data = resp.json()
+    assert data["state"] == "stopped"
+    assert data["pod_status"] == "missing"
 
 
 @patch("app.routes.workers.k8s")

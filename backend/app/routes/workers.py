@@ -131,9 +131,33 @@ def list_workers(db: Session = Depends(get_db)):
 def get_worker(worker_id: str, db: Session = Depends(get_db)):
     worker = _load_worker(db, worker_id)
 
-    if worker.state in (WorkerState.archived, WorkerState.done, WorkerState.stopped):
+    # Archived is fully terminal — never re-probe.
+    if worker.state == WorkerState.archived:
         return _worker_to_response(worker)
 
+    phase, exit_code = k8s.get_pod_phase(worker_id)
+
+    if phase is None:
+        # No pod exists. For stateful workers the PVC is still around — the worker is stopped.
+        # For ephemeral workers the same is true (pod gone = nothing to do); we still call it stopped.
+        if worker.state != WorkerState.stopped:
+            worker.state = WorkerState.stopped
+            db.flush()
+        return _worker_to_response(worker, pod_status="missing")
+
+    if phase == "Failed" or (exit_code is not None and exit_code != 0):
+        if worker.state != WorkerState.error:
+            worker.state = WorkerState.error
+            db.flush()
+        return _worker_to_response(worker, effective_state=WorkerState.error, pod_status="failed")
+
+    if phase == "Succeeded":
+        if worker.state != WorkerState.done:
+            worker.state = WorkerState.done
+            db.flush()
+        return _worker_to_response(worker, effective_state=WorkerState.done, pod_status="succeeded")
+
+    # Pod is Pending or Running — try the in-pod status server for finer-grained state.
     pod_status_data = k8s.get_worker_pod_status(worker_id)
     if pod_status_data:
         live_state_str = pod_status_data.get("state")
@@ -141,17 +165,10 @@ def get_worker(worker_id: str, db: Session = Depends(get_db)):
             effective = WorkerState(live_state_str)
         except ValueError:
             effective = worker.state
-        return _worker_to_response(worker, effective_state=effective)
+        return _worker_to_response(worker, effective_state=effective, pod_status=phase.lower())
 
-    # Status server unreachable — check whether the pod itself failed.
-    phase, exit_code = k8s.get_pod_phase(worker_id)
-    if phase == "Failed" or (exit_code is not None and exit_code != 0):
-        if worker.state != WorkerState.error:
-            worker.state = WorkerState.error
-            db.flush()
-        return _worker_to_response(worker, effective_state=WorkerState.error, pod_status="failed")
-
-    return _worker_to_response(worker, pod_status="unreachable")
+    # Pod is up but status server hasn't started reporting yet (initial boot).
+    return _worker_to_response(worker, pod_status=phase.lower())
 
 
 @router.get("/{worker_id}/vscode-uri")

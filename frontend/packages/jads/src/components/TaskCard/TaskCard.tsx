@@ -48,7 +48,6 @@ export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   worker?: WorkerInfo | null;
   onPlayClick?: () => void;
   onWorkerClick?: () => void;
-  onWorkerArchive?: () => void;
   onWorkerDelete?: () => void;
   onWorkerStop?: () => void;
   onWorkerRestart?: () => void;
@@ -119,12 +118,6 @@ const KIND_COLORS: Record<string, string> = {
   side_quest: '#06b6d4',
 };
 
-const StopIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <rect x="3" y="3" width="10" height="10" rx="1" fill="currentColor" />
-  </svg>
-);
-
 const DropIcon = () => (
   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M3 4H13M6 4V3H10V4M5 4V13H11V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -184,7 +177,6 @@ export function TaskCard({
   worker,
   onPlayClick,
   onWorkerClick,
-  onWorkerArchive,
   onWorkerDelete,
   onWorkerStop,
   onWorkerRestart,
@@ -250,19 +242,14 @@ export function TaskCard({
           {worker && (
             <div className="jads-task-card__worker-row">
               <div className="jads-task-card__worker-controls">
-                {onWorkerStop && worker.mode === 'stateful' && worker.effective_state !== 'stopped' && worker.effective_state !== 'archived' && (
+                {onWorkerStop && worker.mode === 'stateful' && (worker.effective_state === 'working' || worker.effective_state === 'waiting_for_human' || worker.effective_state === 'initialized') && (
                   <IconButton aria-label="Stop worker" variant="ghost" size="sm" onClick={onWorkerStop} className="jads-task-card__worker-stop-btn">
                     <StopWorkerIcon />
                   </IconButton>
                 )}
-                {onWorkerRestart && worker.mode === 'stateful' && worker.effective_state !== 'archived' && (
+                {onWorkerRestart && worker.mode === 'stateful' && (worker.effective_state === 'stopped' || worker.effective_state === 'error' || worker.effective_state === 'done') && (
                   <IconButton aria-label="Restart worker" variant="ghost" size="sm" onClick={onWorkerRestart} className="jads-task-card__worker-restart">
                     <RestartIcon />
-                  </IconButton>
-                )}
-                {onWorkerArchive && worker.effective_state !== 'archived' && (
-                  <IconButton aria-label="Archive worker" variant="ghost" size="sm" onClick={onWorkerArchive} className="jads-task-card__worker-stop">
-                    <StopIcon />
                   </IconButton>
                 )}
                 {onWorkerDelete && (

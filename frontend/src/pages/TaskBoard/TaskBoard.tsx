@@ -47,7 +47,6 @@ import {
   addKeyFocusToTask,
   removeKeyFocusFromTask,
   createWorker,
-  updateWorker,
   deleteWorker,
   stopWorker,
   restartWorker,
@@ -283,7 +282,6 @@ function SortableTaskCard({
   onBlockers,
   onPlayClick,
   onWorkerClick,
-  onWorkerArchive,
   onWorkerDelete,
   onWorkerStop,
   onWorkerRestart,
@@ -299,7 +297,6 @@ function SortableTaskCard({
   onBlockers: () => void;
   onPlayClick?: () => void;
   onWorkerClick?: () => void;
-  onWorkerArchive?: () => void;
   onWorkerDelete?: () => void;
   onWorkerStop?: () => void;
   onWorkerRestart?: () => void;
@@ -339,7 +336,6 @@ function SortableTaskCard({
         worker={task.worker ?? undefined}
         onPlayClick={onPlayClick}
         onWorkerClick={onWorkerClick}
-        onWorkerArchive={onWorkerArchive}
         onWorkerDelete={onWorkerDelete}
         onWorkerStop={onWorkerStop}
         onWorkerRestart={onWorkerRestart}
@@ -453,11 +449,6 @@ export default function TaskBoard() {
       setWorkerSkills([]);
       setWorkerMode('ephemeral');
     },
-  });
-
-  const archiveWorkerMutation = useMutation({
-    mutationFn: (workerId: string) => updateWorker(workerId, { state: 'archived' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
   const deleteWorkerMutation = useMutation({
@@ -1771,7 +1762,6 @@ export default function TaskBoard() {
                   onWorkerClick={task.worker ? () => {
                     getWorkerVscodeUri(task.worker!.id).then(({ uri }) => { window.location.href = uri; });
                   } : undefined}
-                  onWorkerArchive={task.worker && task.worker.effective_state !== 'archived' ? () => archiveWorkerMutation.mutate(task.worker!.id) : undefined}
                   onWorkerDelete={task.worker ? () => { if (confirm('Delete this worker and its Kubernetes resources?')) deleteWorkerMutation.mutate(task.worker!.id); } : undefined}
                   onWorkerStop={task.worker ? () => stopWorkerMutation.mutate(task.worker!.id) : undefined}
                   onWorkerRestart={task.worker ? () => restartWorkerMutation.mutate(task.worker!.id) : undefined}

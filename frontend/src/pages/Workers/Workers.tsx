@@ -7,7 +7,6 @@ import {
   listSkills,
   listTasks,
   createWorker,
-  updateWorker,
   deleteWorker,
   stopWorker,
   restartWorker,
@@ -116,11 +115,6 @@ export default function Workers() {
     onError: (err: Error) => setCreateError(err.message),
   });
 
-  const archiveWorkerMutation = useMutation({
-    mutationFn: (workerId: string) => updateWorker(workerId, { state: 'archived' }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); queryClient.invalidateQueries({ queryKey: ['tasks'] }); },
-  });
-
   const deleteWorkerMutation = useMutation({
     mutationFn: deleteWorker,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); queryClient.invalidateQueries({ queryKey: ['tasks'] }); },
@@ -170,11 +164,14 @@ export default function Workers() {
   }, []);
 
   const availableTasks = tasks.filter((t: Task) => !t.worker);
-  const isActive = (s: string) => s !== 'archived' && s !== 'done' && s !== 'stopped' && s !== 'error';
+  // Pod-state-driven gating: Stop is for live pods; Restart is for missing/failed/done pods.
+  const POD_LIVE_STATES = new Set(['working', 'waiting_for_human', 'initialized']);
+  const POD_GONE_STATES = new Set(['stopped', 'error', 'done']);
   const canStop = (w: Worker) =>
-    w.mode === 'stateful' && w.effective_state !== 'stopped' && w.effective_state !== 'archived';
+    w.mode === 'stateful' && POD_LIVE_STATES.has(w.effective_state);
   const canRestart = (w: Worker) =>
-    w.mode === 'stateful' && w.effective_state !== 'archived';
+    w.mode === 'stateful' && POD_GONE_STATES.has(w.effective_state);
+  const isActive = (s: string) => POD_LIVE_STATES.has(s);
 
   const visibleWorkers = useMemo(() => {
     if (filterState === 'all') return workers;
@@ -242,11 +239,6 @@ export default function Workers() {
                     {canRestart(worker) && (
                       <IconButton aria-label="Restart worker" variant="ghost" size="sm" onClick={() => restartWorkerMutation.mutate(worker.id)} className="worker-card__restart">
                         <RestartIcon />
-                      </IconButton>
-                    )}
-                    {isActive(worker.effective_state) && (
-                      <IconButton aria-label="Archive worker" variant="ghost" size="sm" onClick={() => archiveWorkerMutation.mutate(worker.id)} className="worker-card__archive">
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 4h12v3H2zM3 7v6h10V7" stroke="currentColor" strokeWidth="1.5" fill="none" /></svg>
                       </IconButton>
                     )}
                     <IconButton aria-label="Delete worker" variant="ghost" size="sm" onClick={() => { if (confirm('Delete this worker and its resources?')) deleteWorkerMutation.mutate(worker.id); }} className="worker-card__delete-btn">
