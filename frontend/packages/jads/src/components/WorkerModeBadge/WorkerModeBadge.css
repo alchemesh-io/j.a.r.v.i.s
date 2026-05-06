@@ -1,0 +1,21 @@
+.worker-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.worker-mode-badge--ephemeral {
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.worker-mode-badge--stateful {
+  color: var(--color-accent-violet, #a78bfa);
+}

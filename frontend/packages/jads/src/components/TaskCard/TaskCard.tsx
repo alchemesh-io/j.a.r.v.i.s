@@ -9,11 +9,21 @@ export interface KeyFocusBadge {
   kind: 'delivery' | 'learning' | 'support' | 'operational' | 'side_quest';
 }
 
-export type WorkerEffectiveState = 'initialized' | 'working' | 'waiting_for_human' | 'done' | 'archived';
+export type WorkerEffectiveState =
+  | 'initialized'
+  | 'working'
+  | 'waiting_for_human'
+  | 'done'
+  | 'archived'
+  | 'stopped'
+  | 'error';
+
+export type WorkerMode = 'ephemeral' | 'stateful';
 
 export interface WorkerInfo {
   id: string;
   effective_state: WorkerEffectiveState;
+  mode?: WorkerMode;
 }
 
 export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
@@ -38,8 +48,9 @@ export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   worker?: WorkerInfo | null;
   onPlayClick?: () => void;
   onWorkerClick?: () => void;
-  onWorkerArchive?: () => void;
   onWorkerDelete?: () => void;
+  onWorkerStop?: () => void;
+  onWorkerRestart?: () => void;
 }
 
 const EditIcon = () => (
@@ -107,12 +118,6 @@ const KIND_COLORS: Record<string, string> = {
   side_quest: '#06b6d4',
 };
 
-const StopIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <rect x="3" y="3" width="10" height="10" rx="1" fill="currentColor" />
-  </svg>
-);
-
 const DropIcon = () => (
   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M3 4H13M6 4V3H10V4M5 4V13H11V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -122,6 +127,19 @@ const DropIcon = () => (
 const PlayIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M5 3L13 8L5 13V3Z" fill="currentColor" />
+  </svg>
+);
+
+const StopWorkerIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <rect x="3" y="3" width="10" height="10" rx="1" />
+  </svg>
+);
+
+const RestartIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 3v4h4" />
+    <path d="M3 7a5 5 0 1 1 1.5 3.5" />
   </svg>
 );
 
@@ -159,8 +177,9 @@ export function TaskCard({
   worker,
   onPlayClick,
   onWorkerClick,
-  onWorkerArchive,
   onWorkerDelete,
+  onWorkerStop,
+  onWorkerRestart,
   className = '',
   ...props
 }: TaskCardProps) {
@@ -223,9 +242,14 @@ export function TaskCard({
           {worker && (
             <div className="jads-task-card__worker-row">
               <div className="jads-task-card__worker-controls">
-                {onWorkerArchive && worker.effective_state !== 'archived' && worker.effective_state !== 'done' && (
-                  <IconButton aria-label="End worker" variant="ghost" size="sm" onClick={onWorkerArchive} className="jads-task-card__worker-stop">
-                    <StopIcon />
+                {onWorkerStop && worker.mode === 'stateful' && (worker.effective_state === 'working' || worker.effective_state === 'waiting_for_human' || worker.effective_state === 'initialized') && (
+                  <IconButton aria-label="Stop worker" variant="ghost" size="sm" onClick={onWorkerStop} className="jads-task-card__worker-stop-btn">
+                    <StopWorkerIcon />
+                  </IconButton>
+                )}
+                {onWorkerRestart && worker.mode === 'stateful' && (worker.effective_state === 'stopped' || worker.effective_state === 'error' || worker.effective_state === 'done') && (
+                  <IconButton aria-label="Restart worker" variant="ghost" size="sm" onClick={onWorkerRestart} className="jads-task-card__worker-restart">
+                    <RestartIcon />
                   </IconButton>
                 )}
                 {onWorkerDelete && (

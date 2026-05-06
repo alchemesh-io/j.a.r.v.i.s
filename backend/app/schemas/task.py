@@ -2,7 +2,7 @@ import datetime
 
 from pydantic import BaseModel
 
-from app.models.enums import KeyFocusKind, SourceType, TaskStatus, TaskType, WorkerState
+from app.models.enums import KeyFocusKind, SourceType, TaskStatus, TaskType, WorkerMode, WorkerState
 
 
 class TaskKeyFocusSummary(BaseModel):
@@ -17,6 +17,7 @@ class WorkerSummary(BaseModel):
     model_config = {"from_attributes": True}
 
     id: str
+    mode: WorkerMode
     state: WorkerState
     effective_state: WorkerState
 

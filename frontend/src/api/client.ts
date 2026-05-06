@@ -21,8 +21,16 @@ export type KeyFocusKind = 'delivery' | 'learning' | 'support' | 'operational' |
 export type KeyFocusStatus = 'in_progress' | 'succeed' | 'failed';
 export type KeyFocusFrequency = 'weekly' | 'quarterly';
 export type BlockerStatus = 'opened' | 'resolved';
-export type WorkerState = 'initialized' | 'working' | 'waiting_for_human' | 'done' | 'archived';
+export type WorkerState =
+  | 'initialized'
+  | 'working'
+  | 'waiting_for_human'
+  | 'done'
+  | 'archived'
+  | 'stopped'
+  | 'error';
 export type WorkerType = 'claude_code';
+export type WorkerMode = 'ephemeral' | 'stateful';
 
 export interface TaskKeyFocusSummary {
   id: number;
@@ -34,6 +42,7 @@ export interface WorkerSummary {
   id: string;
   state: WorkerState;
   effective_state: WorkerState;
+  mode?: WorkerMode;
 }
 
 export interface Task {
@@ -62,6 +71,7 @@ export interface Worker {
   id: string;
   task_id: number;
   type: WorkerType;
+  mode: WorkerMode;
   state: WorkerState;
   effective_state: WorkerState;
   pod_status: string | null;
@@ -466,8 +476,17 @@ export function createWorker(body: {
   repository_ids?: number[];
   skills?: { name: string; version: string }[];
   type?: WorkerType;
+  mode?: WorkerMode;
 }): Promise<Worker> {
   return request('/workers', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function stopWorker(id: string): Promise<Worker> {
+  return request(`/workers/${id}/stop`, { method: 'POST' });
+}
+
+export function restartWorker(id: string): Promise<Worker> {
+  return request(`/workers/${id}/restart`, { method: 'POST' });
 }
 
 export function listWorkers(): Promise<Worker[]> {

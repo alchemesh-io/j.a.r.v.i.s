@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.enums import WorkerState, WorkerType
+from app.models.enums import WorkerMode, WorkerState, WorkerType
 
 
 class Worker(Base):
@@ -16,6 +16,9 @@ class Worker(Base):
     )
     type: Mapped[WorkerType] = mapped_column(
         sa.Enum(WorkerType), nullable=False, default=WorkerType.claude_code
+    )
+    mode: Mapped[WorkerMode] = mapped_column(
+        sa.Enum(WorkerMode), nullable=False, default=WorkerMode.ephemeral, server_default=WorkerMode.ephemeral.value
     )
     state: Mapped[WorkerState] = mapped_column(
         sa.Enum(WorkerState), nullable=False, default=WorkerState.initialized

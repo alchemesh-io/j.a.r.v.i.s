@@ -47,8 +47,9 @@ import {
   addKeyFocusToTask,
   removeKeyFocusFromTask,
   createWorker,
-  updateWorker,
   deleteWorker,
+  stopWorker,
+  restartWorker,
   listRepositories,
   listSkills,
   getWorkerVscodeUri,
@@ -59,6 +60,7 @@ import {
   type KeyFocus,
   type Repository,
   type SkillRef,
+  type WorkerMode,
 } from '../../api/client';
 import { NotePanel } from './NotePanel';
 import { BlockerPanel } from './BlockerPanel';
@@ -280,8 +282,9 @@ function SortableTaskCard({
   onBlockers,
   onPlayClick,
   onWorkerClick,
-  onWorkerArchive,
   onWorkerDelete,
+  onWorkerStop,
+  onWorkerRestart,
 }: {
   task: Task;
   jiraProjectUrl?: string;
@@ -294,8 +297,9 @@ function SortableTaskCard({
   onBlockers: () => void;
   onPlayClick?: () => void;
   onWorkerClick?: () => void;
-  onWorkerArchive?: () => void;
   onWorkerDelete?: () => void;
+  onWorkerStop?: () => void;
+  onWorkerRestart?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
@@ -332,8 +336,9 @@ function SortableTaskCard({
         worker={task.worker ?? undefined}
         onPlayClick={onPlayClick}
         onWorkerClick={onWorkerClick}
-        onWorkerArchive={onWorkerArchive}
         onWorkerDelete={onWorkerDelete}
+        onWorkerStop={onWorkerStop}
+        onWorkerRestart={onWorkerRestart}
       />
     </div>
   );
@@ -392,6 +397,7 @@ export default function TaskBoard() {
   const [workerCreateTask, setWorkerCreateTask] = useState<Task | null>(null);
   const [workerRepoIds, setWorkerRepoIds] = useState<number[]>([]);
   const [workerSkills, setWorkerSkills] = useState<SkillRef[]>([]);
+  const [workerMode, setWorkerMode] = useState<WorkerMode>('ephemeral');
 
   const { data: repositories = [] } = useQuery({
     queryKey: ['repositories'],
@@ -441,16 +447,22 @@ export default function TaskBoard() {
       setWorkerCreateTask(null);
       setWorkerRepoIds([]);
       setWorkerSkills([]);
+      setWorkerMode('ephemeral');
     },
-  });
-
-  const archiveWorkerMutation = useMutation({
-    mutationFn: (workerId: string) => updateWorker(workerId, { state: 'archived' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
   const deleteWorkerMutation = useMutation({
     mutationFn: deleteWorker,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+
+  const stopWorkerMutation = useMutation({
+    mutationFn: stopWorker,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+
+  const restartWorkerMutation = useMutation({
+    mutationFn: restartWorker,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
@@ -1750,8 +1762,9 @@ export default function TaskBoard() {
                   onWorkerClick={task.worker ? () => {
                     getWorkerVscodeUri(task.worker!.id).then(({ uri }) => { window.location.href = uri; });
                   } : undefined}
-                  onWorkerArchive={task.worker && task.worker.effective_state !== 'archived' ? () => archiveWorkerMutation.mutate(task.worker!.id) : undefined}
                   onWorkerDelete={task.worker ? () => { if (confirm('Delete this worker and its Kubernetes resources?')) deleteWorkerMutation.mutate(task.worker!.id); } : undefined}
+                  onWorkerStop={task.worker ? () => stopWorkerMutation.mutate(task.worker!.id) : undefined}
+                  onWorkerRestart={task.worker ? () => restartWorkerMutation.mutate(task.worker!.id) : undefined}
                 />
               ))}
               {visibleTasks.length === 0 && (
@@ -1789,9 +1802,34 @@ export default function TaskBoard() {
 
       {/* Worker creation dialog from task card */}
       {workerCreateTask && (
-        <div className="task-board__confirm-overlay" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); }}>
+        <div className="task-board__confirm-overlay" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); setWorkerMode('ephemeral');}}>
           <div className="task-board__confirm-dialog" onClick={(e) => e.stopPropagation()}>
             <p>Create worker for <strong>{workerCreateTask.title}</strong>?</p>
+            <div className="task-board__worker-mode-picker">
+              <span className="task-board__worker-repo-label">
+                Mode
+                <span
+                  className="task-board__worker-mode-help"
+                  title="Stateful workers persist /home/node on a per-worker PVC, so cloned repos and Claude sessions survive stop/restart and pod failures. Ephemeral workers lose all data when the pod stops."
+                >
+                  ⓘ
+                </span>
+              </span>
+              <div className="task-board__worker-mode-toggle" role="radiogroup" aria-label="Worker mode">
+                {(['ephemeral', 'stateful'] as WorkerMode[]).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={workerMode === m}
+                    className={`task-board__worker-mode-option${workerMode === m ? ' task-board__worker-mode-option--selected' : ''}`}
+                    onClick={() => setWorkerMode(m)}
+                  >
+                    {m === 'stateful' ? 'Stateful' : 'Ephemeral'}
+                  </button>
+                ))}
+              </div>
+            </div>
             {repositories.length > 0 && (
               <div className="task-board__worker-repo-picker">
                 <p className="task-board__worker-repo-label">Repositories:</p>
@@ -1851,10 +1889,10 @@ export default function TaskBoard() {
               </div>
             )}
             <div className="task-board__confirm-actions">
-              <Button onClick={() => createWorkerMutation.mutate({ task_id: workerCreateTask.id, repository_ids: workerRepoIds, skills: workerSkills.length > 0 ? workerSkills : undefined })}>
+              <Button onClick={() => createWorkerMutation.mutate({ task_id: workerCreateTask.id, repository_ids: workerRepoIds, skills: workerSkills.length > 0 ? workerSkills : undefined, mode: workerMode })}>
                 Create Worker
               </Button>
-              <Button variant="ghost" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); }}>
+              <Button variant="ghost" onClick={() => { setWorkerCreateTask(null); setWorkerRepoIds([]); setWorkerSkills([]); setWorkerMode('ephemeral');}}>
                 Cancel
               </Button>
             </div>

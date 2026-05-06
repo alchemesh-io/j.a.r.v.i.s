@@ -306,6 +306,18 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
   ```
 - When adding a new artifact: create a subfolder under the appropriate `artifacts/<type>/` directory with a `manifest.yaml`, then register it with `arctl`
 
+### Worker image
+
+- Workers run in two modes: `ephemeral` (default — no persistence, all data lost on pod stop) and `stateful` (PVC mounted at `/home/node` so cloned repos, Claude Code session JSONL under `~/.claude/projects/`, and pulled skills under `~/.claude/skills/` survive pod failures and explicit pause/resume)
+- Mode is set at worker creation (`POST /api/v1/workers` body field `mode`) and is immutable
+- Stateful workers expose two extra REST actions:
+  - `POST /api/v1/workers/{id}/stop` — deletes pod + service, keeps PVC; transitions state to `stopped`. Valid from any state except `archived`
+  - `POST /api/v1/workers/{id}/restart` — re-creates pod + service against the existing PVC. Valid from any state except `archived`; if a pod is still running it is deleted first
+- `archived` is the only terminal state; every other state SHALL be restartable via the `/restart` endpoint
+- The entrypoint is idempotent: it skips `git clone` when `<repo>/.git` already exists and skips `arctl skill pull` when `~/.claude/skills/<name>/SKILL.md` is present. ConfigMap-sourced settings (`policy-limits.json`, `remote-settings.json`, `settings.json`, `~/.claude.json`) are re-applied on every start so cluster-side updates take effect on resume
+- Pod failures (phase `Failed` or non-zero container exit) are mapped to DB state `error` by `get_worker` polling. Stateful workers in `error` can be resumed; ephemeral workers in `error` are terminal
+- PVC sizing: `worker.persistence.size` (default `2Gi`), `worker.persistence.storageClass` (default `standard` for Minikube). Storage class MUST honour `fsGroup` (1000) for the volume to be writable by the `node` user
+
 ### Infrastructure
 
 - ArgoCD renders Helm charts internally — never run `helm install/upgrade` directly
@@ -330,7 +342,7 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
 | **JAAR + PostgreSQL add ~512 MB RAM** | May require more Minikube memory | Bump with `MINIKUBE_MEMORY=12288` |
 | **Data persistence requires mount** | `minikube mount` for `.data/` must stay running | `make cluster-status` shows mount health; data survives `minikube delete` |
 | **Host-based routing requires `/etc/hosts`** | `*.jarvis.io` must resolve to gateway IP | Add entries for `main.jarvis.io`, `mcp.jarvis.io`, `jaar.jarvis.io`, `jaac.jarvis.io` (or use dnsmasq for wildcard) |
-| **Worker pods consume significant resources** | Each worker pod runs Claude Code + UI + status server (~512MB–1GB RAM) | Set resource requests/limits via Helm values; limit concurrent workers |
+| **Worker pods consume significant resources** | Each worker pod runs Claude Code + UI + status server (~512MB–1GB RAM); stateful workers add a per-worker PVC (default 2 GiB) | Set resource requests/limits via Helm values; tune `worker.persistence.size` for stateful workers; archive workers to release the PVC |
 | **Dynamic HTTPRoutes managed outside ArgoCD** | Worker HTTPRoutes aren't managed by ArgoCD sync | Worker deletion explicitly removes HTTPRoutes; orphan cleanup can be added later |
 | **Hook-based state reporting has 3s latency** | Worker state changes are pushed to the backend every 3 seconds by the status server, not in real-time | Acceptable for UI updates combined with 5s frontend polling; total worst-case latency is ~8s |
 | **Claude Code version pinned at 2.1.104** | Worker image must be rebuilt to upgrade Claude Code | Pin prevents unexpected breaking changes; bump version in `worker/Dockerfile` and rebuild |

@@ -213,6 +213,14 @@
   background: rgba(0, 212, 255, 0.12);
 }
 
+/* Worker creation mode picker */
+.task-board__worker-mode-picker { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.task-board__worker-mode-help { margin-left: 6px; color: #94a3b8; font-size: 0.85em; cursor: help; }
+.task-board__worker-mode-toggle { display: inline-flex; border: 1px solid var(--color-border, #2d3748); border-radius: 8px; overflow: hidden; background: var(--color-bg, #0a0e1a); }
+.task-board__worker-mode-option { padding: 6px 14px; background: transparent; border: none; color: #94a3b8; font-size: 0.85rem; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.task-board__worker-mode-option:hover { color: #e2e8f0; }
+.task-board__worker-mode-option--selected { background: rgba(167, 139, 250, 0.15); color: #a78bfa; }
+
 /* Worker creation repo picker */
 .task-board__worker-repo-picker { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; max-height: 200px; overflow-y: auto; }
 .task-board__worker-repo-label { font-size: 0.85rem; color: #94a3b8; margin-bottom: 6px; }

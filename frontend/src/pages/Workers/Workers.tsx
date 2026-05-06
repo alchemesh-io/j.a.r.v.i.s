@@ -1,16 +1,18 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, IconButton, WorkerBrain } from '@jarvis/jads';
+import { Button, IconButton, WorkerBrain, WorkerModeBadge } from '@jarvis/jads';
 import {
   listWorkers,
   listRepositories,
   listSkills,
   listTasks,
   createWorker,
-  updateWorker,
   deleteWorker,
+  stopWorker,
+  restartWorker,
   getWorkerVscodeUri,
   type Worker,
+  type WorkerMode,
   type Repository,
   type Task,
   type SkillRef,
@@ -54,9 +56,24 @@ const STATE_FILTER_OPTIONS: { value: string; label: string; color: string }[] = 
   { value: 'working', label: 'Active', color: '#3b82f6' },
   { value: 'waiting_for_human', label: 'Waiting', color: '#ef4444' },
   { value: 'initialized', label: 'Init', color: '#6b7280' },
+  { value: 'stopped', label: 'Stopped', color: '#a78bfa' },
+  { value: 'error', label: 'Error', color: '#dc2626' },
   { value: 'done', label: 'Done', color: '#10b981' },
   { value: 'archived', label: 'Off', color: '#374151' },
 ];
+
+const StopWorkerIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <rect x="3" y="3" width="10" height="10" rx="1" />
+  </svg>
+);
+
+const RestartIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 3v4h4" />
+    <path d="M3 7a5 5 0 1 1 1.5 3.5" />
+  </svg>
+);
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -80,7 +97,17 @@ export default function Workers() {
   const [selectedTaskId, setSelectedTaskId] = useState<number | ''>('');
   const [selectedRepoIds, setSelectedRepoIds] = useState<number[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<SkillRef[]>([]);
+  const [selectedMode, setSelectedMode] = useState<WorkerMode>('ephemeral');
   const [createError, setCreateError] = useState('');
+
+  const resetCreateForm = useCallback(() => {
+    setShowCreate(false);
+    setSelectedTaskId('');
+    setSelectedRepoIds([]);
+    setSelectedSkills([]);
+    setSelectedMode('ephemeral');
+    setCreateError('');
+  }, []);
 
   const createWorkerMutation = useMutation({
     mutationFn: createWorker,
@@ -88,17 +115,20 @@ export default function Workers() {
     onError: (err: Error) => setCreateError(err.message),
   });
 
-  const archiveWorkerMutation = useMutation({
-    mutationFn: (workerId: string) => updateWorker(workerId, { state: 'archived' }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); queryClient.invalidateQueries({ queryKey: ['tasks'] }); },
-  });
-
   const deleteWorkerMutation = useMutation({
     mutationFn: deleteWorker,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); queryClient.invalidateQueries({ queryKey: ['tasks'] }); },
   });
 
-  const resetCreateForm = useCallback(() => { setShowCreate(false); setSelectedTaskId(''); setSelectedRepoIds([]); setSelectedSkills([]); setCreateError(''); }, []);
+  const stopWorkerMutation = useMutation({
+    mutationFn: stopWorker,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); queryClient.invalidateQueries({ queryKey: ['tasks'] }); },
+  });
+
+  const restartWorkerMutation = useMutation({
+    mutationFn: restartWorker,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); queryClient.invalidateQueries({ queryKey: ['tasks'] }); },
+  });
 
   const toggleRepoId = useCallback((id: number) => {
     setSelectedRepoIds((prev) => prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]);
@@ -134,7 +164,14 @@ export default function Workers() {
   }, []);
 
   const availableTasks = tasks.filter((t: Task) => !t.worker);
-  const isActive = (s: string) => s !== 'archived' && s !== 'done';
+  // Pod-state-driven gating: Stop is for live pods; Restart is for missing/failed/done pods.
+  const POD_LIVE_STATES = new Set(['working', 'waiting_for_human', 'initialized']);
+  const POD_GONE_STATES = new Set(['stopped', 'error', 'done']);
+  const canStop = (w: Worker) =>
+    w.mode === 'stateful' && POD_LIVE_STATES.has(w.effective_state);
+  const canRestart = (w: Worker) =>
+    w.mode === 'stateful' && POD_GONE_STATES.has(w.effective_state);
+  const isActive = (s: string) => POD_LIVE_STATES.has(s);
 
   const visibleWorkers = useMemo(() => {
     if (filterState === 'all') return workers;
@@ -186,14 +223,22 @@ export default function Workers() {
                     {task?.source_id ? `[${task.source_id}] ` : ''}{task?.title ?? `Task #${worker.task_id}`}
                   </h3>
                 </div>
-                <span className="worker-card__type-badge">{worker.type.replace('_', ' ')}</span>
+                <div className="worker-card__badge-row">
+                  <span className="worker-card__type-badge">{worker.type.replace('_', ' ')}</span>
+                  <WorkerModeBadge mode={worker.mode} className="worker-card__mode-badge" />
+                </div>
 
                 {/* Brain centered */}
                 <div className="worker-card__brain-row">
                   <div className="worker-card__brain-controls">
-                    {isActive(worker.effective_state) && (
-                      <IconButton aria-label="Stop worker" variant="ghost" size="sm" onClick={() => archiveWorkerMutation.mutate(worker.id)} className="worker-card__stop">
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="3" y="3" width="10" height="10" rx="1" fill="currentColor" /></svg>
+                    {canStop(worker) && (
+                      <IconButton aria-label="Stop worker" variant="ghost" size="sm" onClick={() => stopWorkerMutation.mutate(worker.id)} className="worker-card__stop">
+                        <StopWorkerIcon />
+                      </IconButton>
+                    )}
+                    {canRestart(worker) && (
+                      <IconButton aria-label="Restart worker" variant="ghost" size="sm" onClick={() => restartWorkerMutation.mutate(worker.id)} className="worker-card__restart">
+                        <RestartIcon />
                       </IconButton>
                     )}
                     <IconButton aria-label="Delete worker" variant="ghost" size="sm" onClick={() => { if (confirm('Delete this worker and its resources?')) deleteWorkerMutation.mutate(worker.id); }} className="worker-card__delete-btn">
@@ -261,6 +306,31 @@ export default function Workers() {
                   <option key={t.id} value={t.id}>{t.source_id ? `[${t.source_id}] ` : ''}{t.title}</option>
                 ))}
               </select>
+            </div>
+            <div className="workers__create-field">
+              <label>
+                Mode
+                <span
+                  className="workers__field-help"
+                  title="Stateful workers persist /home/node on a per-worker PVC, so cloned repos and Claude sessions survive stop/restart and pod failures. Ephemeral workers lose all data when the pod stops."
+                >
+                  ⓘ
+                </span>
+              </label>
+              <div className="workers__mode-toggle" role="radiogroup" aria-label="Worker mode">
+                {(['ephemeral', 'stateful'] as WorkerMode[]).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={selectedMode === m}
+                    className={`workers__mode-option${selectedMode === m ? ' workers__mode-option--selected' : ''}`}
+                    onClick={() => setSelectedMode(m)}
+                  >
+                    {m === 'stateful' ? 'Stateful' : 'Ephemeral'}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="workers__create-field">
               <label>Repositories</label>
@@ -331,7 +401,7 @@ export default function Workers() {
             {createError && <div className="workers__error">{createError}</div>}
             <div className="workers__create-actions">
               <Button onClick={resetCreateForm}>Cancel</Button>
-              <Button onClick={() => { if (selectedTaskId) createWorkerMutation.mutate({ task_id: selectedTaskId as number, repository_ids: selectedRepoIds, skills: selectedSkills.length > 0 ? selectedSkills : undefined }); }} disabled={!selectedTaskId}>Create Worker</Button>
+              <Button onClick={() => { if (selectedTaskId) createWorkerMutation.mutate({ task_id: selectedTaskId as number, repository_ids: selectedRepoIds, skills: selectedSkills.length > 0 ? selectedSkills : undefined, mode: selectedMode }); }} disabled={!selectedTaskId}>Create Worker</Button>
             </div>
           </div>
         </div>

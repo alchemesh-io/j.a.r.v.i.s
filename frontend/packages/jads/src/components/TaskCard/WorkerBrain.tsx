@@ -48,6 +48,8 @@ const STATE_COLORS: Record<string, string> = {
   waiting_for_human: '#ef4444',
   done: '#10b981',
   archived: '#374151',
+  stopped: '#a78bfa',
+  error: '#dc2626',
 };
 
 const STATE_LABELS: Record<string, string> = {
@@ -56,6 +58,8 @@ const STATE_LABELS: Record<string, string> = {
   waiting_for_human: 'WAIT',
   done: 'DONE',
   archived: 'OFF',
+  stopped: 'STOP',
+  error: 'ERROR',
 };
 
 export function WorkerBrain({ state }: { state: string }) {

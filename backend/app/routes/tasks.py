@@ -108,7 +108,11 @@ def update_task(task_id: int, body: TaskUpdate, db: Session = Depends(get_db)):
 
 @router.delete("/{task_id}", status_code=204)
 def delete_task(task_id: int, db: Session = Depends(get_db)):
+    from app.models.enums import WorkerMode
+
     task = _load_task(db, task_id)
     if task.worker:
-        k8s.delete_worker_resources(task.worker.id)
+        k8s.delete_worker_resources(
+            task.worker.id, delete_pvc=task.worker.mode == WorkerMode.stateful
+        )
     db.delete(task)

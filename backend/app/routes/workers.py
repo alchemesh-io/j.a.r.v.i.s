@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.models import Repository, Task, Worker
-from app.models.enums import WorkerState
+from app.models.enums import WorkerMode, WorkerState
 from app.schemas.worker import WorkerCreate, WorkerResponse, WorkerUpdate
 from app.services import k8s
 
@@ -19,6 +19,8 @@ router = APIRouter(prefix="/workers", tags=["workers"])
 WORKER_IMAGE = os.getenv("WORKER_IMAGE", "ghcr.io/alchemesh-io/jarvis-worker:latest")
 WORKER_IMAGE_PULL_POLICY = os.getenv("WORKER_IMAGE_PULL_POLICY", "IfNotPresent")
 KUBE_CONTEXT = os.getenv("KUBE_CONTEXT", "minikube")
+WORKER_PVC_SIZE = os.getenv("WORKER_PVC_SIZE", "2Gi")
+WORKER_PVC_STORAGE_CLASS = os.getenv("WORKER_PVC_STORAGE_CLASS", "standard")
 
 
 def _load_worker(db: Session, worker_id: str) -> Worker:
@@ -38,6 +40,7 @@ def _worker_to_response(worker: Worker, effective_state: WorkerState | None = No
         "id": worker.id,
         "task_id": worker.task_id,
         "type": worker.type,
+        "mode": worker.mode,
         "state": worker.state,
         "effective_state": effective_state or worker.state,
         "pod_status": pod_status,
@@ -47,6 +50,27 @@ def _worker_to_response(worker: Worker, effective_state: WorkerState | None = No
         "skills": worker.skills or [],
     }
     return WorkerResponse.model_validate(data)
+
+
+def _provision_worker_pod(worker: Worker) -> None:
+    """(Re)create the K8s pod + service for a worker. PVC is created if stateful and absent."""
+    if not k8s.is_available():
+        return
+    repo_data = [{"git_url": r.git_url, "branch": r.branch} for r in worker.repositories]
+    skill_data = list(worker.skills or [])
+    stateful = worker.mode == WorkerMode.stateful
+    if stateful:
+        k8s.create_worker_pvc(worker.id, WORKER_PVC_SIZE, WORKER_PVC_STORAGE_CLASS)
+    k8s.create_worker_pod(
+        worker.id,
+        worker.task_id,
+        WORKER_IMAGE,
+        repo_data,
+        skills=skill_data,
+        image_pull_policy=WORKER_IMAGE_PULL_POLICY,
+        stateful=stateful,
+    )
+    k8s.create_worker_service(worker.id)
 
 
 @router.post("", response_model=WorkerResponse, status_code=201)
@@ -74,6 +98,7 @@ def create_worker(body: WorkerCreate, db: Session = Depends(get_db)):
         id=worker_id,
         task_id=body.task_id,
         type=body.type,
+        mode=body.mode,
         state=WorkerState.initialized,
         skills=[s.model_dump() for s in body.skills],
     )
@@ -84,12 +109,11 @@ def create_worker(body: WorkerCreate, db: Session = Depends(get_db)):
 
     if k8s.is_available():
         try:
-            repo_data = [{"git_url": r.git_url, "branch": r.branch} for r in repos]
-            skill_data = [s.model_dump() for s in body.skills]
-            k8s.create_worker_pod(worker_id, body.task_id, WORKER_IMAGE, repo_data, skills=skill_data, image_pull_policy=WORKER_IMAGE_PULL_POLICY)
-            k8s.create_worker_service(worker_id)
+            _provision_worker_pod(worker)
         except Exception:
             logger.exception("Failed to create K8s resources for worker %s", worker_id)
+            # Roll back any partial K8s state so the operator isn't left with orphans.
+            k8s.delete_worker_resources(worker_id, delete_pvc=worker.mode == WorkerMode.stateful)
             raise HTTPException(status_code=503, detail="Failed to create worker Kubernetes resources")
 
     return _worker_to_response(worker)
@@ -107,9 +131,33 @@ def list_workers(db: Session = Depends(get_db)):
 def get_worker(worker_id: str, db: Session = Depends(get_db)):
     worker = _load_worker(db, worker_id)
 
-    if worker.state in (WorkerState.archived, WorkerState.done):
+    # Archived is fully terminal — never re-probe.
+    if worker.state == WorkerState.archived:
         return _worker_to_response(worker)
 
+    phase, exit_code = k8s.get_pod_phase(worker_id)
+
+    if phase is None:
+        # No pod exists. For stateful workers the PVC is still around — the worker is stopped.
+        # For ephemeral workers the same is true (pod gone = nothing to do); we still call it stopped.
+        if worker.state != WorkerState.stopped:
+            worker.state = WorkerState.stopped
+            db.flush()
+        return _worker_to_response(worker, pod_status="missing")
+
+    if phase == "Failed" or (exit_code is not None and exit_code != 0):
+        if worker.state != WorkerState.error:
+            worker.state = WorkerState.error
+            db.flush()
+        return _worker_to_response(worker, effective_state=WorkerState.error, pod_status="failed")
+
+    if phase == "Succeeded":
+        if worker.state != WorkerState.done:
+            worker.state = WorkerState.done
+            db.flush()
+        return _worker_to_response(worker, effective_state=WorkerState.done, pod_status="succeeded")
+
+    # Pod is Pending or Running — try the in-pod status server for finer-grained state.
     pod_status_data = k8s.get_worker_pod_status(worker_id)
     if pod_status_data:
         live_state_str = pod_status_data.get("state")
@@ -117,9 +165,10 @@ def get_worker(worker_id: str, db: Session = Depends(get_db)):
             effective = WorkerState(live_state_str)
         except ValueError:
             effective = worker.state
-        return _worker_to_response(worker, effective_state=effective)
+        return _worker_to_response(worker, effective_state=effective, pod_status=phase.lower())
 
-    return _worker_to_response(worker, pod_status="unreachable")
+    # Pod is up but status server hasn't started reporting yet (initial boot).
+    return _worker_to_response(worker, pod_status=phase.lower())
 
 
 @router.get("/{worker_id}/vscode-uri")
@@ -145,9 +194,75 @@ def update_worker(worker_id: str, body: WorkerUpdate, db: Session = Depends(get_
 
     if body.state is not None:
         if body.state == WorkerState.archived:
-            k8s.delete_worker_resources(worker_id)
+            k8s.delete_worker_resources(worker_id, delete_pvc=worker.mode == WorkerMode.stateful)
         worker.state = body.state
 
+    db.flush()
+    db.refresh(worker)
+    return _worker_to_response(worker)
+
+
+@router.post(
+    "/{worker_id}/stop",
+    response_model=WorkerResponse,
+    summary="Stop a stateful worker",
+    description=(
+        "Deletes the worker pod and service while keeping the PVC and DB row. "
+        "Only valid for stateful workers; ephemeral workers are rejected with HTTP 409. "
+        "Idempotent: stopping an already-stopped worker is a no-op."
+    ),
+)
+def stop_worker(worker_id: str, db: Session = Depends(get_db)):
+    worker = _load_worker(db, worker_id)
+
+    if worker.mode != WorkerMode.stateful:
+        raise HTTPException(status_code=409, detail="Cannot stop an ephemeral worker")
+
+    if worker.state == WorkerState.stopped:
+        return _worker_to_response(worker)
+
+    if worker.state == WorkerState.archived:
+        raise HTTPException(status_code=409, detail="Cannot stop an archived worker")
+
+    k8s.delete_worker_pod_only(worker_id)
+    k8s.delete_worker_service(worker_id)
+
+    worker.state = WorkerState.stopped
+    db.flush()
+    db.refresh(worker)
+    return _worker_to_response(worker)
+
+
+@router.post(
+    "/{worker_id}/restart",
+    response_model=WorkerResponse,
+    summary="Restart a stateful worker",
+    description=(
+        "Re-creates the worker pod and service attached to the existing PVC. "
+        "Valid for stateful workers in any state except 'archived'. "
+        "If a pod already exists it is deleted first."
+    ),
+)
+def restart_worker(worker_id: str, db: Session = Depends(get_db)):
+    worker = _load_worker(db, worker_id)
+
+    if worker.mode != WorkerMode.stateful:
+        raise HTTPException(status_code=409, detail="Cannot restart an ephemeral worker")
+
+    if worker.state == WorkerState.archived:
+        raise HTTPException(status_code=409, detail="Cannot restart an archived worker")
+
+    if k8s.is_available():
+        # Drop any existing pod/service so the new pod cleanly attaches to the PVC.
+        k8s.delete_worker_pod_only(worker_id)
+        k8s.delete_worker_service(worker_id)
+        try:
+            _provision_worker_pod(worker)
+        except Exception:
+            logger.exception("Failed to restart worker %s", worker_id)
+            raise HTTPException(status_code=503, detail="Failed to restart worker Kubernetes resources")
+
+    worker.state = WorkerState.initialized
     db.flush()
     db.refresh(worker)
     return _worker_to_response(worker)
@@ -156,5 +271,5 @@ def update_worker(worker_id: str, body: WorkerUpdate, db: Session = Depends(get_
 @router.delete("/{worker_id}", status_code=204)
 def delete_worker(worker_id: str, db: Session = Depends(get_db)):
     worker = _load_worker(db, worker_id)
-    k8s.delete_worker_resources(worker_id)
+    k8s.delete_worker_resources(worker_id, delete_pvc=worker.mode == WorkerMode.stateful)
     db.delete(worker)
