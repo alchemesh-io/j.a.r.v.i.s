@@ -17,8 +17,14 @@ DATA_DIR            := $(REPO_ROOT)/.data
 DATA_MOUNT_TARGET   := /mnt/jarvis-data
 GHCR_ORG            := alchemesh-io
 
+# Image publishing (make publish-images)
+GHCR_REGISTRY       := ghcr.io/$(GHCR_ORG)
+SBX_AR              := europe-west4-docker.pkg.dev/d-platform-raytflf9/sbx-architecture
+IMAGE_PLATFORM      := linux/amd64
+IMAGES              := jarvis-backend:./backend jarvis-frontend:./frontend jarvis:./artifacts/servers/jarvis jarvis-worker:./worker
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers sync-artifacts-skills db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp build-worker setup-worker-ssh sync-claude-config _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update _tls-secret
+
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local publish-images argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers sync-artifacts-skills db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp build-worker setup-worker-ssh sync-claude-config _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update _tls-secret
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -43,7 +49,7 @@ _check-prereqs:
 # Cluster lifecycle
 # ---------------------------------------------------------------------------
 
-## Start a local Minikube cluster with ArgoCD and minikube mount
+## Start a local Minikube cluster with ArgoCD and minikube mount (mounts are only needed for deploy-local and hostPath data persistence)
 cluster-up: _check-prereqs
 	@echo "==> Starting Minikube cluster (CPUs=$(MINIKUBE_CPUS), Memory=$(MINIKUBE_MEMORY)MB)..."
 	minikube start --cpus=$(MINIKUBE_CPUS) --memory=$(MINIKUBE_MEMORY) --driver=docker
@@ -101,7 +107,7 @@ cluster-status: _check-prereqs
 # Application deployment
 # ---------------------------------------------------------------------------
 
-## Pull latest published images from GHCR, load into Minikube, apply ArgoCD App CRs, hard sync
+## Pull latest published images from GHCR, load into Minikube, apply Git-sourced ArgoCD App CRs (no repo mount required), hard sync
 deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config setup-worker-ssh _helm-dep-update
 	@echo "==> Pulling latest images from GHCR..."
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
@@ -139,6 +145,30 @@ deploy-local: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets
 	@echo "==> Access via Istio ingress gateway:"
 	@echo "    minikube tunnel  (in a separate terminal)"
 	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
+
+## Build all images from the current checkout and push to GHCR + the sandbox
+## Artifact Registry (run from main). Prereqs: `docker login ghcr.io` (write:packages)
+## and `gcloud auth login` with artifactregistry.writer on the sandbox repo.
+publish-images:
+	@command -v docker >/dev/null || { echo "ERROR: docker not found"; exit 1; }
+	@command -v gcloud >/dev/null || { echo "ERROR: gcloud not found"; exit 1; }
+	$(eval IMAGE_TAG := $(shell git rev-parse --short HEAD))
+	@echo "==> Configuring Artifact Registry docker auth..."
+	gcloud auth configure-docker europe-west4-docker.pkg.dev --quiet
+	@echo "==> Building + pushing images (tag: $(IMAGE_TAG), platform: $(IMAGE_PLATFORM))..."
+	@for pair in $(IMAGES); do \
+		name=$${pair%%:*}; ctx=$${pair#*:}; \
+		echo "--> $$name ($$ctx)"; \
+		docker buildx build --platform $(IMAGE_PLATFORM) --push \
+			-t $(GHCR_REGISTRY)/$$name:$(IMAGE_TAG) \
+			-t $(GHCR_REGISTRY)/$$name:latest \
+			-t $(SBX_AR)/$$name:$(IMAGE_TAG) \
+			-t $(SBX_AR)/$$name:latest \
+			$$ctx || exit 1; \
+	done
+	@echo "==> Published (tag $(IMAGE_TAG) + latest) to:"
+	@echo "    $(GHCR_REGISTRY)/<image>"
+	@echo "    $(SBX_AR)/<image>"
 
 ## Delete the ArgoCD Application CRs (cascade deletes all managed resources)
 undeploy: _check-prereqs _db-backup-safe
