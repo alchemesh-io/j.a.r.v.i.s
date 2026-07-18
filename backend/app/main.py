@@ -1,9 +1,12 @@
 from contextlib import asynccontextmanager
 
+import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 
+from app.db.base import Base
+from app.db.engine import engine
 from app.routes import (
     blockers,
     dailies,
@@ -24,8 +27,20 @@ from app.routes import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import app.models  # noqa: F401 — register all models on the metadata
+
     alembic_cfg = Config("alembic.ini")
-    command.upgrade(alembic_cfg, "head")
+    # A fresh database has no alembic_version. The historical migrations were
+    # authored against SQLite (native enums etc. that don't replay on
+    # PostgreSQL), so on a greenfield DB build the schema from the current
+    # models and stamp head; on an existing DB, apply incremental migrations.
+    with engine.connect() as conn:
+        has_history = sa.inspect(conn).has_table("alembic_version")
+    if has_history:
+        command.upgrade(alembic_cfg, "head")
+    else:
+        Base.metadata.create_all(bind=engine)
+        command.stamp(alembic_cfg, "head")
     yield
 
 
