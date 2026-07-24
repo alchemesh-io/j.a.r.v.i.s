@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, IconButton, WorkerBrain, WorkerModeBadge } from '@jarvis/jads';
 import {
@@ -11,6 +12,7 @@ import {
   stopWorker,
   restartWorker,
   getWorkerVscodeUri,
+  getWorkerLogsUrl,
   type Worker,
   type WorkerMode,
   type Repository,
@@ -86,6 +88,7 @@ function formatTime(iso: string): string {
 
 export default function Workers() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: workers = [] } = useQuery({ queryKey: ['workers'], queryFn: listWorkers, refetchInterval: 5000 });
   const { data: repos = [] } = useQuery({ queryKey: ['repositories'], queryFn: listRepositories });
@@ -247,13 +250,49 @@ export default function Workers() {
                   </div>
                   <div
                     className={`worker-card__brain${isActive(worker.effective_state) ? '' : ' worker-card__brain--disabled'}`}
-                    onClick={isActive(worker.effective_state) ? () => getWorkerVscodeUri(worker.id).then(({ uri }) => { window.location.href = uri; }) : undefined}
+                    onClick={isActive(worker.effective_state) ? () => navigate(`/workers/${worker.id}/terminal`) : undefined}
                     role={isActive(worker.effective_state) ? 'button' : undefined}
                     tabIndex={isActive(worker.effective_state) ? 0 : undefined}
-                    title={isActive(worker.effective_state) ? 'Open in VSCode' : undefined}
+                    title={isActive(worker.effective_state) ? 'Open terminal' : undefined}
                   >
                     <WorkerBrain state={worker.effective_state} />
                   </div>
+                </div>
+
+                {/* Action row: Terminal / Shell / VSCode / Logs */}
+                <div className="worker-card__actions">
+                  <button
+                    type="button"
+                    className="worker-card__action"
+                    disabled={!isActive(worker.effective_state)}
+                    onClick={() => navigate(`/workers/${worker.id}/terminal`)}
+                  >
+                    Terminal
+                  </button>
+                  <button
+                    type="button"
+                    className="worker-card__action"
+                    disabled={!isActive(worker.effective_state)}
+                    onClick={() => window.open(`/workers/${worker.id}/terminal?mode=shell`, '_blank', 'noopener')}
+                  >
+                    Shell
+                  </button>
+                  <button
+                    type="button"
+                    className="worker-card__action"
+                    disabled={!isActive(worker.effective_state)}
+                    onClick={() => getWorkerVscodeUri(worker.id).then(({ uri }) => { window.location.href = uri; })}
+                  >
+                    VSCode
+                  </button>
+                  <button
+                    type="button"
+                    className="worker-card__action"
+                    disabled={worker.effective_state === 'stopped' || worker.effective_state === 'archived'}
+                    onClick={() => window.open(getWorkerLogsUrl(worker.id), '_blank', 'noopener')}
+                  >
+                    Logs
+                  </button>
                 </div>
 
                 {/* Repos */}

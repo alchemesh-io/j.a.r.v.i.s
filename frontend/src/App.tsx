@@ -6,6 +6,7 @@ import TaskBoard from './pages/TaskBoard/TaskBoard';
 import KeyFocusBoard from './pages/KeyFocusBoard/KeyFocusBoard';
 import Reports from './pages/Reports/Reports';
 import Workers from './pages/Workers/Workers';
+import WorkerTerminal from './pages/Workers/WorkerTerminal';
 import Repositories from './pages/Repositories/Repositories';
 import ParticlesBackground from './components/ParticlesBackground';
 import { MiniHeart } from './components/MiniHeart';
@@ -96,6 +97,7 @@ export default function App() {
               <Route path="/key-focuses" element={<><BoardNav /><KeyFocusBoard /></>} />
               <Route path="/reports" element={<><BoardNav /><Reports /></>} />
               <Route path="/workers" element={<><WorkerNav /><Workers /></>} />
+            <Route path="/workers/:id/terminal" element={<WorkerTerminal />} />
               <Route path="/repositories" element={<><WorkerNav /><Repositories /></>} />
             </Routes>
           </main>

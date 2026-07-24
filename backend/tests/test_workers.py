@@ -531,3 +531,132 @@ def test_get_worker_marks_failed_pod_as_error(mock_k8s, client):
     assert data["state"] == "error"
     assert data["effective_state"] == "error"
     assert data["pod_status"] == "failed"
+
+
+# --- Terminal bridge integration (routes) ---
+
+
+@patch("app.routes.workers.terminal_bridge")
+@patch("app.routes.workers.k8s")
+def test_worker_logs_endpoint(mock_k8s, mock_bridge, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
+
+    mock_k8s.read_pod_logs.return_value = "line1\nline2"
+    resp = client.get(f"/api/v1/workers/{worker['id']}/logs?tail=100")
+    assert resp.status_code == 200
+    assert resp.text == "line1\nline2"
+    assert resp.headers["content-type"].startswith("text/plain")
+    mock_k8s.read_pod_logs.assert_called_once_with(worker["id"], tail_lines=100)
+
+
+@patch("app.routes.workers.terminal_bridge")
+@patch("app.routes.workers.k8s")
+def test_worker_logs_404_without_pod(mock_k8s, mock_bridge, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
+
+    mock_k8s.read_pod_logs.return_value = None
+    resp = client.get(f"/api/v1/workers/{worker['id']}/logs")
+    assert resp.status_code == 404
+
+
+@patch("app.routes.workers.k8s")
+def test_worker_logs_404_unknown_worker(mock_k8s, client):
+    resp = client.get("/api/v1/workers/doesnotexist/logs")
+    assert resp.status_code == 404
+
+
+@patch("app.routes.workers.terminal_bridge")
+@patch("app.routes.workers.k8s")
+def test_terminal_ws_rejects_unknown_worker(mock_k8s, mock_bridge, client):
+    with client.websocket_connect("/api/v1/workers/doesnotexist/terminal") as ws:
+        msg = ws.receive()
+        assert msg["type"] == "websocket.close"
+        assert msg["code"] == 1008
+
+
+@patch("app.routes.workers.terminal_bridge")
+@patch("app.routes.workers.k8s")
+def test_terminal_ws_rejects_archived_worker(mock_k8s, mock_bridge, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
+    client.patch(f"/api/v1/workers/{worker['id']}", json={"state": "archived"})
+
+    with client.websocket_connect(f"/api/v1/workers/{worker['id']}/terminal") as ws:
+        msg = ws.receive()
+        assert msg["type"] == "websocket.close"
+        assert msg["code"] == 1008
+
+
+@patch("app.routes.workers.terminal_bridge")
+@patch("app.routes.workers.k8s")
+def test_terminal_ws_delegates_to_bridge(mock_k8s, mock_bridge, client):
+    from unittest.mock import AsyncMock
+
+    mock_k8s.is_available.return_value = False
+    mock_bridge.connect_terminal = AsyncMock()
+    mock_bridge.connect_shell = AsyncMock()
+    task = _create_task(client).json()
+    worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
+
+    with client.websocket_connect(f"/api/v1/workers/{worker['id']}/terminal"):
+        pass
+    mock_bridge.connect_terminal.assert_awaited_once()
+
+    with client.websocket_connect(f"/api/v1/workers/{worker['id']}/shell"):
+        pass
+    mock_bridge.connect_shell.assert_awaited_once()
+
+
+@patch("app.routes.workers.terminal_bridge")
+@patch("app.routes.workers.k8s")
+def test_stop_worker_cleans_up_bridge(mock_k8s, mock_bridge, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post(
+        "/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"}
+    ).json()
+
+    resp = client.post(f"/api/v1/workers/{worker['id']}/stop")
+    assert resp.status_code == 200
+    mock_bridge.cleanup.assert_called_once_with(worker["id"], status="stopped")
+
+
+@patch("app.routes.workers.terminal_bridge")
+@patch("app.routes.workers.k8s")
+def test_delete_worker_cleans_up_bridge(mock_k8s, mock_bridge, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
+
+    resp = client.delete(f"/api/v1/workers/{worker['id']}")
+    assert resp.status_code == 204
+    mock_bridge.cleanup.assert_called_once_with(worker["id"], status="stopped")
+
+
+@patch("app.routes.workers.terminal_bridge")
+@patch("app.routes.workers.k8s")
+def test_archive_worker_cleans_up_bridge(mock_k8s, mock_bridge, client):
+    mock_k8s.is_available.return_value = False
+    task = _create_task(client).json()
+    worker = client.post("/api/v1/workers", json={"task_id": task["id"]}).json()
+
+    resp = client.patch(f"/api/v1/workers/{worker['id']}", json={"state": "archived"})
+    assert resp.status_code == 200
+    mock_bridge.cleanup.assert_called_once_with(worker["id"], status="stopped")
+
+
+@patch("app.routes.workers.terminal_bridge")
+@patch("app.routes.workers.k8s")
+def test_create_worker_passes_task_prompt(mock_k8s, mock_bridge, client):
+    mock_k8s.is_available.return_value = True
+    task = _create_task(client, title="Fix the login bug").json()
+    resp = client.post("/api/v1/workers", json={"task_id": task["id"]})
+    assert resp.status_code == 201
+
+    call = mock_k8s.create_worker_pod.call_args
+    assert call.kwargs["task_prompt"] == "Work on the following task: Fix the login bug"

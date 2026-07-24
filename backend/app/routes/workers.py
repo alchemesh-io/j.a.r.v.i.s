@@ -2,7 +2,8 @@ import logging
 import os
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, WebSocket
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -11,6 +12,7 @@ from app.models import Repository, Task, Worker
 from app.models.enums import WorkerMode, WorkerState
 from app.schemas.worker import WorkerCreate, WorkerResponse, WorkerUpdate
 from app.services import k8s
+from app.services.terminal import bridge as terminal_bridge
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,19 @@ def _worker_to_response(worker: Worker, effective_state: WorkerState | None = No
     return WorkerResponse.model_validate(data)
 
 
+def _build_task_prompt(task: Task | None) -> str:
+    """Build the initial interactive prompt Claude Code receives on first boot."""
+    if task is None:
+        return ""
+    parts = [f"Work on the following task: {task.title}"]
+    notes = [n.content.strip() for n in (task.notes or []) if n.content and n.content.strip()]
+    if notes:
+        parts.append("")
+        parts.append("Additional context / notes:")
+        parts.extend(f"- {note}" for note in notes)
+    return "\n".join(parts)
+
+
 def _provision_worker_pod(worker: Worker) -> None:
     """(Re)create the K8s pod + service for a worker. PVC is created if stateful and absent."""
     if not k8s.is_available():
@@ -69,6 +84,7 @@ def _provision_worker_pod(worker: Worker) -> None:
         skills=skill_data,
         image_pull_policy=WORKER_IMAGE_PULL_POLICY,
         stateful=stateful,
+        task_prompt=_build_task_prompt(worker.task),
     )
     k8s.create_worker_service(worker.id)
 
@@ -188,12 +204,51 @@ def get_worker_vscode_uri(worker_id: str, db: Session = Depends(get_db)):
     return {"uri": uri}
 
 
+@router.get(
+    "/{worker_id}/logs",
+    response_class=PlainTextResponse,
+    summary="Worker pod log tail",
+    description="Returns the recent log tail of the worker container as plain text.",
+)
+def get_worker_logs(worker_id: str, tail: int = 500, db: Session = Depends(get_db)):
+    _load_worker(db, worker_id)
+    logs = k8s.read_pod_logs(worker_id, tail_lines=max(1, min(tail, 5000)))
+    if logs is None:
+        raise HTTPException(status_code=404, detail="Worker pod not found")
+    return logs
+
+
+async def _accept_worker_ws(ws: WebSocket, worker_id: str, db: Session) -> bool:
+    """Accept the WS, then policy-check the worker. Closes with 1008 when invalid."""
+    await ws.accept()
+    worker = db.scalars(select(Worker).where(Worker.id == worker_id)).first()
+    if not worker or worker.state == WorkerState.archived:
+        await ws.close(code=1008, reason="Worker not found")
+        return False
+    return True
+
+
+@router.websocket("/{worker_id}/terminal")
+async def worker_terminal(ws: WebSocket, worker_id: str, db: Session = Depends(get_db)):
+    """Attach to the worker's Claude Code PTY (shared, with scrollback replay)."""
+    if await _accept_worker_ws(ws, worker_id, db):
+        await terminal_bridge.connect_terminal(worker_id, ws)
+
+
+@router.websocket("/{worker_id}/shell")
+async def worker_shell(ws: WebSocket, worker_id: str, db: Session = Depends(get_db)):
+    """Spawn an independent interactive shell in the worker container."""
+    if await _accept_worker_ws(ws, worker_id, db):
+        await terminal_bridge.connect_shell(worker_id, ws)
+
+
 @router.patch("/{worker_id}", response_model=WorkerResponse)
 def update_worker(worker_id: str, body: WorkerUpdate, db: Session = Depends(get_db)):
     worker = _load_worker(db, worker_id)
 
     if body.state is not None:
         if body.state == WorkerState.archived:
+            terminal_bridge.cleanup(worker_id, status="stopped")
             k8s.delete_worker_resources(worker_id, delete_pvc=worker.mode == WorkerMode.stateful)
         worker.state = body.state
 
@@ -224,6 +279,7 @@ def stop_worker(worker_id: str, db: Session = Depends(get_db)):
     if worker.state == WorkerState.archived:
         raise HTTPException(status_code=409, detail="Cannot stop an archived worker")
 
+    terminal_bridge.cleanup(worker_id, status="stopped")
     k8s.delete_worker_pod_only(worker_id)
     k8s.delete_worker_service(worker_id)
 
@@ -254,6 +310,7 @@ def restart_worker(worker_id: str, db: Session = Depends(get_db)):
 
     if k8s.is_available():
         # Drop any existing pod/service so the new pod cleanly attaches to the PVC.
+        terminal_bridge.cleanup(worker_id, status="stopped")
         k8s.delete_worker_pod_only(worker_id)
         k8s.delete_worker_service(worker_id)
         try:
@@ -271,5 +328,6 @@ def restart_worker(worker_id: str, db: Session = Depends(get_db)):
 @router.delete("/{worker_id}", status_code=204)
 def delete_worker(worker_id: str, db: Session = Depends(get_db)):
     worker = _load_worker(db, worker_id)
+    terminal_bridge.cleanup(worker_id, status="stopped")
     k8s.delete_worker_resources(worker_id, delete_pvc=worker.mode == WorkerMode.stateful)
     db.delete(worker)

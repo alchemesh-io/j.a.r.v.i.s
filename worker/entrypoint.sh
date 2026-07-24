@@ -90,69 +90,37 @@ if [ -n "$REPOSITORIES" ]; then
     done
 fi
 
-# Step 4: Pull skills from JAAR (selective by name@version) into Claude Code skills dir.
-# Rootless dockerd — uses slirp4netns for network isolation so the pod's DNS/iptables
-# stay clean. No sudo, no privileged: true on the pod.
+# Step 4: Fetch skills from GCS (selective by name@version) into Claude Code skills dir.
+# Skills are plain files (SKILL.md + assets) — no OCI pull, no dockerd, no privileged pod.
 SKILLS_CACHED=0
 SKILLS_PULLED=0
-if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
-    # Determine which skills are missing — avoids starting dockerd unnecessarily on resume.
-    PENDING_SKILLS=()
-    IFS=',' read -ra SKILL_REFS <<< "$SKILLS"
-    for skill_ref in "${SKILL_REFS[@]}"; do
-        skill_name="${skill_ref%@*}"
-        skill_dir="$HOME/.claude/skills/$skill_name"
-        if [ -f "$skill_dir/SKILL.md" ]; then
-            echo "[worker] Skill $skill_name already cached at $skill_dir, skipping"
-            SKILLS_CACHED=$((SKILLS_CACHED + 1))
-        else
-            PENDING_SKILLS+=("$skill_ref")
-        fi
-    done
-
-    if [ ${#PENDING_SKILLS[@]} -gt 0 ]; then
-        echo "[worker] Starting dockerd for skill pulls..."
-        sudo sh -c 'dockerd > /var/log/dockerd.log 2>&1 &'
-        sleep 1
-
-        # Wait for dockerd socket to be ready (up to 15s)
-        for i in $(seq 1 15); do
-            if sudo docker info >/dev/null 2>&1; then
-                echo "[worker] dockerd ready"
-                break
-            fi
-            sleep 1
-        done
-
-        # Authenticate with GHCR so arctl can pull private skill images.
-        if [ -n "$GITHUB_TOKEN" ]; then
-            GHCR_USER="${GHCR_USERNAME:-USERNAME}"
-            echo "[worker] Logging into ghcr.io as ${GHCR_USER}..."
-            echo "$GITHUB_TOKEN" | sudo docker login ghcr.io -u "${GHCR_USER}" --password-stdin 2>&1 || \
-                echo "[worker] WARNING: docker login failed — ensure GITHUB_TOKEN has read:packages scope"
-        fi
-
-        echo "[worker] Pulling ${#PENDING_SKILLS[@]} skills from JAAR..."
-        for skill_ref in "${PENDING_SKILLS[@]}"; do
+if [ -n "$SKILLS" ]; then
+    if [ -z "$SKILLS_BUCKET" ]; then
+        echo "[worker] ERROR: SKILLS is set (${SKILLS}) but SKILLS_BUCKET is empty — cannot fetch skills"
+    elif ! command -v gcloud &> /dev/null; then
+        echo "[worker] ERROR: SKILLS is set but gcloud is not available in this image — cannot fetch skills"
+    else
+        IFS=',' read -ra SKILL_REFS <<< "$SKILLS"
+        for skill_ref in "${SKILL_REFS[@]}"; do
             skill_name="${skill_ref%@*}"
             skill_version="${skill_ref#*@}"
             skill_dir="$HOME/.claude/skills/$skill_name"
-            echo "[worker] Pulling skill $skill_name (version: $skill_version) to $skill_dir"
-            if sudo arctl skill pull "$skill_name" "$skill_dir" --version "$skill_version" --registry-url "$JAAR_URL" 2>&1; then
+            if [ -f "$skill_dir/SKILL.md" ]; then
+                echo "[worker] Skill $skill_name already cached at $skill_dir, skipping"
+                SKILLS_CACHED=$((SKILLS_CACHED + 1))
+                continue
+            fi
+            echo "[worker] Fetching skill $skill_name (version: $skill_version) from gs://$SKILLS_BUCKET/$skill_name/$skill_version/ to $skill_dir"
+            mkdir -p "$skill_dir"
+            if gcloud storage cp -r "gs://$SKILLS_BUCKET/$skill_name/$skill_version/*" "$skill_dir" 2>&1; then
                 SKILLS_PULLED=$((SKILLS_PULLED + 1))
             else
-                echo "[worker] WARNING: Failed to pull skill $skill_name@$skill_version"
+                echo "[worker] WARNING: Failed to fetch skill $skill_name@$skill_version from GCS"
             fi
-            sudo chown -R node:node "$skill_dir" 2>/dev/null || true
         done
-
-        # Stop dockerd — no longer needed after skills are pulled
-        sudo pkill -x dockerd 2>/dev/null || true
-    else
-        echo "[worker] All skills already cached, no skill pull required"
     fi
-elif [ -z "$SKILLS" ]; then
-    echo "[worker] No skills configured (SKILLS env var empty), skipping skill pull"
+else
+    echo "[worker] No skills configured (SKILLS env var empty), skipping skill fetch"
 fi
 
 # Stateful summary log so resume vs fresh-start is visible at a glance.
@@ -160,32 +128,24 @@ if [ "$WORKER_MODE" = "stateful" ]; then
     echo "[worker] mode=stateful, PVC mounted at /home/node, ${REPOS_CACHED} repos cached, ${SKILLS_CACHED} skills cached"
 fi
 
-# Step 5: Start all processes
-echo "[worker] Starting status server on port 8080..."
-node /opt/jarvis-worker/status-server/index.js &
-STATUS_PID=$!
+# Step 5: Launch Claude Code interactively as the container's main process so the
+# Kubernetes Attach API reaches its PTY. The status server runs in a dedicated
+# sidecar container; the hooks report Claude's state through the shared
+# /worker-state emptyDir (see setup-claude.sh / STATE_FILE).
+export TERM="${TERM:-xterm-256color}"
 
-# Convert 32-char hex worker ID to UUID format (8-4-4-4-12)
-SESSION_UUID="${WORKER_ID:0:8}-${WORKER_ID:8:4}-${WORKER_ID:12:4}-${WORKER_ID:16:4}-${WORKER_ID:20:12}"
-
-# Start Claude Code in non-interactive streaming mode via a named pipe
-CLAUDE_FIFO="/tmp/claude-input"
-mkfifo "$CLAUDE_FIFO"
-echo "[worker] Starting Claude Code session (UUID: ${SESSION_UUID}) in stream mode..."
-cat "$CLAUDE_FIFO" | claude --resume "$SESSION_UUID" \
-    --dangerously-skip-permissions \
-    --print \
-    --input-format stream-json \
-    --output-format stream-json \
-    > /tmp/claude-output.log 2>&1 &
-CLAUDE_PID=$!
-
-echo "$CLAUDE_PID" > /tmp/claude.pid
-
-echo "[worker] All processes started. Claude PID=$CLAUDE_PID, Status PID=$STATUS_PID"
-
-# Keep the pod alive — wait for status server to exit
-wait $STATUS_PID
-echo "[worker] Status server exited, shutting down..."
-kill $STATUS_PID $CLAUDE_PID 2>/dev/null || true
-wait
+# Resume probe: if a previous session exists under ~/.claude/projects/ (stateful
+# restart), resume the most recent one; otherwise start fresh with the task
+# prompt as the first turn.
+LATEST_SESSION=$(ls -t "$HOME/.claude/projects"/*/*.jsonl 2>/dev/null | head -1)
+if [ -n "$LATEST_SESSION" ]; then
+    SESSION_ID=$(basename "$LATEST_SESSION" .jsonl)
+    echo "[worker] Resuming Claude Code session ${SESSION_ID}..."
+    exec claude --dangerously-skip-permissions --resume "$SESSION_ID"
+elif [ -n "$TASK_PROMPT" ]; then
+    echo "[worker] Starting Claude Code with task prompt..."
+    exec claude --dangerously-skip-permissions "$TASK_PROMPT"
+else
+    echo "[worker] Starting Claude Code (no task prompt)..."
+    exec claude --dangerously-skip-permissions
+fi

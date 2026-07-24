@@ -10,6 +10,17 @@ logger = logging.getLogger(__name__)
 NAMESPACE = "jarvis"
 WORKER_LABEL = "jarvis-worker"
 
+# Path of the Claude state file shared between the worker container (hooks) and
+# the status sidecar via the /worker-state emptyDir.
+STATE_FILE = "/worker-state/claude-state"
+
+# Worker resources come from the backend ConfigMap (fed by Helm worker.resources
+# values) — defaults mirror helm/jarvis/values.yaml.
+WORKER_CPU_REQUEST = os.getenv("WORKER_CPU_REQUEST", "250m")
+WORKER_MEMORY_REQUEST = os.getenv("WORKER_MEMORY_REQUEST", "256Mi")
+WORKER_CPU_LIMIT = os.getenv("WORKER_CPU_LIMIT", "1000m")
+WORKER_MEMORY_LIMIT = os.getenv("WORKER_MEMORY_LIMIT", "1Gi")
+
 _api_v1: client.CoreV1Api | None = None
 _k8s_available: bool | None = None
 
@@ -85,6 +96,27 @@ def delete_worker_pvc(worker_id: str) -> None:
             logger.error("Failed to delete worker PVC %s: %s", _pvc_name(worker_id), e)
 
 
+# Module-level so tests can shrink them.
+POD_DELETE_WAIT_S = 30.0
+POD_DELETE_POLL_S = 1.0
+
+
+def _wait_pod_gone(name: str) -> None:
+    """Poll until the pod no longer exists (delete is async), or timeout."""
+    import time
+
+    deadline = time.monotonic() + POD_DELETE_WAIT_S
+    while time.monotonic() < deadline:
+        try:
+            _api_v1.read_namespaced_pod(name=name, namespace=NAMESPACE)
+        except ApiException as e:
+            if e.status == 404:
+                return
+            raise
+        time.sleep(POD_DELETE_POLL_S)
+    logger.warning("Pod %s still terminating after %ss", name, POD_DELETE_WAIT_S)
+
+
 def create_worker_pod(
     worker_id: str,
     task_id: int,
@@ -95,22 +127,39 @@ def create_worker_pod(
     resource_limits: dict[str, str] | None = None,
     image_pull_policy: str = "IfNotPresent",
     stateful: bool = False,
+    task_prompt: str = "",
 ) -> None:
     """Create a worker pod in the jarvis namespace.
 
+    The pod runs two containers sharing a /worker-state emptyDir:
+    - `worker`: Claude Code interactive under a PTY (tty/stdin) — the Attach target.
+      Skills are fetched from GCS via Workload Identity, so the pod is never privileged.
+    - `status`: the status server on port 8080, pushing hook-reported state to the backend.
+
     When stateful=True, the pod mounts the PVC `jarvis-worker-<id>-data` at /home/node
     and runs with fsGroup=1000 so the volume is owned by the node user.
+
+    Creation is idempotent: any leftover pod with the same name is deleted first so
+    restart flows never hit a 409 on a not-yet-garbage-collected pod.
     """
     if not _init_client():
         raise RuntimeError("Kubernetes cluster not available")
 
-    requests = resource_requests or {"memory": "1Gi", "cpu": "500m"}
-    limits = resource_limits or {"memory": "4Gi", "cpu": "2000m"}
+    requests = resource_requests or {"memory": WORKER_MEMORY_REQUEST, "cpu": WORKER_CPU_REQUEST}
+    limits = resource_limits or {"memory": WORKER_MEMORY_LIMIT, "cpu": WORKER_CPU_LIMIT}
 
     repo_env = ",".join(f"{r['git_url']}@{r['branch']}" for r in repositories)
     skills_env = ",".join(
         f"{s['name']}@{s.get('version', 'latest')}" for s in (skills or [])
     )
+
+    pod_name = f"jarvis-worker-{worker_id}"
+    try:
+        _api_v1.delete_namespaced_pod(name=pod_name, namespace=NAMESPACE)
+        _wait_pod_gone(pod_name)
+    except ApiException as e:
+        if e.status != 404:
+            raise
 
     worker_volume_mounts = [
         client.V1VolumeMount(
@@ -123,6 +172,7 @@ def create_worker_pod(
             mount_path="/etc/gws",
             read_only=True,
         ),
+        client.V1VolumeMount(name="worker-state", mount_path="/worker-state"),
     ]
     pod_volumes = [
         client.V1Volume(
@@ -145,6 +195,10 @@ def create_worker_pod(
                 ],
             ),
         ),
+        client.V1Volume(
+            name="worker-state",
+            empty_dir=client.V1EmptyDirVolumeSource(),
+        ),
     ]
 
     pod_security_context: client.V1PodSecurityContext | None = None
@@ -162,9 +216,93 @@ def create_worker_pod(
         )
         pod_security_context = client.V1PodSecurityContext(fs_group=1000)
 
+    worker_container = client.V1Container(
+        name="worker",
+        image=worker_image,
+        image_pull_policy=image_pull_policy,
+        # Never privileged: skill fetch uses gcloud storage (Workload Identity), and the
+        # stateful chown fallback only needs in-container root via sudo.
+        security_context=None,
+        # Interactive PTY for the Kubernetes Attach API (remote-claude pattern).
+        tty=True,
+        stdin=True,
+        stdin_once=False,
+        env=[
+            client.V1EnvVar(name="WORKER_ID", value=worker_id),
+            client.V1EnvVar(name="TASK_ID", value=str(task_id)),
+            client.V1EnvVar(name="WORKER_MODE", value="stateful" if stateful else "ephemeral"),
+            client.V1EnvVar(name="TASK_PROMPT", value=task_prompt),
+            client.V1EnvVar(name="STATE_FILE", value=STATE_FILE),
+            client.V1EnvVar(name="REPOSITORIES", value=repo_env),
+            client.V1EnvVar(name="SKILLS", value=skills_env),
+            client.V1EnvVar(name="SKILLS_BUCKET", value=os.getenv("SKILLS_BUCKET", "")),
+            client.V1EnvVar(name="JARVIS_MCP_URL", value=os.getenv("JARVIS_MCP_URL", "")),
+            client.V1EnvVar(name="BACKEND_URL", value=f"http://jarvis-backend.{NAMESPACE}.svc:8000"),
+            client.V1EnvVar(
+                name="ANTHROPIC_API_KEY",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name="jarvis-jaw-secret",
+                        key="ANTHROPIC_API_KEY",
+                        optional=True,
+                    )
+                ),
+            ),
+            client.V1EnvVar(
+                name="CLAUDE_CODE_OAUTH_TOKEN",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name="jarvis-jaw-secret",
+                        key="CLAUDE_CODE_OAUTH_TOKEN",
+                        optional=True,
+                    )
+                ),
+            ),
+            client.V1EnvVar(
+                name="GITHUB_TOKEN",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name="jarvis-jaw-secret",
+                        key="GITHUB_TOKEN",
+                        optional=True,
+                    )
+                ),
+            ),
+            client.V1EnvVar(
+                name="GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
+                value="/etc/gws/credentials.json",
+            ),
+        ],
+        resources=client.V1ResourceRequirements(
+            requests=requests,
+            limits=limits,
+        ),
+        volume_mounts=worker_volume_mounts,
+    )
+
+    status_container = client.V1Container(
+        name="status",
+        image=worker_image,
+        image_pull_policy=image_pull_policy,
+        command=["node", "/opt/jarvis-worker/status-server/index.js"],
+        ports=[client.V1ContainerPort(container_port=8080, name="status")],
+        env=[
+            client.V1EnvVar(name="WORKER_ID", value=worker_id),
+            client.V1EnvVar(name="STATE_FILE", value=STATE_FILE),
+            client.V1EnvVar(name="BACKEND_URL", value=f"http://jarvis-backend.{NAMESPACE}.svc:8000"),
+        ],
+        resources=client.V1ResourceRequirements(
+            requests={"memory": "32Mi", "cpu": "25m"},
+            limits={"memory": "128Mi", "cpu": "100m"},
+        ),
+        volume_mounts=[
+            client.V1VolumeMount(name="worker-state", mount_path="/worker-state"),
+        ],
+    )
+
     pod = client.V1Pod(
         metadata=client.V1ObjectMeta(
-            name=f"jarvis-worker-{worker_id}",
+            name=pod_name,
             namespace=NAMESPACE,
             labels={
                 "app": WORKER_LABEL,
@@ -180,67 +318,7 @@ def create_worker_pod(
         spec=client.V1PodSpec(
             service_account_name="jarvis-backend",
             security_context=pod_security_context,
-            containers=[
-                client.V1Container(
-                    name="worker",
-                    image=worker_image,
-                    image_pull_policy=image_pull_policy,
-                    security_context=client.V1SecurityContext(privileged=True),
-                    ports=[
-                        client.V1ContainerPort(container_port=3000, name="ui"),
-                        client.V1ContainerPort(container_port=8080, name="status"),
-                    ],
-                    env=[
-                        client.V1EnvVar(name="WORKER_ID", value=worker_id),
-                        client.V1EnvVar(name="TASK_ID", value=str(task_id)),
-                        client.V1EnvVar(name="WORKER_MODE", value="stateful" if stateful else "ephemeral"),
-                        client.V1EnvVar(name="REPOSITORIES", value=repo_env),
-                        client.V1EnvVar(name="SKILLS", value=skills_env),
-                        client.V1EnvVar(name="JAAR_URL", value=os.getenv("JAAR_URL", "")),
-                        client.V1EnvVar(name="JARVIS_MCP_URL", value=os.getenv("JARVIS_MCP_URL", "")),
-                        client.V1EnvVar(name="BACKEND_URL", value=f"http://jarvis-backend.{NAMESPACE}.svc:8000"),
-                        client.V1EnvVar(
-                            name="ANTHROPIC_API_KEY",
-                            value_from=client.V1EnvVarSource(
-                                secret_key_ref=client.V1SecretKeySelector(
-                                    name="jarvis-jaw-secret",
-                                    key="ANTHROPIC_API_KEY",
-                                    optional=True,
-                                )
-                            ),
-                        ),
-                        client.V1EnvVar(
-                            name="CLAUDE_CODE_OAUTH_TOKEN",
-                            value_from=client.V1EnvVarSource(
-                                secret_key_ref=client.V1SecretKeySelector(
-                                    name="jarvis-jaw-secret",
-                                    key="CLAUDE_CODE_OAUTH_TOKEN",
-                                    optional=True,
-                                )
-                            ),
-                        ),
-                        client.V1EnvVar(
-                            name="GITHUB_TOKEN",
-                            value_from=client.V1EnvVarSource(
-                                secret_key_ref=client.V1SecretKeySelector(
-                                    name="jarvis-jaw-secret",
-                                    key="GITHUB_TOKEN",
-                                    optional=True,
-                                )
-                            ),
-                        ),
-                        client.V1EnvVar(
-                            name="GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
-                            value="/etc/gws/credentials.json",
-                        ),
-                    ],
-                    resources=client.V1ResourceRequirements(
-                        requests=requests,
-                        limits=limits,
-                    ),
-                    volume_mounts=worker_volume_mounts,
-                ),
-            ],
+            containers=[worker_container, status_container],
             volumes=pod_volumes,
             restart_policy="Never",
         ),
@@ -345,3 +423,97 @@ def get_pod_phase(worker_id: str) -> tuple[str | None, int | None]:
             exit_code = cs.state.terminated.exit_code
             break
     return (phase, exit_code)
+
+
+def get_pod_detail(worker_id: str) -> dict | None:
+    """Return pod diagnostic detail for the terminal bridge, or None if the pod is gone.
+
+    Keys: name, phase, reason, message, worker_ready (the `worker` container's ready flag).
+    """
+    if not _init_client():
+        return None
+    name = f"jarvis-worker-{worker_id}"
+    try:
+        pod = _api_v1.read_namespaced_pod(name=name, namespace=NAMESPACE)
+    except ApiException as e:
+        if e.status == 404:
+            return None
+        logger.error("Failed to read worker pod %s: %s", name, e)
+        return None
+    worker_ready = False
+    for cs in (pod.status.container_statuses or []) if pod.status else []:
+        if cs.name == "worker":
+            worker_ready = bool(cs.ready)
+            break
+    return {
+        "name": name,
+        "phase": pod.status.phase if pod.status else None,
+        "reason": pod.status.reason if pod.status else None,
+        "message": pod.status.message if pod.status else None,
+        "worker_ready": worker_ready,
+    }
+
+
+def attach_worker_pty(worker_id: str):
+    """Open a raw WebSocket stream attached to the `worker` container's PTY.
+
+    Returns a kubernetes.stream WSClient (``_preload_content=False``). The caller
+    owns its lifecycle.
+    """
+    from kubernetes.stream import stream as k8s_ws_stream
+
+    if not _init_client():
+        raise RuntimeError("Kubernetes cluster not available")
+    return k8s_ws_stream(
+        _api_v1.connect_get_namespaced_pod_attach,
+        name=f"jarvis-worker-{worker_id}",
+        namespace=NAMESPACE,
+        container="worker",
+        stderr=True,
+        stdin=True,
+        stdout=True,
+        tty=True,
+        _preload_content=False,
+    )
+
+
+def exec_worker_shell(worker_id: str):
+    """Start an interactive /bin/bash in the `worker` container via the Exec API.
+
+    Returns a kubernetes.stream WSClient (``_preload_content=False``); each call
+    creates an independent shell process.
+    """
+    from kubernetes.stream import stream as k8s_ws_stream
+
+    if not _init_client():
+        raise RuntimeError("Kubernetes cluster not available")
+    return k8s_ws_stream(
+        _api_v1.connect_get_namespaced_pod_exec,
+        name=f"jarvis-worker-{worker_id}",
+        namespace=NAMESPACE,
+        container="worker",
+        command=["/bin/bash"],
+        stderr=True,
+        stdin=True,
+        stdout=True,
+        tty=True,
+        _preload_content=False,
+    )
+
+
+def read_pod_logs(worker_id: str, tail_lines: int = 500) -> str | None:
+    """Return the recent log tail of the `worker` container, or None if unavailable."""
+    if not _init_client():
+        return None
+    name = f"jarvis-worker-{worker_id}"
+    try:
+        return _api_v1.read_namespaced_pod_log(
+            name=name,
+            namespace=NAMESPACE,
+            container="worker",
+            tail_lines=tail_lines,
+        )
+    except ApiException as e:
+        if e.status != 404:
+            logger.error("Failed to read logs for worker pod %s: %s", name, e)
+        return None

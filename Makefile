@@ -24,7 +24,7 @@ IMAGE_PLATFORM      := linux/amd64
 IMAGES              := jarvis-backend:./backend jarvis-frontend:./frontend jarvis:./artifacts/servers/jarvis jarvis-worker:./worker
 
 
-.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local publish-images argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers sync-artifacts-skills db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp build-worker setup-worker-ssh sync-claude-config _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config _helm-dep-update _tls-secret
+.PHONY: cluster-up cluster-down cluster-status deploy undeploy deploy-local publish-images argocd-ui jarvis-ui sync sync-artifacts sync-artifacts-servers sync-artifacts-skills db-backup db-restore _db-backup-safe test-backend test-frontend test-e2e test-mcp build-worker setup-worker-ssh sync-claude-config _check-prereqs _mount-start _istio-install _argocd-install _argocd-patch-repo-server _argocd-add-repo _deploy-secrets _deploy-jaw-secrets _sync-claude-config _tls-secret
 
 # ---------------------------------------------------------------------------
 # Prerequisite checks
@@ -108,7 +108,7 @@ cluster-status: _check-prereqs
 # ---------------------------------------------------------------------------
 
 ## Pull latest published images from GHCR, load into Minikube, apply Git-sourced ArgoCD App CRs (no repo mount required), hard sync
-deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config setup-worker-ssh _helm-dep-update
+deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _sync-claude-config setup-worker-ssh
 	@echo "==> Pulling latest images from GHCR..."
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-backend:latest
 	docker pull ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
@@ -117,7 +117,6 @@ deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _depl
 	minikube image load ghcr.io/$(GHCR_ORG)/jarvis-frontend:latest
 	@echo "==> Applying ArgoCD Application CRs (GHCR images)..."
 	kubectl apply -f argocd/jarvis-app.yaml
-	kubectl apply -f argocd/jaar-app.yaml
 	@$(MAKE) sync
 	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
 	@echo "==> Access via Istio ingress gateway:"
@@ -125,7 +124,7 @@ deploy: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _depl
 	@echo "    kubectl get svc istio-ingressgateway -n istio-system"
 
 ## Build images locally, load into Minikube, apply ArgoCD App CRs, hard sync
-deploy-local: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _deploy-jaar-secrets _sync-claude-config setup-worker-ssh _helm-dep-update
+deploy-local: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets _sync-claude-config setup-worker-ssh
 	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
 	@echo "==> Building Docker images locally (tag: $(LOCAL_TAG))..."
 	docker build -t jarvis-backend:$(LOCAL_TAG) ./backend
@@ -139,7 +138,6 @@ deploy-local: _check-prereqs _db-backup-safe _deploy-secrets _deploy-jaw-secrets
 	minikube image load jarvis-worker:$(LOCAL_TAG)
 	@echo "==> Applying ArgoCD Application CRs (local images, tag: $(LOCAL_TAG))..."
 	@sed 's/tag: local/tag: "$(LOCAL_TAG)"/g' argocd/jarvis-app-local.yaml | kubectl apply -f -
-	kubectl apply -f argocd/jaar-app-local.yaml
 	@$(MAKE) sync
 	@echo "==> Deployment complete. Run 'make argocd-ui' to monitor sync status."
 	@echo "==> Access via Istio ingress gateway:"
@@ -174,7 +172,6 @@ publish-images:
 undeploy: _check-prereqs _db-backup-safe
 	@echo "==> Deleting ArgoCD Application CRs (cascade)..."
 	kubectl delete -f argocd/jarvis-app.yaml --ignore-not-found=true
-	kubectl delete -f argocd/jaar-app.yaml --ignore-not-found=true
 	@echo "==> Applications undeployed."
 
 # ---------------------------------------------------------------------------
@@ -192,22 +189,21 @@ argocd-ui: _check-prereqs
 	@echo "    Username: admin"
 
 ## Port-forward Istio ingress gateway to localhost:80 (requires minikube tunnel)
-## Access: http://main.jarvis.io (JARVIS), http://jaar.jarvis.io (JAAR)
+## Access: http://main.jarvis.io (JARVIS)
 ## Ensure /etc/hosts maps *.jarvis.io to the gateway IP (minikube tunnel IP)
 jarvis-ui: _check-prereqs
 	@echo "==> Access via minikube tunnel:"
 	@echo "    http://main.jarvis.io    (JARVIS)"
 	@echo "    http://mcp.jarvis.io     (MCP Server)"
 	@echo ""
-	@echo "    http://jaar.jarvis.io    (Agent Registry)"
 	@echo "    http://jaac.jarvis.io    (ArgoCD)"
 	@echo ""
 	@echo "==> Ensure /etc/hosts contains:"
-	@echo "    <GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaar.jarvis.io jaac.jarvis.io"
+	@echo "    <GATEWAY-IP>  main.jarvis.io mcp.jarvis.io jaac.jarvis.io"
 	@echo ""
 	kubectl port-forward svc/jarvis-gateway-istio -n istio-system 7080:80
 
-## Trigger ArgoCD hard sync for jarvis and jaar applications
+## Trigger ArgoCD hard sync for the jarvis application
 sync: _check-prereqs
 	@echo "==> Triggering ArgoCD sync for 'jarvis'..."
 	@if command -v argocd >/dev/null 2>&1; then \
@@ -215,15 +211,6 @@ sync: _check-prereqs
 		echo "  (argocd CLI sync failed — falling back to kubectl)"; \
 	fi
 	kubectl -n argocd patch app jarvis \
-		--type merge \
-		-p '{"operation":{"initiatedBy":{"username":"make-sync"},"sync":{"revision":"HEAD","prune":true}}}' \
-		2>/dev/null || true
-	@echo "==> Triggering ArgoCD sync for 'jaar'..."
-	@if command -v argocd >/dev/null 2>&1; then \
-		argocd app sync jaar --hard-refresh 2>/dev/null || \
-		echo "  (argocd CLI sync failed — falling back to kubectl)"; \
-	fi
-	kubectl -n argocd patch app jaar \
 		--type merge \
 		-p '{"operation":{"initiatedBy":{"username":"make-sync"},"sync":{"revision":"HEAD","prune":true}}}' \
 		2>/dev/null || true
@@ -275,7 +262,7 @@ _mount-start:
 		echo $$! > $(MOUNT_PID_FILE); \
 		echo "  Repo mount started (PID $$(cat $(MOUNT_PID_FILE)))"; \
 	fi
-	@mkdir -p $(DATA_DIR)/jarvis $(DATA_DIR)/jaar
+	@mkdir -p $(DATA_DIR)/jarvis
 	@echo "==> Starting minikube mount $(DATA_DIR) -> $(DATA_MOUNT_TARGET)..."
 	@if [ -f $(DATA_MOUNT_PID_FILE) ]; then \
 		PID=$$(cat $(DATA_MOUNT_PID_FILE)); \
@@ -300,11 +287,9 @@ _istio-install:
 	@kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/istio -n argocd --timeout=300s 2>/dev/null || \
 		echo "  (Waiting for Istio sync — may take a moment on first deploy)"
 	@$(MAKE) _tls-secret
-	@echo "==> Labeling jarvis and jaar namespaces for Istio sidecar injection..."
+	@echo "==> Labeling jarvis namespace for Istio sidecar injection..."
 	kubectl create namespace jarvis --dry-run=client -o yaml | kubectl apply -f -
 	kubectl label namespace jarvis istio-injection=enabled --overwrite
-	kubectl create namespace jaar --dry-run=client -o yaml | kubectl apply -f -
-	kubectl label namespace jaar istio-injection=enabled --overwrite
 
 ## Generate self-signed wildcard TLS cert for *.jarvis.io and store in istio-system
 _tls-secret:
@@ -356,26 +341,6 @@ _argocd-add-repo:
 	@echo "==> Configuring ArgoCD repository entry for file:///mnt/jarvis-repo..."
 	kubectl apply -f argocd/jarvis-repo-secret.yaml
 
-JAAR_SECRETS_FILE := secrets/jaar-secret.yaml
-
-## Apply the local JAAR secret manifest (gitignored, not managed by ArgoCD)
-_deploy-jaar-secrets:
-	@if [ -f $(JAAR_SECRETS_FILE) ]; then \
-		echo "==> Applying JAAR secret from $(JAAR_SECRETS_FILE)..."; \
-		kubectl create namespace jaar --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null; \
-		kubectl apply -f $(JAAR_SECRETS_FILE); \
-	else \
-		echo "==> No $(JAAR_SECRETS_FILE) found — skipping JAAR secrets deployment."; \
-		echo "    Copy secrets/jaar-secret.example.yaml to $(JAAR_SECRETS_FILE) and fill in values."; \
-	fi
-
-## Build Helm chart dependencies (pull upstream subcharts)
-_helm-dep-update:
-	@echo "==> Updating Helm dependencies for helm/jaar/..."
-	helm dependency update helm/jaar/ 2>/dev/null || \
-		echo "  (helm dependency update failed — chart may not render correctly)"
-
-
 # ---------------------------------------------------------------------------
 # Local dev (no Docker)
 # ---------------------------------------------------------------------------
@@ -396,101 +361,35 @@ dev-backend:
 # Artifact publishing
 # ---------------------------------------------------------------------------
 
-## Sync all artifacts to the Agent Registry (publish remote GHCR versions + local images)
-## Requires JAAR to be running. Override registry URL: make sync-artifacts JAAR_URL=http://...
-JAAR_URL ?= http://jaar.jarvis.io
+## Sync all artifacts (servers to GHCR, skills to the skills GCS bucket)
 sync-artifacts: sync-artifacts-servers sync-artifacts-skills
 
-## Publish all MCP servers to Agent Registry — all remote tags from GHCR + local git SHA
+## MCP servers are published to GHCR by the artifacts-publish.yml CI workflow.
+## Registration with Gemini Enterprise Agent Registry happens automatically via
+## GKE auto-discovery (registry.gke.io/functional-type label + A2A Agent Card) —
+## there is no manual publish step for servers anymore.
 sync-artifacts-servers:
-	@echo "==> Syncing MCP servers to Agent Registry ($(JAAR_URL))..."
-	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
-	@for dir in artifacts/servers/*/; do \
-		manifest="$${dir}mcp.yaml"; \
-		if [ ! -f "$$manifest" ]; then continue; fi; \
-		NAME=$$(yq -r '.name' "$$manifest"); \
-		DESC=$$(yq -r '.description' "$$manifest"); \
-		IMAGE=$$(yq -r '.image' "$$manifest"); \
-		echo "  --- $${NAME} ---"; \
-		echo "  Fetching remote tags from GHCR..."; \
-		TAGS=$$(docker images --format '{{.Tag}}' "$$IMAGE" 2>/dev/null; \
-			curl -sf "https://ghcr.io/v2/$(GHCR_ORG)/$${NAME}/tags/list" \
-				-H "Authorization: Bearer $$(curl -sf "https://ghcr.io/token?scope=repository:$(GHCR_ORG)/$${NAME}:pull&service=ghcr.io" | jq -r '.token')" \
-				2>/dev/null | jq -r '.tags[]' 2>/dev/null) || true; \
-		for TAG in $$TAGS; do \
-			echo "  Publishing $${NAME}:$${TAG}..."; \
-			OUT=$$(arctl mcp publish $(GHCR_ORG)/$${NAME} \
-				--registry-url "$(JAAR_URL)" \
-				--description "$$DESC" \
-				--version "$$TAG" \
-				--type oci \
-				--package-id "$${IMAGE}:$${TAG}" 2>&1); \
-			if echo "$$OUT" | grep -q "already exists"; then \
-				echo "    (already published)"; \
-			else \
-				echo "$$OUT"; \
-			fi; \
-		done; \
-		echo "  Publishing local $${NAME}:$(LOCAL_TAG)..."; \
-		OUT=$$(arctl mcp publish $(GHCR_ORG)/$${NAME} \
-			--registry-url "$(JAAR_URL)" \
-			--description "$$DESC" \
-			--version "$(LOCAL_TAG)" \
-			--type oci \
-			--package-id "$${IMAGE}:$(LOCAL_TAG)" 2>&1); \
-		if echo "$$OUT" | grep -q "already exists"; then \
-			echo "    (already published)"; \
-		else \
-			echo "$$OUT"; \
-		fi; \
-	done
-	@echo "==> Done."
+	@echo "==> MCP server registration is automatic via GKE Agent Registry auto-discovery; nothing to sync here."
 
-## Publish all skills to Agent Registry — all remote tags from GHCR + local git SHA
+## Upload all skills to the skills GCS bucket. Override the bucket: make sync-artifacts-skills SKILLS_BUCKET=gs://...
+SKILLS_BUCKET ?=
 sync-artifacts-skills:
-	@echo "==> Syncing skills to Agent Registry ($(JAAR_URL))..."
-	$(eval LOCAL_TAG := $(shell git rev-parse --short HEAD))
+	@if [ -z "$(SKILLS_BUCKET)" ]; then \
+		echo "ERROR: SKILLS_BUCKET is not set. Usage: make sync-artifacts-skills SKILLS_BUCKET=my-skills-bucket"; \
+		exit 1; \
+	fi
+	@command -v gcloud >/dev/null || { echo "ERROR: gcloud not found"; exit 1; }
+	@echo "==> Syncing skills to gs://$(SKILLS_BUCKET)..."
 	@for dir in artifacts/skills/*/; do \
 		skill_md="$${dir}SKILL.md"; \
 		if [ ! -f "$$skill_md" ]; then continue; fi; \
-		if [ ! -f "$${dir}Dockerfile" ]; then continue; fi; \
 		DIR_NAME=$$(basename "$$dir"); \
 		NAME=$$(echo "$$DIR_NAME" | tr '_' '-' | sed 's/--/-/g'); \
-		DESC=$$(grep -m1 '^description:' "$$skill_md" | sed 's/^description:[[:space:]]*//' || echo ""); \
-		IMAGE="ghcr.io/$(GHCR_ORG)/$$NAME"; \
-		echo "  --- $${NAME} ---"; \
-		echo "  Fetching remote tags from GHCR..."; \
-		TAGS=$$(docker images --format '{{.Tag}}' "$$IMAGE" 2>/dev/null; \
-			curl -sf "https://ghcr.io/v2/$(GHCR_ORG)/$${NAME}/tags/list" \
-				-H "Authorization: Bearer $$(curl -sf "https://ghcr.io/token?scope=repository:$(GHCR_ORG)/$${NAME}:pull&service=ghcr.io" | jq -r '.token')" \
-				2>/dev/null | jq -r '.tags[]' 2>/dev/null) || true; \
-		for TAG in $$TAGS; do \
-			echo "  Publishing $${NAME}:$${TAG}..."; \
-			OUT=$$(arctl skill publish $${NAME} \
-				--registry-url "$(JAAR_URL)" \
-				--description "$$DESC" \
-				--version "$$TAG" \
-				--docker-image "$${IMAGE}:$${TAG}" 2>&1); \
-			if echo "$$OUT" | grep -qE "already exists|duplicate version"; then \
-				echo "    (already published)"; \
-			else \
-				echo "$$OUT"; \
-			fi; \
-		done; \
-		echo "  Building and pushing $${NAME}:$(LOCAL_TAG) to GHCR (platform: linux/amd64)..."; \
-		arctl skill build "$$dir" --image "$${IMAGE}:$(LOCAL_TAG)" --platform linux/amd64 --push 2>&1 || \
-			echo "    WARNING: skill build/push failed (is docker logged into ghcr.io?)"; \
-		echo "  Publishing local $${NAME}:$(LOCAL_TAG) to JAAR..."; \
-		OUT=$$(arctl skill publish $${NAME} \
-			--registry-url "$(JAAR_URL)" \
-			--description "$$DESC" \
-			--version "$(LOCAL_TAG)" \
-			--docker-image "$${IMAGE}:$(LOCAL_TAG)" 2>&1); \
-		if echo "$$OUT" | grep -qE "already exists|duplicate version"; then \
-			echo "    (already published)"; \
-		else \
-			echo "$$OUT"; \
-		fi; \
+		VERSION=$$(grep -m1 '^version:' "$$skill_md" | sed 's/^version:[[:space:]]*//'); \
+		if [ -z "$$VERSION" ]; then VERSION="latest"; fi; \
+		echo "  --- $${NAME}@$${VERSION} ---"; \
+		gcloud storage cp -r "$${dir}*" "gs://$(SKILLS_BUCKET)/$${NAME}/$${VERSION}/" || \
+			echo "    WARNING: failed to upload $${NAME}@$${VERSION}"; \
 	done
 	@echo "==> Done."
 

@@ -2,7 +2,9 @@ const http = require("http");
 const fs = require("fs");
 
 const PORT = 8080;
-const STATE_FILE = "/tmp/claude-state";
+// Shared with the worker container via the /worker-state emptyDir; the file may
+// not exist yet while the worker container is still provisioning.
+const STATE_FILE = process.env.STATE_FILE || "/worker-state/claude-state";
 const BACKEND_URL = process.env.BACKEND_URL;
 const WORKER_ID = process.env.WORKER_ID;
 

@@ -10,9 +10,13 @@ def reset_k8s_state():
     """Reset the module-level K8s client state before each test."""
     k8s._api_v1 = None
     k8s._k8s_available = None
+    # The mocked read_namespaced_pod never 404s, so create_worker_pod's
+    # delete-and-wait preamble must not block.
+    k8s.POD_DELETE_WAIT_S = 0.0
     yield
     k8s._api_v1 = None
     k8s._k8s_available = None
+    k8s.POD_DELETE_WAIT_S = 30.0
 
 
 @patch("app.services.k8s.config")
@@ -387,6 +391,172 @@ def test_get_pod_phase_returns_phase_and_exit_code(mock_client, mock_config):
     phase, exit_code = k8s.get_pod_phase("abc123")
     assert phase == "Failed"
     assert exit_code == 1
+
+
+# --- Interactive runtime pod spec ---
+
+
+def _mocked_pod_api(mock_client, mock_config):
+    mock_config.ConfigException = Exception
+    mock_api = MagicMock()
+    mock_client.CoreV1Api.return_value = mock_api
+    k8s._init_client()
+    k8s._api_v1 = mock_api
+    return mock_api
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_has_worker_and_status_containers(mock_client, mock_config):
+    _mocked_pod_api(mock_client, mock_config)
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [])
+
+    names = [c.kwargs.get("name") for c in mock_client.V1Container.call_args_list]
+    assert names == ["worker", "status"]
+    worker_kwargs = mock_client.V1Container.call_args_list[0].kwargs
+    assert worker_kwargs["tty"] is True
+    assert worker_kwargs["stdin"] is True
+    assert worker_kwargs["stdin_once"] is False
+    status_kwargs = mock_client.V1Container.call_args_list[1].kwargs
+    assert status_kwargs["command"] == ["node", "/opt/jarvis-worker/status-server/index.js"]
+    assert status_kwargs.get("security_context") is None
+    # Shared state volume mounted in both containers.
+    state_mounts = [
+        c for c in mock_client.V1VolumeMount.call_args_list
+        if c.kwargs.get("mount_path") == "/worker-state"
+    ]
+    assert len(state_mounts) == 2
+    # No vestigial ui port anywhere.
+    port_names = [c.kwargs.get("name") for c in mock_client.V1ContainerPort.call_args_list]
+    assert "ui" not in port_names
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_unprivileged_without_skills(mock_client, mock_config):
+    _mocked_pod_api(mock_client, mock_config)
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [], skills=[])
+    mock_client.V1SecurityContext.assert_not_called()
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_unprivileged_with_skills(mock_client, mock_config):
+    """Skills are fetched from GCS via gcloud storage — never needs a privileged pod."""
+    _mocked_pod_api(mock_client, mock_config)
+    k8s.create_worker_pod(
+        "abc123", 42, "worker:latest", [], skills=[{"name": "s", "version": "1"}]
+    )
+    mock_client.V1SecurityContext.assert_not_called()
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_passes_skills_bucket_env(mock_client, mock_config, monkeypatch):
+    monkeypatch.setenv("SKILLS_BUCKET", "jarvis-skills-bucket")
+    _mocked_pod_api(mock_client, mock_config)
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [], skills=[{"name": "s", "version": "1"}])
+    env_calls = mock_client.V1EnvVar.call_args_list
+    bucket_calls = [c for c in env_calls if c.kwargs.get("name") == "SKILLS_BUCKET"]
+    assert len(bucket_calls) == 1
+    assert bucket_calls[0].kwargs["value"] == "jarvis-skills-bucket"
+    jaar_calls = [c for c in env_calls if c.kwargs.get("name") == "JAAR_URL"]
+    assert len(jaar_calls) == 0
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_passes_task_prompt_and_state_file(mock_client, mock_config):
+    _mocked_pod_api(mock_client, mock_config)
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [], task_prompt="Do the thing")
+    env_calls = mock_client.V1EnvVar.call_args_list
+    prompt = [c for c in env_calls if c.kwargs.get("name") == "TASK_PROMPT"]
+    assert len(prompt) == 1
+    assert prompt[0].kwargs["value"] == "Do the thing"
+    state = [c for c in env_calls if c.kwargs.get("name") == "STATE_FILE"]
+    # Worker container + status sidecar both get STATE_FILE.
+    assert len(state) == 2
+    assert all(c.kwargs["value"] == "/worker-state/claude-state" for c in state)
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_deletes_leftover_pod_first(mock_client, mock_config):
+    from kubernetes.client.exceptions import ApiException
+
+    mock_api = _mocked_pod_api(mock_client, mock_config)
+    mock_api.read_namespaced_pod.side_effect = ApiException(status=404)
+
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [])
+    mock_api.delete_namespaced_pod.assert_called_once()
+    mock_api.create_namespaced_pod.assert_called_once()
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_resources_default_from_env(mock_client, mock_config):
+    _mocked_pod_api(mock_client, mock_config)
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [])
+    # First V1ResourceRequirements call is the worker container's.
+    worker_res = mock_client.V1ResourceRequirements.call_args_list[0].kwargs
+    assert worker_res["requests"] == {
+        "memory": k8s.WORKER_MEMORY_REQUEST,
+        "cpu": k8s.WORKER_CPU_REQUEST,
+    }
+    assert worker_res["limits"] == {
+        "memory": k8s.WORKER_MEMORY_LIMIT,
+        "cpu": k8s.WORKER_CPU_LIMIT,
+    }
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_get_pod_detail_returns_worker_readiness(mock_client, mock_config):
+    mock_api = _mocked_pod_api(mock_client, mock_config)
+    pod = MagicMock()
+    pod.status.phase = "Running"
+    pod.status.reason = None
+    pod.status.message = None
+    cs = MagicMock()
+    cs.name = "worker"
+    cs.ready = True
+    pod.status.container_statuses = [cs]
+    mock_api.read_namespaced_pod.return_value = pod
+
+    detail = k8s.get_pod_detail("abc123")
+    assert detail["phase"] == "Running"
+    assert detail["worker_ready"] is True
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_get_pod_detail_none_on_404(mock_client, mock_config):
+    from kubernetes.client.exceptions import ApiException
+
+    mock_api = _mocked_pod_api(mock_client, mock_config)
+    mock_api.read_namespaced_pod.side_effect = ApiException(status=404)
+    assert k8s.get_pod_detail("abc123") is None
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_read_pod_logs_returns_tail(mock_client, mock_config):
+    mock_api = _mocked_pod_api(mock_client, mock_config)
+    mock_api.read_namespaced_pod_log.return_value = "line1\nline2"
+    assert k8s.read_pod_logs("abc123", tail_lines=2) == "line1\nline2"
+    call = mock_api.read_namespaced_pod_log.call_args
+    assert call.kwargs["container"] == "worker"
+    assert call.kwargs["tail_lines"] == 2
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_read_pod_logs_none_on_404(mock_client, mock_config):
+    from kubernetes.client.exceptions import ApiException
+
+    mock_api = _mocked_pod_api(mock_client, mock_config)
+    mock_api.read_namespaced_pod_log.side_effect = ApiException(status=404)
+    assert k8s.read_pod_logs("abc123") is None
 
 
 @patch("app.services.k8s.config")

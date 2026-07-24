@@ -512,6 +512,19 @@ export function getWorkerVscodeUri(id: string): Promise<{ uri: string }> {
   return request(`/workers/${id}/vscode-uri`);
 }
 
+export type TerminalMode = 'terminal' | 'shell';
+
+/** Same-origin WebSocket URL for a worker's Claude session PTY or an ad-hoc shell. */
+export function getWorkerTerminalWsUrl(id: string, mode: TerminalMode = 'terminal'): string {
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${window.location.host}${API_BASE}/workers/${id}/${mode}`;
+}
+
+/** Plain-text pod log tail — meant to be opened in a new tab. */
+export function getWorkerLogsUrl(id: string, tail = 500): string {
+  return `${API_BASE}/workers/${id}/logs?tail=${tail}`;
+}
+
 // --- Repository API ---
 
 export function createRepository(body: {

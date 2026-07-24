@@ -19,8 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, Input } from '@jarvis/jads';
-import { listTasks, type Task } from '../../api/client';
-import { fetchServerCount, fetchAgentCount, fetchSkillCount, fetchPromptCount } from '../../api/jaar';
+import { listTasks, listSkills, type Task } from '../../api/client';
 import BrainAnimation from './BrainAnimation';
 import './Dashboard.css';
 
@@ -42,7 +41,7 @@ const RedirectIcon = () => (
 interface MetricBlockProps {
   id: string;
   title: string;
-  metrics: { label: string; count: number; color: string }[];
+  metrics: { label: string; count: number | null; color: string }[];
   compact: boolean;
   onNavigate?: () => void;
 }
@@ -72,7 +71,7 @@ function MetricBlock({ id, title, metrics, compact, onNavigate }: MetricBlockPro
           <div className="dashboard__metrics">
             {metrics.map((m) => (
               <div key={m.label} className="dashboard__metric">
-                <span className="dashboard__metric-count" style={{ color: m.color }}>{m.count}</span>
+                <span className="dashboard__metric-count" style={{ color: m.color }}>{m.count ?? '—'}</span>
                 {!compact && <span className="dashboard__metric-label" style={{ color: m.color }}>{m.label}</span>}
               </div>
             ))}
@@ -155,22 +154,13 @@ export default function Dashboard() {
     queryFn: () => listTasks({ date: today, scope: 'weekly' }),
   });
 
-  const { data: serverCount = 0 } = useQuery({
-    queryKey: ['jaar', 'servers'],
-    queryFn: fetchServerCount,
+  const { data: skills = [] } = useQuery({
+    queryKey: ['skills'],
+    queryFn: listSkills,
   });
-  const { data: agentCount = 0 } = useQuery({
-    queryKey: ['jaar', 'agents'],
-    queryFn: fetchAgentCount,
-  });
-  const { data: skillCount = 0 } = useQuery({
-    queryKey: ['jaar', 'skills'],
-    queryFn: fetchSkillCount,
-  });
-  const { data: promptCount = 0 } = useQuery({
-    queryKey: ['jaar', 'prompts'],
-    queryFn: fetchPromptCount,
-  });
+  const skillCount = new Set(skills.map((s) => s.name)).size;
+
+  const agentRegistryConsoleUrl = import.meta.env.VITE_AGENT_REGISTRY_CONSOLE_URL as string | undefined;
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(blockOrder));
@@ -234,13 +224,15 @@ export default function Dashboard() {
       id: 'agent-registry',
       title: 'Agent Registry',
       metrics: [
-        { label: 'Servers', count: serverCount, color: '#3b82f6' },
-        { label: 'Agents', count: agentCount, color: '#f97316' },
+        { label: 'Servers', count: null, color: '#3b82f6' },
+        { label: 'Agents', count: null, color: '#f97316' },
         { label: 'Skills', count: skillCount, color: '#22c55e' },
-        { label: 'Prompts', count: promptCount, color: '#a855f7' },
+        { label: 'Prompts', count: null, color: '#a855f7' },
       ],
       compact,
-      onNavigate: () => { window.open(`${window.location.protocol}//jaar.jarvis.io`, '_blank'); },
+      ...(agentRegistryConsoleUrl
+        ? { onNavigate: () => { window.open(agentRegistryConsoleUrl, '_blank'); } }
+        : {}),
     },
   };
 

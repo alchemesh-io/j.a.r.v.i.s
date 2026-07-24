@@ -1,6 +1,8 @@
-FROM docker@sha256:4d2c6e334de4b26d492c0a8cc5438e3dbf1a02eee899fc0d4d39b96202c943a7 AS base
+FROM gcr.io/google.com/cloudsdktool/cloud-sdk:alpine AS base
 
-# Alpine-based docker:dind already includes dockerd + docker CLI.
+# Google's own Alpine image ships the gcloud CLI (incl. `gcloud storage`), used by
+# the entrypoint to fetch skills from GCS via Workload Identity — no docker/dind
+# needed anymore since skills are plain files, not OCI images.
 # Install the remaining runtime dependencies: Node.js, Python, git, jq, sudo, etc.
 RUN apk add --no-cache \
     bash \
@@ -24,11 +26,9 @@ RUN addgroup -g 1000 node && \
     chown -R node:node /home/node
 
 # Allow the node user to run any command as root without a password prompt.
-# The worker pod runs with privileged: true so dockerd can start.
+# Covers the stateful-mode chown fallback (in-container root is enough); no
+# privileged pod is required anymore since skill fetch no longer needs dockerd.
 RUN echo "node ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/node-docker
-
-# Use slirp4netns as the rootlesskit networking backend for dockerd.
-ENV DOCKERD_ROOTLESS_ROOTLESSKIT_NET=slirp4netns
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -36,18 +36,6 @@ ENV PATH="/root/.local/bin:$PATH"
 
 # Install Claude Code (pinned version — npm package still available for Docker/Linux)
 RUN npm install -g @anthropic-ai/claude-code@2.1.104
-
-# Install arctl directly from GitHub releases into /usr/local/bin (readable by node user)
-ARG ARCTL_VERSION=v0.3.3
-RUN ARCH=$(uname -m) && \
-    case "$ARCH" in \
-      x86_64) ARCTL_ARCH=amd64 ;; \
-      aarch64|arm64) ARCTL_ARCH=arm64 ;; \
-      *) echo "unsupported arch: $ARCH" && exit 1 ;; \
-    esac && \
-    curl -fsSL "https://github.com/agentregistry-dev/agentregistry/releases/download/${ARCTL_VERSION}/arctl-linux-${ARCTL_ARCH}" \
-      -o /usr/local/bin/arctl \
-    && chmod 755 /usr/local/bin/arctl
 
 # Install gws (Google Workspace CLI) via npm
 RUN npm install -g @googleworkspace/cli@0.22.5
