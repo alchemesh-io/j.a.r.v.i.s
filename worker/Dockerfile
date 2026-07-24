@@ -19,8 +19,12 @@ RUN apk add --no-cache \
     sudo \
     tar
 
-# Create a non-root 'node' user (UID 1000) to match the previous Debian layout
-RUN addgroup -g 1000 node && \
+# Create a non-root 'node' user (UID 1000) to match the previous Debian layout.
+# The base image ships its own uid/gid-1000 'cloudsdk' user — remove it first
+# since /google-cloud-sdk is root-owned and world-executable, so gcloud works
+# fine under any uid and doesn't need that user to exist.
+RUN deluser cloudsdk 2>/dev/null; delgroup cloudsdk 2>/dev/null; \
+    addgroup -g 1000 node && \
     adduser -u 1000 -G node -s /bin/bash -D node && \
     mkdir -p /home/node/jarvis /home/node/.claude && \
     chown -R node:node /home/node
