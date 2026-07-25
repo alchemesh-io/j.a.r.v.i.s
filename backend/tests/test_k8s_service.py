@@ -441,27 +441,12 @@ def test_create_worker_pod_unprivileged_without_skills(mock_client, mock_config)
 
 @patch("app.services.k8s.config")
 @patch("app.services.k8s.client")
-def test_create_worker_pod_unprivileged_with_skills(mock_client, mock_config):
-    """Skills are fetched from GCS via gcloud storage — never needs a privileged pod."""
+def test_create_worker_pod_privileged_with_skills(mock_client, mock_config):
     _mocked_pod_api(mock_client, mock_config)
     k8s.create_worker_pod(
         "abc123", 42, "worker:latest", [], skills=[{"name": "s", "version": "1"}]
     )
-    mock_client.V1SecurityContext.assert_not_called()
-
-
-@patch("app.services.k8s.config")
-@patch("app.services.k8s.client")
-def test_create_worker_pod_passes_skills_bucket_env(mock_client, mock_config, monkeypatch):
-    monkeypatch.setenv("SKILLS_BUCKET", "jarvis-skills-bucket")
-    _mocked_pod_api(mock_client, mock_config)
-    k8s.create_worker_pod("abc123", 42, "worker:latest", [], skills=[{"name": "s", "version": "1"}])
-    env_calls = mock_client.V1EnvVar.call_args_list
-    bucket_calls = [c for c in env_calls if c.kwargs.get("name") == "SKILLS_BUCKET"]
-    assert len(bucket_calls) == 1
-    assert bucket_calls[0].kwargs["value"] == "jarvis-skills-bucket"
-    jaar_calls = [c for c in env_calls if c.kwargs.get("name") == "JAAR_URL"]
-    assert len(jaar_calls) == 0
+    mock_client.V1SecurityContext.assert_called_once_with(privileged=True)
 
 
 @patch("app.services.k8s.config")

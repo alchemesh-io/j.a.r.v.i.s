@@ -1,0 +1,11 @@
+apiVersion: v2
+name: jaar
+description: J.A.A.R — Just An Agent Registry (AgentRegistry for J.A.R.V.I.S)
+type: application
+version: 0.1.0
+appVersion: "0.3.3"
+
+dependencies:
+  - name: agentregistry
+    version: "0.3.3"
+    repository: "oci://ghcr.io/agentregistry-dev/agentregistry/charts"

@@ -1,0 +1,10 @@
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: jaar-agentregistry-plaintext
+  namespace: {{ .Release.Namespace }}
+spec:
+  host: jaar-agentregistry.jaar.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: DISABLE
