@@ -1,0 +1,104 @@
+.worker-terminal {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: calc(100vh - 120px);
+}
+
+.worker-terminal__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px 8px 0 0;
+  font-size: 0.85rem;
+}
+
+.worker-terminal__back {
+  color: var(--color-accent-cyan);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.worker-terminal__back:focus-visible,
+.worker-terminal__action:focus-visible {
+  outline: 2px solid var(--color-accent-cyan);
+  outline-offset: 2px;
+}
+
+.worker-terminal__title {
+  color: var(--color-text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worker-terminal__status {
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.worker-terminal__status--running {
+  color: #10b981;
+  border-color: #10b98140;
+  background: #10b9810d;
+}
+
+.worker-terminal__status--starting,
+.worker-terminal__status--connecting,
+.worker-terminal__status--disconnected {
+  color: #f59e0b;
+  border-color: #f59e0b40;
+  background: #f59e0b0d;
+}
+
+.worker-terminal__status--error {
+  color: #dc2626;
+  border-color: #dc262640;
+  background: #dc26260d;
+}
+
+.worker-terminal__status--stopped {
+  color: #a78bfa;
+  border-color: #a78bfa40;
+  background: #a78bfa0d;
+}
+
+.worker-terminal__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+}
+
+.worker-terminal__action {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.worker-terminal__action:hover {
+  color: var(--color-accent-cyan);
+}
+
+.worker-terminal__screen {
+  flex: 1;
+  min-height: 0;
+  background: #0a0e1a;
+  border: 1px solid var(--color-border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 6px;
+}
+
+/* xterm fills its container */
+.worker-terminal__screen .xterm {
+  height: 100%;
+}

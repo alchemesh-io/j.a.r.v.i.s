@@ -24,7 +24,9 @@ RUN addgroup -g 1000 node && \
     chown -R node:node /home/node
 
 # Allow the node user to run any command as root without a password prompt.
-# The worker pod runs with privileged: true so dockerd can start.
+# sudo covers the stateful-mode chown fallback (in-container root is enough) and
+# dockerd for skill pulls — the latter additionally requires the pod to be
+# privileged, which the backend sets only when the worker references skills.
 RUN echo "node ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/node-docker
 
 # Use slirp4netns as the rootlesskit networking backend for dockerd.

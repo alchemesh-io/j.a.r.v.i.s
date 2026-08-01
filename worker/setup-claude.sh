@@ -2,24 +2,27 @@
 # setup-claude.sh — Configure Claude Code settings, hooks, and workspace trust
 set -e
 
-STATE_FILE="/tmp/claude-state"
+# State file shared with the status sidecar via the /worker-state emptyDir.
+STATE_FILE="${STATE_FILE:-/worker-state/claude-state}"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 CLAUDE_JSON="$HOME/.claude.json"
 WORKSPACE="$HOME/jarvis"
 
 # --- State hook scripts ---
 
+mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null || true
 echo "initialized" > "$STATE_FILE"
 
-cat > "$HOME/worker-hook-working.sh" << 'HOOK'
+# Unquoted heredocs: $STATE_FILE is resolved now, when the hook is generated.
+cat > "$HOME/worker-hook-working.sh" << HOOK
 #!/bin/bash
-echo "working" > /tmp/claude-state
+echo "working" > "$STATE_FILE"
 HOOK
 chmod +x "$HOME/worker-hook-working.sh"
 
-cat > "$HOME/worker-hook-idle.sh" << 'HOOK'
+cat > "$HOME/worker-hook-idle.sh" << HOOK
 #!/bin/bash
-echo "waiting_for_human" > /tmp/claude-state
+echo "waiting_for_human" > "$STATE_FILE"
 HOOK
 chmod +x "$HOME/worker-hook-idle.sh"
 

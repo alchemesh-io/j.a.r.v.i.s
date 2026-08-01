@@ -8,9 +8,11 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: file:///mnt/jarvis-repo
+    # Git-sourced: works on any cluster, no minikube mount required.
+    # Use jaar-app-local.yaml for the mount-based local inner loop.
+    repoURL: https://github.com/alchemesh-io/j.a.r.v.i.s.git
     path: helm/jaar
-    targetRevision: HEAD
+    targetRevision: main
     helm:
       releaseName: jaar
   destination:

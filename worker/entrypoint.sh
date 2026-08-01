@@ -160,32 +160,24 @@ if [ "$WORKER_MODE" = "stateful" ]; then
     echo "[worker] mode=stateful, PVC mounted at /home/node, ${REPOS_CACHED} repos cached, ${SKILLS_CACHED} skills cached"
 fi
 
-# Step 5: Start all processes
-echo "[worker] Starting status server on port 8080..."
-node /opt/jarvis-worker/status-server/index.js &
-STATUS_PID=$!
+# Step 5: Launch Claude Code interactively as the container's main process so the
+# Kubernetes Attach API reaches its PTY. The status server runs in a dedicated
+# sidecar container; the hooks report Claude's state through the shared
+# /worker-state emptyDir (see setup-claude.sh / STATE_FILE).
+export TERM="${TERM:-xterm-256color}"
 
-# Convert 32-char hex worker ID to UUID format (8-4-4-4-12)
-SESSION_UUID="${WORKER_ID:0:8}-${WORKER_ID:8:4}-${WORKER_ID:12:4}-${WORKER_ID:16:4}-${WORKER_ID:20:12}"
-
-# Start Claude Code in non-interactive streaming mode via a named pipe
-CLAUDE_FIFO="/tmp/claude-input"
-mkfifo "$CLAUDE_FIFO"
-echo "[worker] Starting Claude Code session (UUID: ${SESSION_UUID}) in stream mode..."
-cat "$CLAUDE_FIFO" | claude --resume "$SESSION_UUID" \
-    --dangerously-skip-permissions \
-    --print \
-    --input-format stream-json \
-    --output-format stream-json \
-    > /tmp/claude-output.log 2>&1 &
-CLAUDE_PID=$!
-
-echo "$CLAUDE_PID" > /tmp/claude.pid
-
-echo "[worker] All processes started. Claude PID=$CLAUDE_PID, Status PID=$STATUS_PID"
-
-# Keep the pod alive — wait for status server to exit
-wait $STATUS_PID
-echo "[worker] Status server exited, shutting down..."
-kill $STATUS_PID $CLAUDE_PID 2>/dev/null || true
-wait
+# Resume probe: if a previous session exists under ~/.claude/projects/ (stateful
+# restart), resume the most recent one; otherwise start fresh with the task
+# prompt as the first turn.
+LATEST_SESSION=$(ls -t "$HOME/.claude/projects"/*/*.jsonl 2>/dev/null | head -1)
+if [ -n "$LATEST_SESSION" ]; then
+    SESSION_ID=$(basename "$LATEST_SESSION" .jsonl)
+    echo "[worker] Resuming Claude Code session ${SESSION_ID}..."
+    exec claude --dangerously-skip-permissions --resume "$SESSION_ID"
+elif [ -n "$TASK_PROMPT" ]; then
+    echo "[worker] Starting Claude Code with task prompt..."
+    exec claude --dangerously-skip-permissions "$TASK_PROMPT"
+else
+    echo "[worker] Starting Claude Code (no task prompt)..."
+    exec claude --dangerously-skip-permissions
+fi

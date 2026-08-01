@@ -53,7 +53,8 @@ j.a.r.v.i.s/
 │   │   │   ├── worker.py     # Worker Pydantic schemas (Create, Update, Response, Summary)
 │   │   │   └── repository.py # Repository Pydantic schemas (Create, Response)
 │   │   ├── services/
-│   │   │   └── k8s.py        # Kubernetes client — create/delete worker pods and services
+│   │   │   ├── k8s.py        # Kubernetes client — worker pods/services/PVCs, attach/exec streams, logs
+│   │   │   └── terminal.py   # WebSocket bridge: browser xterm ↔ worker pod PTY (attach/exec)
 │   │   └── routes/
 │   │       ├── tasks.py      # /api/v1/tasks — CRUD + date/scope filtering
 │   │       ├── weeklies.py   # /api/v1/weeklies — CRUD with nested dailies
@@ -109,11 +110,11 @@ j.a.r.v.i.s/
 │   ├── skills/                 # Skill artifacts (add via arctl)
 │   └── prompts/                # Prompt artifacts (add via arctl)
 ├── worker/
-│   ├── Dockerfile            # Worker Docker image (node:22-slim + Claude Code 2.1.104 + tools)
-│   ├── entrypoint.sh         # Init sequence: config copy, repo clone, skill pull, start
-│   ├── setup-claude.sh       # Claude Code config: hooks, workspace trust, MCP server
+│   ├── Dockerfile            # Worker Docker image (docker:dind base + Claude Code 2.1.104 + tools)
+│   ├── entrypoint.sh         # Init sequence: config copy, repo clone, skill pull, then exec claude (interactive PTY)
+│   ├── setup-claude.sh       # Claude Code config: hooks (write $STATE_FILE), workspace trust, MCP server
 │   └── status-server/
-│       └── index.js          # Status endpoint (port 8080) + push state to backend every 3s
+│       └── index.js          # Sidecar: status endpoint (port 8080) + push state to backend every 3s
 ├── helm/
 │   ├── istio/                # Istio service mesh (deployed via ArgoCD)
 │   │   ├── Chart.yaml        # Sub-chart deps: base, istiod, gateway
@@ -169,7 +170,7 @@ For local dev, add entries to `/etc/hosts` (or use dnsmasq for wildcard):
 
 Backend task management endpoints are under `/api/v1/`. OpenAPI docs at `main.jarvis.io/docs`.
 
-Frontend routes: `/` (Dashboard), `/tasks` (TaskBoard), `/key-focuses` (Key Focuses), `/reports` (Reports), `/workers` (Workers), `/repositories` (Repositories). Workers and Repositories share a `WorkerNav` tab bar.
+Frontend routes: `/` (Dashboard), `/tasks` (TaskBoard), `/key-focuses` (Key Focuses), `/reports` (Reports), `/workers` (Workers), `/workers/:id/terminal` (worker terminal — xterm.js; `?mode=shell` for an ad-hoc shell), `/repositories` (Repositories). Workers and Repositories share a `WorkerNav` tab bar.
 
 ## Local Development Workflow
 
@@ -306,22 +307,34 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
   ```
 - When adding a new artifact: create a subfolder under the appropriate `artifacts/<type>/` directory with a `manifest.yaml`, then register it with `arctl`
 
-### Worker image
+### Worker image & runtime
 
+- Worker pods run **two containers** sharing a `/worker-state` emptyDir (`sizeLimit: 64Mi` — required by this cluster's `require-emptydir-sizelimit` policy):
+  - `worker` — Claude Code running **interactively as the container's main process** (`tty: true`, `stdin: true`); the entrypoint provisions (config copy, repo clone, skill pull) then `exec claude --dangerously-skip-permissions`. This is the Kubernetes Attach target for the browser terminal
+  - `status` — the status server (port 8080), reading the hook-written state file (`$STATE_FILE = /worker-state/claude-state`) and PATCHing the backend every 3s. Declared as a **native sidecar** (`initContainers` entry with `restartPolicy: Always`, not a second `containers` entry) — this cluster's `deny-shared-volumes` admission policy forbids an emptyDir mounted by more than one standard container, and its per-workload whitelist can't apply to one-off Pods with a random per-instance name anyway. Its own readiness/state therefore shows up under `pod.status.initContainerStatuses`, not `containerStatuses` — code reading `worker`'s status only (`get_pod_phase`, `get_pod_detail`) is unaffected
+- The task prompt (title + notes) is passed as `TASK_PROMPT` and submitted as Claude's first turn on fresh boot. On restart, the entrypoint probes `~/.claude/projects/**/*.jsonl` and resumes the most recent session with `--resume <id>`
+- Worker pods are **privileged only when skills are requested** (dockerd for `arctl skill pull`); skill-less workers run unprivileged. The `status` sidecar is never privileged
+- Terminal access:
+  - `WS /api/v1/workers/{id}/terminal` — attach to the Claude PTY (shared attachment, ring-buffer replay on reconnect, pre-populated from pod logs)
+  - `WS /api/v1/workers/{id}/shell` — independent `/bin/bash` exec per connection
+  - `GET /api/v1/workers/{id}/logs?tail=N` — plain-text pod log tail
+  - Protocol: binary frames = raw PTY bytes; JSON text frames = `{type:"resize",cols,rows}` (client→server) and `{type:"status",status}` (server→client). Bridge lives in `backend/app/services/terminal.py`; frontend terminal page at `/workers/:id/terminal` (xterm.js, `?mode=shell` for the shell)
 - Workers run in two modes: `ephemeral` (default — no persistence, all data lost on pod stop) and `stateful` (PVC mounted at `/home/node` so cloned repos, Claude Code session JSONL under `~/.claude/projects/`, and pulled skills under `~/.claude/skills/` survive pod failures and explicit pause/resume)
 - Mode is set at worker creation (`POST /api/v1/workers` body field `mode`) and is immutable
 - Stateful workers expose two extra REST actions:
   - `POST /api/v1/workers/{id}/stop` — deletes pod + service, keeps PVC; transitions state to `stopped`. Valid from any state except `archived`
   - `POST /api/v1/workers/{id}/restart` — re-creates pod + service against the existing PVC. Valid from any state except `archived`; if a pod is still running it is deleted first
 - `archived` is the only terminal state; every other state SHALL be restartable via the `/restart` endpoint
+- Pod creation is idempotent: any leftover pod with the same name is deleted (and awaited) before the new pod is created
 - The entrypoint is idempotent: it skips `git clone` when `<repo>/.git` already exists and skips `arctl skill pull` when `~/.claude/skills/<name>/SKILL.md` is present. ConfigMap-sourced settings (`policy-limits.json`, `remote-settings.json`, `settings.json`, `~/.claude.json`) are re-applied on every start so cluster-side updates take effect on resume
 - Pod failures (phase `Failed` or non-zero container exit) are mapped to DB state `error` by `get_worker` polling. Stateful workers in `error` can be resumed; ephemeral workers in `error` are terminal
 - PVC sizing: `worker.persistence.size` (default `2Gi`), `worker.persistence.storageClass` (default `standard` for Minikube). Storage class MUST honour `fsGroup` (1000) for the volume to be writable by the `node` user
+- Worker resources come from Helm `worker.resources` values, surfaced to the backend as `WORKER_CPU_REQUEST` / `WORKER_MEMORY_REQUEST` / `WORKER_CPU_LIMIT` / `WORKER_MEMORY_LIMIT` in the backend ConfigMap
 
 ### Infrastructure
 
 - ArgoCD renders Helm charts internally — never run `helm install/upgrade` directly
-- ArgoCD syncs from `HEAD` of the current branch via `minikube mount`
+- The GHCR Application CRs (`jarvis-app.yaml`, `jaar-app.yaml`) sync from the **Git repository** (`targetRevision: main`) — no minikube mount needed. The `-local` variants sync from `HEAD` via `minikube mount` for the fast inner loop (uncommitted Helm changes visible immediately)
 - Helm values for image tags use `latest` by default locally; CI tags with short git SHA
 - Kubernetes Gateway API (Gateway + HTTPRoute) with Istio: host-based routing on `*.jarvis.io` (`main.jarvis.io` → JARVIS, `mcp.jarvis.io` → MCP server, `jaar.jarvis.io` → AgentRegistry)
 - Backend config via ConfigMap (`backend-configmap.yaml`) including `WORKER_IMAGE`, `WORKER_IMAGE_PULL_POLICY`, `KUBE_CONTEXT`; secrets via Secret (`backend-secret.yaml`)
@@ -335,15 +348,16 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
 | Limitation | Impact | Mitigation |
 |------------|--------|-----------|
 | **SQLite is single-writer** | No horizontal scaling for backend | Acceptable for local dev; migration to PostgreSQL planned (change `DATABASE_URL` + Helm chart) |
-| **`minikube mount` must stay running** | ArgoCD loses access to chart if process dies | `make cluster-status` shows mount health; `make cluster-up` is idempotent and restarts it |
-| **ArgoCD syncs from HEAD via minikube mount** | Uncommitted Helm changes are visible immediately via the filesystem mount | Use `make sync` to force ArgoCD to re-read |
+| **`minikube mount` needed for local-source deploys** | `deploy-local` (and hostPath data persistence) break if the mount process dies; `make deploy` (Git-sourced) is unaffected | `make cluster-status` shows mount health; `make cluster-up` is idempotent and restarts it |
+| **Git-sourced apps sync committed changes only** | With `jarvis-app.yaml` / `jaar-app.yaml`, uncommitted Helm edits are invisible to ArgoCD | Use `make deploy-local` (mount-sourced, `HEAD`) for the inner loop |
 | **ArgoCD + Istio add ~1 GB RAM overhead** | May strain developer laptops | Tune with `MINIKUBE_MEMORY` override |
 | **MCP server depends on backend** | MCP tools fail if backend is down | httpx with retry logic; K8s readiness probes check backend connectivity |
 | **JAAR + PostgreSQL add ~512 MB RAM** | May require more Minikube memory | Bump with `MINIKUBE_MEMORY=12288` |
 | **Data persistence requires mount** | `minikube mount` for `.data/` must stay running | `make cluster-status` shows mount health; data survives `minikube delete` |
 | **Host-based routing requires `/etc/hosts`** | `*.jarvis.io` must resolve to gateway IP | Add entries for `main.jarvis.io`, `mcp.jarvis.io`, `jaar.jarvis.io`, `jaac.jarvis.io` (or use dnsmasq for wildcard) |
-| **Worker pods consume significant resources** | Each worker pod runs Claude Code + UI + status server (~512MB–1GB RAM); stateful workers add a per-worker PVC (default 2 GiB) | Set resource requests/limits via Helm values; tune `worker.persistence.size` for stateful workers; archive workers to release the PVC |
-| **Dynamic HTTPRoutes managed outside ArgoCD** | Worker HTTPRoutes aren't managed by ArgoCD sync | Worker deletion explicitly removes HTTPRoutes; orphan cleanup can be added later |
+| **Worker pods consume significant resources** | Each worker pod runs Claude Code + status sidecar (~512MB–1GB RAM); stateful workers add a per-worker PVC (default 2 GiB) | Set resource requests/limits via Helm `worker.resources`; tune `worker.persistence.size` for stateful workers; archive workers to release the PVC |
+| **No auth on the worker terminal** | Anyone who can reach `main.jarvis.io` can attach to a worker PTY / shell (root-equivalent in the pod) | Acceptable for a local single-user cluster; an auth layer is a prerequisite before any remote deployment |
+| **Terminal bridge state is in-process** | Terminal attachments live in backend memory — backend must stay single-replica (already required by SQLite) | Revisit with the PostgreSQL migration (sticky routing or a dedicated bridge) |
 | **Hook-based state reporting has 3s latency** | Worker state changes are pushed to the backend every 3 seconds by the status server, not in real-time | Acceptable for UI updates combined with 5s frontend polling; total worst-case latency is ~8s |
 | **Claude Code version pinned at 2.1.104** | Worker image must be rebuilt to upgrade Claude Code | Pin prevents unexpected breaking changes; bump version in `worker/Dockerfile` and rebuild |
 | **VSCode Dev Containers requires extension** | `vscode-uri` endpoint generates `k8s-container` URIs that need the Dev Containers extension | Document prerequisite; SSH fallback abandoned |
