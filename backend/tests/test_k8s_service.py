@@ -409,6 +409,11 @@ def _mocked_pod_api(mock_client, mock_config):
 @patch("app.services.k8s.client")
 def test_create_worker_pod_has_worker_and_status_containers(mock_client, mock_config):
     _mocked_pod_api(mock_client, mock_config)
+    # Distinct sentinels per call — MagicMock()'s default .return_value is a single
+    # shared object across calls, which would make the containers/init_containers
+    # split below trivially pass regardless of which list each object lands in.
+    mock_worker_container, mock_status_container = MagicMock(), MagicMock()
+    mock_client.V1Container.side_effect = [mock_worker_container, mock_status_container]
     k8s.create_worker_pod("abc123", 42, "worker:latest", [])
 
     names = [c.kwargs.get("name") for c in mock_client.V1Container.call_args_list]
@@ -420,6 +425,15 @@ def test_create_worker_pod_has_worker_and_status_containers(mock_client, mock_co
     status_kwargs = mock_client.V1Container.call_args_list[1].kwargs
     assert status_kwargs["command"] == ["node", "/opt/jarvis-worker/status-server/index.js"]
     assert status_kwargs.get("security_context") is None
+    # `status` must be a native sidecar (initContainers + restartPolicy=Always), not a
+    # second entry in `containers` — this cluster's deny-shared-volumes admission
+    # policy rejects an emptyDir mounted by more than one standard container, and its
+    # workload whitelist can't be pre-populated since each worker Pod's name includes a
+    # random per-instance id.
+    assert status_kwargs["restart_policy"] == "Always"
+    pod_spec_kwargs = mock_client.V1PodSpec.call_args.kwargs
+    assert pod_spec_kwargs["containers"] == [mock_worker_container]
+    assert pod_spec_kwargs["init_containers"] == [mock_status_container]
     # Shared state volume mounted in both containers.
     state_mounts = [
         c for c in mock_client.V1VolumeMount.call_args_list

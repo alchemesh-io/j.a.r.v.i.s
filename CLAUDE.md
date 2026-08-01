@@ -309,9 +309,9 @@ cd artifacts/servers/jarvis && uv run pytest tests/ -v
 
 ### Worker image & runtime
 
-- Worker pods run **two containers** sharing a `/worker-state` emptyDir:
+- Worker pods run **two containers** sharing a `/worker-state` emptyDir (`sizeLimit: 64Mi` — required by this cluster's `require-emptydir-sizelimit` policy):
   - `worker` — Claude Code running **interactively as the container's main process** (`tty: true`, `stdin: true`); the entrypoint provisions (config copy, repo clone, skill pull) then `exec claude --dangerously-skip-permissions`. This is the Kubernetes Attach target for the browser terminal
-  - `status` — the status server (port 8080), reading the hook-written state file (`$STATE_FILE = /worker-state/claude-state`) and PATCHing the backend every 3s
+  - `status` — the status server (port 8080), reading the hook-written state file (`$STATE_FILE = /worker-state/claude-state`) and PATCHing the backend every 3s. Declared as a **native sidecar** (`initContainers` entry with `restartPolicy: Always`, not a second `containers` entry) — this cluster's `deny-shared-volumes` admission policy forbids an emptyDir mounted by more than one standard container, and its per-workload whitelist can't apply to one-off Pods with a random per-instance name anyway. Its own readiness/state therefore shows up under `pod.status.initContainerStatuses`, not `containerStatuses` — code reading `worker`'s status only (`get_pod_phase`, `get_pod_detail`) is unaffected
 - The task prompt (title + notes) is passed as `TASK_PROMPT` and submitted as Claude's first turn on fresh boot. On restart, the entrypoint probes `~/.claude/projects/**/*.jsonl` and resumes the most recent session with `--resume <id>`
 - Worker pods are **privileged only when skills are requested** (dockerd for `arctl skill pull`); skill-less workers run unprivileged. The `status` sidecar is never privileged
 - Terminal access:

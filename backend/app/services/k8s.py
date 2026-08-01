@@ -198,7 +198,9 @@ def create_worker_pod(
         ),
         client.V1Volume(
             name="worker-state",
-            empty_dir=client.V1EmptyDirVolumeSource(),
+            # sizeLimit required by this cluster's require-emptydir-sizelimit
+            # admission policy (same one istiod's gateway proxy hits — see istio.tf).
+            empty_dir=client.V1EmptyDirVolumeSource(size_limit="64Mi"),
         ),
     ]
 
@@ -283,8 +285,17 @@ def create_worker_pod(
         volume_mounts=worker_volume_mounts,
     )
 
+    # A native sidecar (initContainers entry with restartPolicy=Always, GA since
+    # K8s 1.28) rather than a second entry in `containers`. This cluster's
+    # deny-shared-volumes admission policy forbids an emptyDir/PVC being mounted
+    # by more than one *standard* container — its check only counts
+    # pod.spec.containers, not initContainers — and the policy's whitelist is
+    # keyed by workload name, which is useless here since each worker Pod's name
+    # includes a random per-instance id. Restructuring as a sidecar is the only
+    # way to keep `status` sharing /worker-state with `worker` and pass admission.
     status_container = client.V1Container(
         name="status",
+        restart_policy="Always",
         image=worker_image,
         image_pull_policy=image_pull_policy,
         command=["node", "/opt/jarvis-worker/status-server/index.js"],
@@ -321,7 +332,8 @@ def create_worker_pod(
         spec=client.V1PodSpec(
             service_account_name="jarvis-backend",
             security_context=pod_security_context,
-            containers=[worker_container, status_container],
+            containers=[worker_container],
+            init_containers=[status_container],
             volumes=pod_volumes,
             restart_policy="Never",
         ),
