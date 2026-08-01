@@ -526,8 +526,12 @@ def exec_worker_shell(worker_id: str):
     )
 
 
-def read_pod_logs(worker_id: str, tail_lines: int = 500) -> str | None:
-    """Return the recent log tail of the `worker` container, or None if unavailable."""
+def read_pod_logs(worker_id: str, tail_lines: int | None = 500) -> str | None:
+    """Return the log tail of the `worker` container, or None if unavailable.
+
+    tail_lines=None returns everything the kubelet still has on disk for this
+    container (bounded by containerLogMaxSize), not just a recent tail.
+    """
     if not _init_client():
         return None
     name = f"jarvis-worker-{worker_id}"

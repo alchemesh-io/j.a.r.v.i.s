@@ -23,9 +23,10 @@ from app.services import k8s
 
 logger = logging.getLogger(__name__)
 
-# Sized so a reconnect hands the client back roughly what xterm's in-browser
-# scrollback covers — several thousand lines of typical Claude output.
-MAX_BUFFER = 500 * 1024
+# Sized to match the kubelet's default per-container log cap (containerLogMaxSize,
+# 10Mi) — read_pod_logs() below pulls the whole current log file on reattach, so
+# the ring buffer needs enough headroom not to immediately re-truncate it.
+MAX_BUFFER = 10 * 1024 * 1024
 
 READY_POLL_S = 2.0
 READY_TIMEOUT_S = 120.0
@@ -286,8 +287,10 @@ class TerminalBridge:
         att = Attachment(worker_id, handle, asyncio.get_running_loop(), self._drop)
 
         # First attach: pre-populate the buffer from pod logs so the user gets
-        # the current screen history immediately.
-        logs = await asyncio.to_thread(k8s.read_pod_logs, worker_id, 500)
+        # the full session history immediately, not just a recent tail.
+        # tail_lines=None pulls everything the kubelet still has on disk for
+        # this container (bounded by containerLogMaxSize, not by us).
+        logs = await asyncio.to_thread(k8s.read_pod_logs, worker_id, None)
         if logs:
             att.buffer.push(logs.replace("\n", "\r\n").encode())
 
