@@ -60,15 +60,19 @@ else
     echo "$SETTINGS" > "$SETTINGS_FILE"
 fi
 
-# --- Pre-trust workspace, pre-seed onboarding (skips the first-run theme wizard,
-# which otherwise blocks the interactive PTY on a keypress) ---
+# --- Pre-trust workspace, pre-seed onboarding (skips the first-run theme wizard
+# and the Bypass Permissions mode confirmation — both otherwise block the
+# interactive PTY on a keypress) ---
 
 if [ ! -f "$CLAUDE_JSON" ]; then
     echo '{}' > "$CLAUDE_JSON"
 fi
 
 jq --arg ws "$WORKSPACE" \
-    '.projects[$ws].hasTrustDialogAccepted = true | .theme = "dark" | .hasCompletedOnboarding = true' \
+    '.projects[$ws].hasTrustDialogAccepted = true
+     | .theme = "dark"
+     | .hasCompletedOnboarding = true
+     | .bypassPermissionsModeAccepted = true' \
     "$CLAUDE_JSON" > /tmp/claude.json && mv /tmp/claude.json "$CLAUDE_JSON"
 
 # --- Configure JARVIS MCP (HTTP) via the Claude Code CLI ---
