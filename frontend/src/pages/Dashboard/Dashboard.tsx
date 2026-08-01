@@ -126,6 +126,7 @@ export default function Dashboard() {
   const [brainHovered, setBrainHovered] = useState(false);
   const [isDraggingAny, setIsDraggingAny] = useState(false);
   const [konamiMode, setKonamiMode] = useState(false);
+  const [brainChatOpen, setBrainChatOpen] = useState(false);
 
   // Easter egg: Konami code ↑↑↓↓←→←→BA toggles heart mode
   useEffect(() => {
@@ -266,6 +267,11 @@ export default function Dashboard() {
           className="dashboard__hud-brain"
           onMouseEnter={() => setBrainHovered(true)}
           onMouseLeave={() => setBrainHovered(false)}
+          onClick={() => setBrainChatOpen(true)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setBrainChatOpen(true); } }}
+          role="button"
+          tabIndex={0}
+          aria-label="Open main brain terminal"
         >
           <BrainAnimation konamiMode={konamiMode} />
         </div>
@@ -297,9 +303,7 @@ export default function Dashboard() {
         </DndContext>
       </div>
 
-      <div className="dashboard__brain-dock">
-        <MainBrainTerminal />
-      </div>
+      <MainBrainTerminal open={brainChatOpen} onClose={() => setBrainChatOpen(false)} />
     </div>
   );
 }

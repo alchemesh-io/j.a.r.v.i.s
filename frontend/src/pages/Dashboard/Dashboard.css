@@ -45,6 +45,13 @@
   transform: translate(-50%, -50%);
   width: min(60vmin, 520px);
   height: min(60vmin, 520px);
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.dashboard__hud-brain:focus-visible {
+  outline: 2px solid var(--color-accent-cyan);
+  outline-offset: 6px;
 }
 
 /* ── Block positions ─────────────────────────────────────── */
@@ -432,11 +439,3 @@
   color: var(--color-text-muted, #94a3b8);
 }
 
-/* ── Main brain dock ───────────────────────────────────── */
-
-.dashboard__brain-dock {
-  width: 100%;
-  max-width: min(1100px, 100%);
-  margin: 0 auto;
-  padding: 16px 24px 24px;
-}
