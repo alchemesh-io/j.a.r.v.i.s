@@ -13,6 +13,7 @@ backend:
     databaseUrl: "sqlite:////data/jarvis.db"
     appTitle: "J.A.R.V.I.S"
     debug: "false"
+    mainWorkerBootstrap: "true"
     # JIRA integration (optional)
     jiraProjectUrl: "https://sage-project.atlassian.net"
     jiraUserEmail: "guittonbouedronalexandre@gmail.com"

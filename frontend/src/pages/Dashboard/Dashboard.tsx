@@ -18,10 +18,11 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Card, Input } from '@jarvis/jads';
+import { Card } from '@jarvis/jads';
 import { listTasks, type Task } from '../../api/client';
 import { fetchServerCount, fetchAgentCount, fetchSkillCount, fetchPromptCount } from '../../api/jaar';
 import BrainAnimation from './BrainAnimation';
+import MainBrainTerminal from './MainBrainTerminal';
 import './Dashboard.css';
 
 function formatDate(d: Date): string {
@@ -296,21 +297,8 @@ export default function Dashboard() {
         </DndContext>
       </div>
 
-      <div className="dashboard__chat">
-        <div className="dashboard__chat-field">
-          <span className="dashboard__chat-icon" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M14 2H2C1.4 2 1 2.4 1 3V10C1 10.6 1.4 11 2 11H6L8 14L10 11H14C14.6 11 15 10.6 15 10V3C15 2.4 14.6 2 14 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </span>
-          <Input
-            label=""
-            placeholder="Ask J.A.R.V.I.S anything..."
-            value=""
-            onChange={() => {}}
-            disabled
-          />
-        </div>
+      <div className="dashboard__brain-dock">
+        <MainBrainTerminal />
       </div>
     </div>
   );

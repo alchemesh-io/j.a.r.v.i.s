@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 import sqlalchemy as sa
@@ -5,8 +7,10 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 
+from app.config import settings
 from app.db.base import Base
 from app.db.engine import engine
+from app.db.session import SessionLocal
 from app.routes import (
     blockers,
     dailies,
@@ -23,6 +27,8 @@ from app.routes import (
     weeklies,
     workers,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -41,6 +47,24 @@ async def lifespan(app: FastAPI):
     else:
         Base.metadata.create_all(bind=engine)
         command.stamp(alembic_cfg, "head")
+
+    if settings.main_worker_bootstrap:
+        db = SessionLocal()
+        try:
+            worker = workers.ensure_main_brain_records(db)
+            db.commit()
+            # Backgrounded: k8s provisioning can block ~30s+ (pod/PVC readiness),
+            # which would otherwise eat into the liveness probe's startup budget
+            # and block /health entirely since this runs before `yield`.
+            app.state.main_brain_task = asyncio.create_task(
+                asyncio.to_thread(workers.ensure_main_worker_pod, worker.id)
+            )
+        except Exception:
+            logger.exception("Main brain bootstrap failed; continuing startup")
+            db.rollback()
+        finally:
+            db.close()
+
     yield
 
 

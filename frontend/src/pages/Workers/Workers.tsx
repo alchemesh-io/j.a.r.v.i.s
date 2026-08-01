@@ -171,7 +171,7 @@ export default function Workers() {
   const POD_LIVE_STATES = new Set(['working', 'waiting_for_human', 'initialized']);
   const POD_GONE_STATES = new Set(['stopped', 'error', 'done']);
   const canStop = (w: Worker) =>
-    w.mode === 'stateful' && POD_LIVE_STATES.has(w.effective_state);
+    !w.is_main && w.mode === 'stateful' && POD_LIVE_STATES.has(w.effective_state);
   const canRestart = (w: Worker) =>
     w.mode === 'stateful' && POD_GONE_STATES.has(w.effective_state);
   const isActive = (s: string) => POD_LIVE_STATES.has(s);
@@ -223,10 +223,13 @@ export default function Workers() {
                 {/* Title row */}
                 <div className="worker-card__title-row">
                   <h3 className="worker-card__task-title">
-                    {task?.source_id ? `[${task.source_id}] ` : ''}{task?.title ?? `Task #${worker.task_id}`}
+                    {worker.is_main
+                      ? 'J.A.R.V.I.S Main Brain'
+                      : (task?.source_id ? `[${task.source_id}] ` : '') + (task?.title ?? `Task #${worker.task_id}`)}
                   </h3>
                 </div>
                 <div className="worker-card__badge-row">
+                  {worker.is_main && <span className="worker-card__type-badge">MAIN</span>}
                   <span className="worker-card__type-badge">{worker.type.replace('_', ' ')}</span>
                   <WorkerModeBadge mode={worker.mode} className="worker-card__mode-badge" />
                 </div>
@@ -244,9 +247,11 @@ export default function Workers() {
                         <RestartIcon />
                       </IconButton>
                     )}
-                    <IconButton aria-label="Delete worker" variant="ghost" size="sm" onClick={() => { if (confirm('Delete this worker and its resources?')) deleteWorkerMutation.mutate(worker.id); }} className="worker-card__delete-btn">
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 4H13M6 4V3H10V4M5 4V13H11V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                    </IconButton>
+                    {!worker.is_main && (
+                      <IconButton aria-label="Delete worker" variant="ghost" size="sm" onClick={() => { if (confirm('Delete this worker and its resources?')) deleteWorkerMutation.mutate(worker.id); }} className="worker-card__delete-btn">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 4H13M6 4V3H10V4M5 4V13H11V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      </IconButton>
+                    )}
                   </div>
                   <div
                     className={`worker-card__brain${isActive(worker.effective_state) ? '' : ' worker-card__brain--disabled'}`}

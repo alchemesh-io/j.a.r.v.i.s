@@ -7,11 +7,11 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.models import Repository, Task, Worker
-from app.models.enums import WorkerMode, WorkerState
+from app.models.enums import WorkerMode, WorkerState, WorkerType
 from app.schemas.worker import WorkerCreate, WorkerResponse, WorkerUpdate
-from app.services import k8s
+from app.services import k8s, main_brain
 from app.services.terminal import bridge as terminal_bridge
 
 logger = logging.getLogger(__name__)
@@ -29,12 +29,17 @@ def _load_worker(db: Session, worker_id: str) -> Worker:
     stmt = (
         select(Worker)
         .where(Worker.id == worker_id)
-        .options(selectinload(Worker.repositories))
+        .options(selectinload(Worker.repositories), selectinload(Worker.task))
     )
     worker = db.scalars(stmt).first()
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
     return worker
+
+
+def _reject_if_main(worker: Worker, action: str) -> None:
+    if main_brain.is_main_worker(worker):
+        raise HTTPException(status_code=409, detail=f"The main worker is permanent and cannot be {action}")
 
 
 def _worker_to_response(worker: Worker, effective_state: WorkerState | None = None, pod_status: str | None = None) -> WorkerResponse:
@@ -50,13 +55,14 @@ def _worker_to_response(worker: Worker, effective_state: WorkerState | None = No
         "updated_at": worker.updated_at,
         "repositories": worker.repositories,
         "skills": worker.skills or [],
+        "is_main": main_brain.is_main_worker(worker),
     }
     return WorkerResponse.model_validate(data)
 
 
 def _build_task_prompt(task: Task | None) -> str:
     """Build the initial interactive prompt Claude Code receives on first boot."""
-    if task is None:
+    if task is None or main_brain.is_main_task(task):
         return ""
     parts = [f"Work on the following task: {task.title}"]
     notes = [n.content.strip() for n in (task.notes or []) if n.content and n.content.strip()]
@@ -87,6 +93,64 @@ def _provision_worker_pod(worker: Worker) -> None:
         task_prompt=_build_task_prompt(worker.task),
     )
     k8s.create_worker_service(worker.id)
+
+
+def ensure_main_brain_records(db: Session) -> Worker:
+    """DB-only, idempotent, fast. Safe to call on every backend startup.
+
+    The synthetic task is the dedup key: a repeat call (e.g. after a restart)
+    finds it via main_brain.get_main_task and is a no-op.
+    """
+    task = main_brain.get_main_task(db)
+    if task is None:
+        task = Task(
+            source_type=None,
+            source_id=main_brain.MAIN_BRAIN_SOURCE_ID,
+            title=main_brain.MAIN_BRAIN_TITLE,
+            type=main_brain.MAIN_BRAIN_TASK_TYPE,
+        )
+        db.add(task)
+        db.flush()
+        db.refresh(task)
+
+    if task.worker is not None:
+        return task.worker
+
+    worker = Worker(
+        id=uuid.uuid4().hex,
+        task_id=task.id,
+        type=WorkerType.claude_code,
+        mode=WorkerMode.stateful,
+        state=WorkerState.initialized,
+        skills=[],
+    )
+    db.add(worker)
+    db.flush()
+    db.refresh(worker)
+    return worker
+
+
+def ensure_main_worker_pod(worker_id: str) -> None:
+    """k8s-only, slow, idempotent. Runs off the startup path in its own session."""
+    if not k8s.is_available():
+        return
+    db = SessionLocal()
+    try:
+        worker = db.scalars(select(Worker).where(Worker.id == worker_id)).first()
+        if worker is None:
+            return
+        phase, _ = k8s.get_pod_phase(worker_id)
+        if phase is not None:
+            return  # pod already exists — nothing to do
+        try:
+            _provision_worker_pod(worker)
+            worker.state = WorkerState.initialized
+        except Exception:
+            logger.exception("Failed to provision main brain worker pod %s", worker_id)
+            worker.state = WorkerState.error
+        db.commit()
+    finally:
+        db.close()
 
 
 @router.post("", response_model=WorkerResponse, status_code=201)
@@ -138,9 +202,19 @@ def create_worker(body: WorkerCreate, db: Session = Depends(get_db)):
 @router.get("", response_model=list[WorkerResponse])
 def list_workers(db: Session = Depends(get_db)):
     workers = db.scalars(
-        select(Worker).options(selectinload(Worker.repositories))
+        select(Worker).options(selectinload(Worker.repositories), selectinload(Worker.task))
     ).all()
     return [_worker_to_response(w) for w in workers]
+
+
+@router.get("/main", response_model=WorkerResponse, summary="The permanent main-brain worker")
+def get_main_worker_route(db: Session = Depends(get_db)):
+    # Declared before /{worker_id} — FastAPI matches routes in declaration
+    # order, so this must come first or "main" gets swallowed as a worker id.
+    worker = main_brain.get_main_worker(db)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Main worker not provisioned")
+    return get_worker(worker.id, db)
 
 
 @router.get("/{worker_id}", response_model=WorkerResponse)
@@ -248,6 +322,7 @@ def update_worker(worker_id: str, body: WorkerUpdate, db: Session = Depends(get_
 
     if body.state is not None:
         if body.state == WorkerState.archived:
+            _reject_if_main(worker, "archived")
             terminal_bridge.cleanup(worker_id, status="stopped")
             k8s.delete_worker_resources(worker_id, delete_pvc=worker.mode == WorkerMode.stateful)
         worker.state = body.state
@@ -269,6 +344,7 @@ def update_worker(worker_id: str, body: WorkerUpdate, db: Session = Depends(get_
 )
 def stop_worker(worker_id: str, db: Session = Depends(get_db)):
     worker = _load_worker(db, worker_id)
+    _reject_if_main(worker, "stopped")
 
     if worker.mode != WorkerMode.stateful:
         raise HTTPException(status_code=409, detail="Cannot stop an ephemeral worker")
@@ -328,6 +404,7 @@ def restart_worker(worker_id: str, db: Session = Depends(get_db)):
 @router.delete("/{worker_id}", status_code=204)
 def delete_worker(worker_id: str, db: Session = Depends(get_db)):
     worker = _load_worker(db, worker_id)
+    _reject_if_main(worker, "deleted")
     terminal_bridge.cleanup(worker_id, status="stopped")
     k8s.delete_worker_resources(worker_id, delete_pvc=worker.mode == WorkerMode.stateful)
     db.delete(worker)
