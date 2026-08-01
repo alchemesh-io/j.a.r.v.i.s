@@ -274,6 +274,16 @@ def create_worker_pod(
                 ),
             ),
             client.V1EnvVar(
+                name="DD_API_KEY",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name="jarvis-jaw-secret",
+                        key="DD_API_KEY",
+                        optional=True,
+                    )
+                ),
+            ),
+            client.V1EnvVar(
                 name="GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
                 value="/etc/gws/credentials.json",
             ),
