@@ -2,6 +2,7 @@
 set -e
 
 WORKER_MODE="${WORKER_MODE:-ephemeral}"
+WORKSPACE_DIR="$HOME/jarvis/$TASK_ID"
 echo "[worker] Starting worker ${WORKER_ID} for task ${TASK_ID} (mode=${WORKER_MODE})"
 
 # Step 0: Fix PVC ownership and ensure the home directory layout exists.
@@ -15,7 +16,7 @@ if [ "$WORKER_MODE" = "stateful" ] && [ "$(stat -c %u "$HOME" 2>/dev/null || ech
 fi
 
 mkdir -p \
-    "$HOME/jarvis" \
+    "$WORKSPACE_DIR" \
     "$HOME/.claude" \
     "$HOME/.claude/skills" \
     "$HOME/.claude/projects"
@@ -57,7 +58,7 @@ if [ -n "$REPOSITORIES" ]; then
         git_url="${repo_spec%@*}"
         branch="${repo_spec#*@}"
         repo_name=$(basename "$git_url" .git)
-        target_dir="$HOME/jarvis/$repo_name"
+        target_dir="$WORKSPACE_DIR/$repo_name"
 
         if [ -d "$target_dir/.git" ]; then
             echo "[worker] Repo $repo_name already cloned at $target_dir, skipping"
@@ -167,17 +168,19 @@ fi
 export TERM="${TERM:-xterm-256color}"
 
 # Resume probe: if a previous session exists under ~/.claude/projects/ (stateful
-# restart), resume the most recent one; otherwise start fresh with the task
-# prompt as the first turn.
+# restart), continue it from within the task's workspace directory; otherwise
+# start fresh there with the task prompt as the first turn. Running from a
+# per-task-id workspace lets `--continue` (cwd-scoped) find the right session
+# without us tracking a session id ourselves.
 LATEST_SESSION=$(ls -t "$HOME/.claude/projects"/*/*.jsonl 2>/dev/null | head -1)
+cd "$WORKSPACE_DIR"
 if [ -n "$LATEST_SESSION" ]; then
-    SESSION_ID=$(basename "$LATEST_SESSION" .jsonl)
-    echo "[worker] Resuming Claude Code session ${SESSION_ID}..."
-    exec claude --dangerously-skip-permissions --resume "$SESSION_ID"
+    echo "[worker] Resuming Claude Code session in ${WORKSPACE_DIR}..."
+    exec claude --dangerously-skip-permissions --continue
 elif [ -n "$TASK_PROMPT" ]; then
-    echo "[worker] Starting Claude Code with task prompt..."
+    echo "[worker] Starting Claude Code in ${WORKSPACE_DIR} with task prompt..."
     exec claude --dangerously-skip-permissions "$TASK_PROMPT"
 else
-    echo "[worker] Starting Claude Code (no task prompt)..."
+    echo "[worker] Starting Claude Code in ${WORKSPACE_DIR} (no task prompt)..."
     exec claude --dangerously-skip-permissions
 fi

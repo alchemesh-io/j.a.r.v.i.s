@@ -41,7 +41,7 @@ grep -q 'mode=stateful' "$ENTRYPOINT" || \
 WORK_DIR="$(mktemp -d -t jaw-stateful-test.XXXXXX)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-mkdir -p "$WORK_DIR/home/jarvis/repo1/.git" "$WORK_DIR/bin"
+mkdir -p "$WORK_DIR/home/jarvis/task-42/repo1/.git" "$WORK_DIR/bin"
 
 cat > "$WORK_DIR/bin/git" << 'STUB'
 #!/usr/bin/env bash
@@ -55,12 +55,13 @@ SNIPPET="$WORK_DIR/clone-loop.sh"
 cat > "$SNIPPET" << 'SCRIPT'
 #!/usr/bin/env bash
 set -e
+WORKSPACE_DIR="$HOME/jarvis/$TASK_ID"
 IFS=',' read -ra REPOS <<< "$REPOSITORIES"
 for repo_spec in "${REPOS[@]}"; do
     git_url="${repo_spec%@*}"
     branch="${repo_spec#*@}"
     repo_name=$(basename "$git_url" .git)
-    target_dir="$HOME/jarvis/$repo_name"
+    target_dir="$WORKSPACE_DIR/$repo_name"
     if [ -d "$target_dir/.git" ]; then
         echo "[worker] Repo $repo_name already cloned at $target_dir, skipping"
         continue
@@ -76,6 +77,7 @@ TEST_GIT_LOG="$WORK_DIR/git.log"
 HOME="$WORK_DIR/home" \
 PATH="$WORK_DIR/bin:$PATH" \
 TEST_GIT_LOG="$TEST_GIT_LOG" \
+TASK_ID="task-42" \
 REPOSITORIES="https://github.com/org/repo1@main,https://github.com/org/repo2@main" \
 bash "$SNIPPET"
 
