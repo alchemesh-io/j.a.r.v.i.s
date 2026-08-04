@@ -14,6 +14,16 @@ if ! grep -q "agentregistry.googleapis.com" /etc/hosts 2>/dev/null; then
     echo "199.36.153.8 agentregistry.googleapis.com" | sudo tee -a /etc/hosts >/dev/null
 fi
 
+# Register gh as git's credential helper so HTTPS clones (e.g. Claude Code's own
+# plugin marketplace fetches, which run non-interactively with no TTY to prompt
+# for credentials) can authenticate. gh reads GITHUB_TOKEN from the environment
+# automatically, no separate `gh auth login` needed. Re-run on every start —
+# it writes to ~/.gitconfig, which is ephemeral for ephemeral-mode workers and,
+# even for stateful workers, isn't guaranteed to survive every pod recreation.
+if [ -n "$GITHUB_TOKEN" ]; then
+    gh auth setup-git >/dev/null 2>&1 || echo "[worker] WARNING: gh auth setup-git failed"
+fi
+
 # Step 0: Fix PVC ownership and ensure the home directory layout exists.
 # When the worker is stateful, the PVC mount overlays /home/node — and on most storage
 # classes (including minikube's hostPath) the volume root is owned root:root regardless
