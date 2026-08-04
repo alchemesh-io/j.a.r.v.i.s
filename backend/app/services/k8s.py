@@ -10,6 +10,11 @@ logger = logging.getLogger(__name__)
 NAMESPACE = "jarvis"
 WORKER_LABEL = "jarvis-worker"
 
+# Dedicated ServiceAccount for worker pods (helm/jarvis/templates/worker-pod-serviceaccount.yaml),
+# distinct from "jarvis-backend" and carrying no RoleBinding — worker pods must not inherit
+# the backend's pods/attach, pods/exec, and pod/service/PVC management permissions.
+WORKER_SERVICE_ACCOUNT = "jarvis-worker"
+
 # Path of the Claude state file shared between the worker container (hooks) and
 # the status sidecar via the /worker-state emptyDir.
 STATE_FILE = "/worker-state/claude-state"
@@ -284,6 +289,36 @@ def create_worker_pod(
                 ),
             ),
             client.V1EnvVar(
+                name="DD_APP_KEY",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name="jarvis-jaw-secret",
+                        key="DD_APP_KEY",
+                        optional=True,
+                    )
+                ),
+            ),
+            client.V1EnvVar(
+                name="DD_SITE",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name="jarvis-jaw-secret",
+                        key="DD_SITE",
+                        optional=True,
+                    )
+                ),
+            ),
+            client.V1EnvVar(
+                name="TFE_TOKEN",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name="jarvis-jaw-secret",
+                        key="TFE_TOKEN",
+                        optional=True,
+                    )
+                ),
+            ),
+            client.V1EnvVar(
                 name="GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
                 value="/etc/gws/credentials.json",
             ),
@@ -340,7 +375,8 @@ def create_worker_pod(
             },
         ),
         spec=client.V1PodSpec(
-            service_account_name="jarvis-backend",
+            service_account_name=WORKER_SERVICE_ACCOUNT,
+            automount_service_account_token=False,
             security_context=pod_security_context,
             containers=[worker_container],
             init_containers=[status_container],

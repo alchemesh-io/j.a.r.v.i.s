@@ -38,7 +38,25 @@ fi
 # settings.json when present, never touches ~/.claude/projects/.
 /opt/jarvis-worker/setup-claude.sh
 
-# Step 3: Clone repositories (with DNS retry — Istio sidecar may not be ready immediately)
+# Step 3: Write Terraform Enterprise credentials when TFE_TOKEN is present. Re-applied on
+# every start (fresh or resumed), same as the ConfigMap-sourced Claude config above —
+# mirrors how GOOGLE_WORKSPACE_CLI_CREDENTIALS is written to /etc/gws/credentials.json.
+# The Terraform CLI credentials file is keyed by host, not org.
+if [ -n "$TFE_TOKEN" ]; then
+    echo "[worker] Writing Terraform Enterprise credentials for tfe.doctolib.net..."
+    mkdir -p ~/.terraform.d
+    cat > ~/.terraform.d/credentials.tfrc.json <<EOF
+{
+  "credentials": {
+    "tfe.doctolib.net": {
+      "token": "$TFE_TOKEN"
+    }
+  }
+}
+EOF
+fi
+
+# Step 4: Clone repositories (with DNS retry — Istio sidecar may not be ready immediately)
 REPOS_CACHED=0
 REPOS_CLONED=0
 if [ -n "$REPOSITORIES" ]; then
@@ -91,7 +109,7 @@ if [ -n "$REPOSITORIES" ]; then
     done
 fi
 
-# Step 4: Pull skills from JAAR (selective by name@version) into Claude Code skills dir.
+# Step 5: Pull skills from JAAR (selective by name@version) into Claude Code skills dir.
 # Rootless dockerd — uses slirp4netns for network isolation so the pod's DNS/iptables
 # stay clean. No sudo, no privileged: true on the pod.
 SKILLS_CACHED=0
@@ -161,18 +179,22 @@ if [ "$WORKER_MODE" = "stateful" ]; then
     echo "[worker] mode=stateful, PVC mounted at /home/node, ${REPOS_CACHED} repos cached, ${SKILLS_CACHED} skills cached"
 fi
 
-# Step 5: Launch Claude Code interactively as the container's main process so the
+# Step 6: Launch Claude Code interactively as the container's main process so the
 # Kubernetes Attach API reaches its PTY. The status server runs in a dedicated
 # sidecar container; the hooks report Claude's state through the shared
 # /worker-state emptyDir (see setup-claude.sh / STATE_FILE).
 export TERM="${TERM:-xterm-256color}"
 
-# Resume probe: if a previous session exists under ~/.claude/projects/ (stateful
-# restart), continue it from within the task's workspace directory; otherwise
-# start fresh there with the task prompt as the first turn. Running from a
-# per-task-id workspace lets `--continue` (cwd-scoped) find the right session
-# without us tracking a session id ourselves.
-LATEST_SESSION=$(ls -t "$HOME/.claude/projects"/*/*.jsonl 2>/dev/null | head -1)
+# Resume probe: Claude Code keys sessions by an encoded form of the project's
+# absolute path (every / and . becomes -), under ~/.claude/projects/<encoded>/*.jsonl.
+# We check specifically for a session scoped to THIS task's workspace, not
+# "any session exists anywhere" — a worker upgrading from the old shared-$HOME
+# layout (pre this per-task-workspace change) has an old session keyed to the
+# old cwd, which a global check would wrongly match, picking --continue over
+# TASK_PROMPT while --continue (cwd-scoped) finds nothing and silently starts
+# an empty session that never receives the task prompt.
+WORKSPACE_PROJECT_KEY=$(echo "$WORKSPACE_DIR" | sed 's/[\/.]/-/g')
+LATEST_SESSION=$(ls -t "$HOME/.claude/projects/$WORKSPACE_PROJECT_KEY"/*.jsonl 2>/dev/null | head -1)
 cd "$WORKSPACE_DIR"
 if [ -n "$LATEST_SESSION" ]; then
     echo "[worker] Resuming Claude Code session in ${WORKSPACE_DIR}..."
