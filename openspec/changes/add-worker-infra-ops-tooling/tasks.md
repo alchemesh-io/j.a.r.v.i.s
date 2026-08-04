@@ -45,9 +45,9 @@
 ## 9. Worker pod ServiceAccount separation
 
 - [x] 9.1 Add `helm/jarvis/templates/worker-pod-serviceaccount.yaml` defining a new ServiceAccount named `{{ .Release.Name }}-worker`, with no accompanying RoleBinding. (Named distinctly from the pre-existing `worker-serviceaccount.yaml`, which defines the **backend's own** ServiceAccount — reusing that filename would have collided with it.)
-- [x] 9.2 In `backend/app/services/k8s.py`, change the worker pod spec's `service_account_name` from `"jarvis-backend"` to the new `{{ .Release.Name }}-worker` account name, and set `automount_service_account_token=False` unless a concrete need for in-cluster API access is identified.
+- [x] 9.2 In `backend/app/services/k8s.py`, change the worker pod spec's `service_account_name` from `"jarvis-backend"` to the new `{{ .Release.Name }}-worker` account name. **Do NOT set `automount_service_account_token=False`** — deployed to the real `t2-d-sbx-arch` cluster, this combination is hard-denied by its `deny-automount-token-without-sa` ValidatingAdmissionPolicy, which broke worker creation in production (503 on every attempt) until reverted. Safety comes from the zero RoleBindings on the new SA, not from suppressing the token mount.
 - [x] 9.3 Confirm `helm/jarvis/templates/worker-serviceaccount.yaml` (backend's own), `worker-role.yaml`, and `worker-rolebinding.yaml` are left unmodified — the backend's own permissions for managing worker pods (create/attach/exec/delete) are unaffected.
-- [x] 9.4 Update or add backend tests asserting the worker pod spec's `service_account_name` is the new dedicated account, not `jarvis-backend`.
+- [x] 9.4 Update or add backend tests asserting the worker pod spec's `service_account_name` is the new dedicated account, not `jarvis-backend`, and that `automount_service_account_token` is not set at all.
 
 ## 10. Local verification (before any cluster rollout)
 

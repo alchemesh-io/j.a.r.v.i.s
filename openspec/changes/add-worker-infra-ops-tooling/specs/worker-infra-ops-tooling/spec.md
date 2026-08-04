@@ -92,11 +92,11 @@ When the `TFE_TOKEN` environment variable is non-empty, `worker/entrypoint.sh` S
 - **THEN** `~/.terraform.d/credentials.tfrc.json` is (re)written, consistent with how other ConfigMap/secret-sourced config files are re-applied on every start
 
 ### Requirement: Worker pods run under their own dedicated ServiceAccount, not the backend's
-The worker pod SHALL run under a new, dedicated ServiceAccount (`{{ .Release.Name }}-worker`) rather than reusing `{{ .Release.Name }}-backend`. This new ServiceAccount SHALL have no RoleBinding by default, and the worker pod spec SHALL set `automount_service_account_token=False` unless a future capability explicitly requires in-cluster API access. The backend's own ServiceAccount, `worker-manager` Role, and RoleBinding (used for the backend to create/attach/exec/delete worker pods) SHALL remain unchanged.
+The worker pod SHALL run under a new, dedicated ServiceAccount (`{{ .Release.Name }}-worker`) rather than reusing `{{ .Release.Name }}-backend`. This new ServiceAccount SHALL have no RoleBinding by default. The worker pod spec SHALL NOT set `automount_service_account_token=False` — the target cluster's `deny-automount-token-without-sa` ValidatingAdmissionPolicy hard-rejects that combination with a custom `serviceAccountName`, confirmed in production (every worker creation 503'd until reverted). Safety comes entirely from the zero RoleBindings on `jarvis-worker`, not from suppressing the token mount. The backend's own ServiceAccount, `worker-manager` Role, and RoleBinding (used for the backend to create/attach/exec/delete worker pods) SHALL remain unchanged.
 
 #### Scenario: Worker pod has no cluster permissions by default
 - **WHEN** a shell is opened in a running worker pod and `kubectl auth can-i --list` is run
-- **THEN** it reports no permissions (no token mounted, or a token with zero bindings)
+- **THEN** it reports only the cluster's baseline discovery/health endpoints available to any authenticated identity (e.g. `/api`, `/healthz`, `/version`, self-subject-review) — no pods/attach, pods/exec, or pod/service/PVC create-delete permissions
 
 #### Scenario: Backend retains its own permissions
 - **WHEN** the backend creates, attaches to, execs into, or deletes a worker pod via the K8s API
