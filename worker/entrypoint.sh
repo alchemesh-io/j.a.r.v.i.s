@@ -2,7 +2,7 @@
 set -e
 
 WORKER_MODE="${WORKER_MODE:-ephemeral}"
-WORKSPACE_DIR="$HOME/jarvis/$TASK_ID"
+WORKSPACE_DIR="$HOME/jarvis/task-$TASK_ID"
 echo "[worker] Starting worker ${WORKER_ID} for task ${TASK_ID} (mode=${WORKER_MODE})"
 
 # Step 0: Fix PVC ownership and ensure the home directory layout exists.

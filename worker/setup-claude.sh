@@ -6,7 +6,7 @@ set -e
 STATE_FILE="${STATE_FILE:-/worker-state/claude-state}"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 CLAUDE_JSON="$HOME/.claude.json"
-WORKSPACE="$HOME/jarvis/$TASK_ID"
+WORKSPACE="$HOME/jarvis/task-$TASK_ID"
 
 # --- State hook scripts ---
 
