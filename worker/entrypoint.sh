@@ -185,24 +185,25 @@ fi
 # /worker-state emptyDir (see setup-claude.sh / STATE_FILE).
 export TERM="${TERM:-xterm-256color}"
 
-# Resume probe: Claude Code keys sessions by an encoded form of the project's
-# absolute path (every / and . becomes -), under ~/.claude/projects/<encoded>/*.jsonl.
-# We check specifically for a session scoped to THIS task's workspace, not
-# "any session exists anywhere" — a worker upgrading from the old shared-$HOME
-# layout (pre this per-task-workspace change) has an old session keyed to the
-# old cwd, which a global check would wrongly match, picking --continue over
-# TASK_PROMPT while --continue (cwd-scoped) finds nothing and silently starts
-# an empty session that never receives the task prompt.
+# Session id is derived deterministically from WORKER_ID (a uuid4().hex from the
+# backend) rather than left to Claude Code to assign, so it's stable across restarts
+# and addressable by the backend/frontend without discovery. Claude Code keys session
+# files by an encoded form of the project's absolute path (every / and . becomes -)
+# under ~/.claude/projects/<encoded>/<session-id>.jsonl — we check specifically for
+# THIS worker's session id scoped to THIS task's workspace, not "any session exists
+# anywhere": a worker upgrading from the old shared-$HOME layout (pre per-task-workspace)
+# has an old session keyed to the old cwd, which a global check would wrongly match.
 WORKSPACE_PROJECT_KEY=$(echo "$WORKSPACE_DIR" | sed 's/[\/.]/-/g')
-LATEST_SESSION=$(ls -t "$HOME/.claude/projects/$WORKSPACE_PROJECT_KEY"/*.jsonl 2>/dev/null | head -1)
+SESSION_UUID="${WORKER_ID:0:8}-${WORKER_ID:8:4}-${WORKER_ID:12:4}-${WORKER_ID:16:4}-${WORKER_ID:20:12}"
+EXISTING_SESSION="$HOME/.claude/projects/$WORKSPACE_PROJECT_KEY/$SESSION_UUID.jsonl"
 cd "$WORKSPACE_DIR"
-if [ -n "$LATEST_SESSION" ]; then
-    echo "[worker] Resuming Claude Code session in ${WORKSPACE_DIR}..."
-    exec claude --dangerously-skip-permissions --continue
+if [ -f "$EXISTING_SESSION" ]; then
+    echo "[worker] Resuming Claude Code session ${SESSION_UUID} in ${WORKSPACE_DIR}..."
+    exec claude --dangerously-skip-permissions --resume "$SESSION_UUID"
 elif [ -n "$TASK_PROMPT" ]; then
-    echo "[worker] Starting Claude Code in ${WORKSPACE_DIR} with task prompt..."
-    exec claude --dangerously-skip-permissions "$TASK_PROMPT"
+    echo "[worker] Starting Claude Code session ${SESSION_UUID} in ${WORKSPACE_DIR} with task prompt..."
+    exec claude --dangerously-skip-permissions --session-id "$SESSION_UUID" "$TASK_PROMPT"
 else
-    echo "[worker] Starting Claude Code in ${WORKSPACE_DIR} (no task prompt)..."
-    exec claude --dangerously-skip-permissions
+    echo "[worker] Starting Claude Code session ${SESSION_UUID} in ${WORKSPACE_DIR} (no task prompt)..."
+    exec claude --dangerously-skip-permissions --session-id "$SESSION_UUID"
 fi
