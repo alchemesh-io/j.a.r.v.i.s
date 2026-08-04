@@ -163,23 +163,24 @@ for s in data:
         fi
     fi
 
-    local tmp_zip
-    tmp_zip=$(mktemp)
+    # `revisions download` extracts the archive itself — given a ".zip"-suffixed
+    # destination it writes the unzipped payload to that same path with ".zip"
+    # stripped (confirmed empirically), so no separate unzip step is needed.
+    local tmp_zip tmp_extracted
+    tmp_zip="$(mktemp -u).zip"
+    tmp_extracted="${tmp_zip%.zip}"
+    rm -rf "$tmp_extracted"
     if ! gcloud alpha agent-registry skills revisions download "$revision" \
         --skill="$skill_id" --project="$AGENT_REGISTRY_PROJECT" --location="$AGENT_REGISTRY_LOCATION" \
         --destination="$tmp_zip" --allow-overwrite 2>/dev/null; then
         echo "[worker] ERROR: failed to download skill $skill_name revision $revision"
-        rm -f "$tmp_zip"
+        rm -rf "$tmp_extracted"
         return 1
     fi
 
-    mkdir -p "$skill_dir"
-    if ! unzip -oq "$tmp_zip" -d "$skill_dir"; then
-        echo "[worker] ERROR: failed to unzip skill $skill_name payload"
-        rm -f "$tmp_zip"
-        return 1
-    fi
-    rm -f "$tmp_zip"
+    mkdir -p "$(dirname "$skill_dir")"
+    rm -rf "$skill_dir"
+    mv "$tmp_extracted" "$skill_dir"
     return 0
 }
 
