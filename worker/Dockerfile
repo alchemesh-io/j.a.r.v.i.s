@@ -139,6 +139,7 @@ RUN ARCH=$(uname -m) && \
     /opt/google-cloud-sdk/install.sh --usage-reporting=false --command-completion=false \
       --path-update=false --quiet && \
     /opt/google-cloud-sdk/bin/gcloud components install alpha beta -q && \
+    /opt/google-cloud-sdk/bin/gcloud config set component_manager/disable_update_check true && \
     chown -R node:node /opt/google-cloud-sdk
 ENV PATH="/opt/google-cloud-sdk/bin:$PATH"
 
