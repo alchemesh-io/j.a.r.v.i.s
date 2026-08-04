@@ -1,9 +1,113 @@
+.worker-terminal-page {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: calc(100vh - 120px);
+  gap: 12px;
+}
+
+.worker-terminal-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.worker-terminal-sidebar__header {
+  padding: 10px 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.worker-terminal-sidebar__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.worker-terminal-sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.worker-terminal-sidebar__item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.worker-terminal-sidebar__item--current {
+  background: #00d4ff14;
+  border-color: #00d4ff40;
+}
+
+.worker-terminal-sidebar__item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.worker-terminal-sidebar__item:focus-visible {
+  outline: 2px solid var(--color-accent-cyan);
+  outline-offset: 2px;
+}
+
+.worker-terminal-sidebar__brain {
+  flex-shrink: 0;
+}
+
+.worker-terminal-sidebar__brain .worker-brain {
+  width: 30px;
+  height: 30px;
+  margin: 0;
+}
+
+.worker-terminal-sidebar__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.worker-terminal-sidebar__title {
+  font-size: 0.78rem;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worker-terminal-sidebar__id {
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  font-family: 'SF Mono', Menlo, monospace;
+}
+
 .worker-terminal {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-width: 0;
   min-height: 0;
-  height: calc(100vh - 120px);
 }
 
 .worker-terminal__bar {
