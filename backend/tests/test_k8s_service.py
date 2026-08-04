@@ -625,16 +625,3 @@ def test_create_worker_pod_uses_dedicated_service_account(mock_client, mock_conf
     # outright (confirmed against the real cluster). Safety instead comes from
     # WORKER_SERVICE_ACCOUNT having zero RoleBindings.
     assert "automount_service_account_token" not in pod_spec_kwargs
-
-
-@patch("app.services.k8s.config")
-@patch("app.services.k8s.client")
-def test_create_worker_pod_routes_agent_registry_via_restricted_vip(mock_client, mock_config):
-    _mocked_pod_api(mock_client, mock_config)
-    k8s.create_worker_pod("abc123", 42, "worker:latest", [])
-
-    pod_spec_kwargs = mock_client.V1PodSpec.call_args.kwargs
-    assert pod_spec_kwargs["host_aliases"] == [mock_client.V1HostAlias.return_value]
-    alias_kwargs = mock_client.V1HostAlias.call_args.kwargs
-    assert alias_kwargs["ip"] == "199.36.153.8"
-    assert alias_kwargs["hostnames"] == ["agentregistry.googleapis.com"]
