@@ -109,69 +109,108 @@ if [ -n "$REPOSITORIES" ]; then
     done
 fi
 
-# Step 5: Pull skills from JAAR (selective by name@version) into Claude Code skills dir.
-# Rootless dockerd — uses slirp4netns for network isolation so the pod's DNS/iptables
-# stay clean. No sudo, no privileged: true on the pod.
+# Step 5: Fetch skills from the GCP Agent Registry (selective by name@version) into the
+# Claude Code skills dir. The registry's own API resolves which skill/revision to use
+# (list/get — plain JSON, no docker daemon needed), but the payload itself is fetched
+# directly from GCS rather than the registry's alt=media download endpoint: that path
+# is blocked by this project's VPC-SC perimeter for in-cluster callers, confirmed
+# empirically (403 "not available on Google's Restricted VIPs", at every location
+# tried) — direct storage.googleapis.com access through the same perimeter works fine
+# with the same Workload Identity. Skills are published with gcsSource pointing at a
+# JARVIS-owned bucket for exactly this reason (see scripts/publish-skill.sh and the
+# infra repo's agent_registry.tf). Skill-enabled pods run fully unprivileged — no
+# dockerd, no sudo needed for this step.
 SKILLS_CACHED=0
 SKILLS_PULLED=0
-if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
-    # Determine which skills are missing — avoids starting dockerd unnecessarily on resume.
-    PENDING_SKILLS=()
+AGENT_REGISTRY_HOST="${AGENT_REGISTRY_HOST:-agentregistry.googleapis.com}"
+
+fetch_skill() {
+    local skill_name="$1" skill_version="$2" skill_dir="$3"
+    local root="https://${AGENT_REGISTRY_HOST}/v1alpha/projects/${AGENT_REGISTRY_PROJECT}/locations/${AGENT_REGISTRY_LOCATION}"
+    local token
+    token=$(gcloud auth print-access-token 2>/dev/null) || { echo "[worker] ERROR: failed to obtain an access token for the Agent Registry"; return 1; }
+
+    # The registry may assign a different resource id than the requested displayName
+    # (e.g. a "private-" prefix for unpublished project-owned skills), so resolve by
+    # listing and matching displayName rather than guessing skills/{skill_name} directly.
+    local skill_path
+    skill_path=$(curl -sf -H "Authorization: Bearer ${token}" "${root}/skills" \
+        | python3 -c "
+import json, sys
+name = sys.argv[1]
+data = json.load(sys.stdin)
+for s in data.get('skills', []):
+    if s.get('displayName') == name and 'publisher' not in s:
+        print(s['name'])
+        break
+" "$skill_name") || true
+    if [ -z "$skill_path" ]; then
+        echo "[worker] ERROR: could not find skill '$skill_name' in the Agent Registry"
+        return 1
+    fi
+
+    local revision="$skill_version"
+    if [ "$skill_version" = "latest" ] || [ -z "$skill_version" ]; then
+        revision=$(curl -sf -H "Authorization: Bearer ${token}" "https://${AGENT_REGISTRY_HOST}/v1alpha/${skill_path}" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("defaultRevision","").rsplit("/",1)[-1])' 2>/dev/null) || true
+        if [ -z "$revision" ]; then
+            echo "[worker] ERROR: could not resolve defaultRevision for skill $skill_name"
+            return 1
+        fi
+    fi
+
+    # Read the revision's gcsSource — the registry validates/ingests it but the
+    # actual bytes are fetched directly from Cloud Storage, not the registry itself.
+    local gcs_uri
+    gcs_uri=$(curl -sf -H "Authorization: Bearer ${token}" "https://${AGENT_REGISTRY_HOST}/v1alpha/${skill_path}/revisions/${revision}" \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin).get("gcsSource",{}).get("uri",""))' 2>/dev/null) || true
+    if [ -z "$gcs_uri" ]; then
+        echo "[worker] ERROR: revision $revision for skill $skill_name has no gcsSource"
+        return 1
+    fi
+
+    local tmp_zip
+    tmp_zip=$(mktemp)
+    if ! gcloud storage cp "$gcs_uri" "$tmp_zip" 2>/dev/null; then
+        echo "[worker] ERROR: failed to download skill $skill_name revision $revision from $gcs_uri"
+        rm -f "$tmp_zip"
+        return 1
+    fi
+
+    mkdir -p "$skill_dir"
+    if ! unzip -oq "$tmp_zip" -d "$skill_dir"; then
+        echo "[worker] ERROR: failed to unzip skill $skill_name payload"
+        rm -f "$tmp_zip"
+        return 1
+    fi
+    rm -f "$tmp_zip"
+    return 0
+}
+
+if [ -n "$SKILLS" ] && [ -n "$AGENT_REGISTRY_PROJECT" ] && [ -n "$AGENT_REGISTRY_LOCATION" ]; then
     IFS=',' read -ra SKILL_REFS <<< "$SKILLS"
     for skill_ref in "${SKILL_REFS[@]}"; do
         skill_name="${skill_ref%@*}"
+        skill_version="${skill_ref#*@}"
         skill_dir="$HOME/.claude/skills/$skill_name"
+
         if [ -f "$skill_dir/SKILL.md" ]; then
             echo "[worker] Skill $skill_name already cached at $skill_dir, skipping"
             SKILLS_CACHED=$((SKILLS_CACHED + 1))
+            continue
+        fi
+
+        echo "[worker] Fetching skill $skill_name (version: $skill_version) from the Agent Registry to $skill_dir"
+        if fetch_skill "$skill_name" "$skill_version" "$skill_dir"; then
+            SKILLS_PULLED=$((SKILLS_PULLED + 1))
         else
-            PENDING_SKILLS+=("$skill_ref")
+            echo "[worker] WARNING: Failed to fetch skill $skill_name@$skill_version"
         fi
     done
-
-    if [ ${#PENDING_SKILLS[@]} -gt 0 ]; then
-        echo "[worker] Starting dockerd for skill pulls..."
-        sudo sh -c 'dockerd > /var/log/dockerd.log 2>&1 &'
-        sleep 1
-
-        # Wait for dockerd socket to be ready (up to 15s)
-        for i in $(seq 1 15); do
-            if sudo docker info >/dev/null 2>&1; then
-                echo "[worker] dockerd ready"
-                break
-            fi
-            sleep 1
-        done
-
-        # Authenticate with GHCR so arctl can pull private skill images.
-        if [ -n "$GITHUB_TOKEN" ]; then
-            GHCR_USER="${GHCR_USERNAME:-USERNAME}"
-            echo "[worker] Logging into ghcr.io as ${GHCR_USER}..."
-            echo "$GITHUB_TOKEN" | sudo docker login ghcr.io -u "${GHCR_USER}" --password-stdin 2>&1 || \
-                echo "[worker] WARNING: docker login failed — ensure GITHUB_TOKEN has read:packages scope"
-        fi
-
-        echo "[worker] Pulling ${#PENDING_SKILLS[@]} skills from JAAR..."
-        for skill_ref in "${PENDING_SKILLS[@]}"; do
-            skill_name="${skill_ref%@*}"
-            skill_version="${skill_ref#*@}"
-            skill_dir="$HOME/.claude/skills/$skill_name"
-            echo "[worker] Pulling skill $skill_name (version: $skill_version) to $skill_dir"
-            if sudo arctl skill pull "$skill_name" "$skill_dir" --version "$skill_version" --registry-url "$JAAR_URL" 2>&1; then
-                SKILLS_PULLED=$((SKILLS_PULLED + 1))
-            else
-                echo "[worker] WARNING: Failed to pull skill $skill_name@$skill_version"
-            fi
-            sudo chown -R node:node "$skill_dir" 2>/dev/null || true
-        done
-
-        # Stop dockerd — no longer needed after skills are pulled
-        sudo pkill -x dockerd 2>/dev/null || true
-    else
-        echo "[worker] All skills already cached, no skill pull required"
-    fi
-elif [ -z "$SKILLS" ]; then
-    echo "[worker] No skills configured (SKILLS env var empty), skipping skill pull"
+elif [ -n "$SKILLS" ]; then
+    echo "[worker] ERROR: SKILLS is set but AGENT_REGISTRY_PROJECT/AGENT_REGISTRY_LOCATION are not — cannot fetch skills"
+else
+    echo "[worker] No skills configured (SKILLS env var empty), skipping skill fetch"
 fi
 
 # Stateful summary log so resume vs fresh-start is visible at a glance.

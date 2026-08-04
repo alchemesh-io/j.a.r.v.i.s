@@ -81,6 +81,12 @@ gateway:
   host: main.jarvis.io
   mcpHost: mcp.jarvis.io
 
+# GCP Agent Registry (agentregistry.googleapis.com) — replaces JAAR. IAM/Fleet
+# Terraform for a real deployment lives in the infra repo's agent_registry.tf.
+agentRegistry:
+  project: ""
+  location: "global"
+
 persistence:
   storageClass: standard
   size: 1Gi

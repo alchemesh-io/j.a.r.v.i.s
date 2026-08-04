@@ -117,3 +117,22 @@ class TestToolLoading:
 
         # Verify that task tools were loaded
         assert "tasks" in server.loaded_tools
+
+
+class TestAgentCard:
+    """Test the A2A Agent Card endpoint used for GKE/Agent Registry auto-discovery."""
+
+    def test_agent_card_served_at_well_known_path(self) -> None:
+        from starlette.testclient import TestClient
+
+        server = DynamicMCPServer(name="Test Server", tools_dir="src/tools")
+        server.load_tools()
+
+        client = TestClient(server.mcp.http_app())
+        resp = client.get("/.well-known/agent-card.json")
+
+        assert resp.status_code == 200
+        card = resp.json()
+        assert card["name"]
+        assert isinstance(card["skills"], list)
+        assert any(s["id"] == "tasks" for s in card["skills"])

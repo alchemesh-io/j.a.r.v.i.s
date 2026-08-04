@@ -7,12 +7,15 @@ Each tool file should contain a function decorated with @mcp.tool().
 import asyncio
 import importlib.util
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from .utils import load_config
 
@@ -44,6 +47,46 @@ class DynamicMCPServer:
 
         # Track loaded tools
         self.loaded_tools: list[str] = []
+
+        self._register_agent_card()
+
+    def _register_agent_card(self) -> None:
+        """Expose a minimal A2A Agent Card for GKE/Agent Registry auto-discovery.
+
+        registry.gke.io auto-discovery expects this at a fixed well-known path;
+        content is generated lazily per-request so it reflects self.loaded_tools
+        once tool loading has run.
+        """
+        agent_card_url = os.getenv(
+            "AGENT_CARD_URL", "https://mcp.jarvis.io/.well-known/agent-card.json"
+        )
+        mcp_url = os.getenv("AGENT_CARD_MCP_URL", "https://mcp.jarvis.io/mcp")
+
+        @self.mcp.custom_route("/.well-known/agent-card.json", methods=["GET"])
+        async def agent_card(_request: Request) -> JSONResponse:
+            return JSONResponse(
+                {
+                    "protocolVersion": "0.3.0",
+                    "name": self.config.get("name", self.name),
+                    "description": self.config.get("description", ""),
+                    "version": self.config.get("version", "0.0.0"),
+                    "url": agent_card_url,
+                    "preferredTransport": "JSONRPC",
+                    "skills": [
+                        {
+                            "id": tool_name,
+                            "name": tool_name,
+                            "description": f"{tool_name} MCP tool",
+                            "tags": ["jarvis", "mcp"],
+                        }
+                        for tool_name in self.loaded_tools
+                    ],
+                    "capabilities": {"streaming": False, "pushNotifications": False},
+                    "defaultInputModes": ["text/plain"],
+                    "defaultOutputModes": ["application/json"],
+                    "interfaces": [{"url": mcp_url, "protocolBinding": "JSONRPC"}],
+                }
+            )
 
     def _load_config(self) -> dict[str, Any]:
         """Load configuration from mcp.yaml."""

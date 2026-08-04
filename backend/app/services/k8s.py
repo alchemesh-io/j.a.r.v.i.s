@@ -138,7 +138,7 @@ def create_worker_pod(
 
     The pod runs two containers sharing a /worker-state emptyDir:
     - `worker`: Claude Code interactive under a PTY (tty/stdin) — the Attach target.
-      Privileged only when skills are requested (dockerd for `arctl skill pull`).
+      Never privileged — skills are fetched from the GCP Agent Registry + GCS.
     - `status`: the status server on port 8080, pushing hook-reported state to the backend.
 
     When stateful=True, the pod mounts the PVC `jarvis-worker-<id>-data` at /home/node
@@ -157,7 +157,6 @@ def create_worker_pod(
     skills_env = ",".join(
         f"{s['name']}@{s.get('version', 'latest')}" for s in (skills or [])
     )
-    has_skills = bool(skills)
 
     pod_name = f"jarvis-worker-{worker_id}"
     try:
@@ -228,11 +227,8 @@ def create_worker_pod(
         name="worker",
         image=worker_image,
         image_pull_policy=image_pull_policy,
-        # dockerd (skill pulls) is the only thing needing privilege; the stateful
-        # chown fallback only needs in-container root via sudo.
-        security_context=(
-            client.V1SecurityContext(privileged=True) if has_skills else None
-        ),
+        # Skills are fetched from the GCP Agent Registry + GCS (no docker daemon
+        # involved) — worker pods run fully unprivileged regardless of skills.
         # Interactive PTY for the Kubernetes Attach API (remote-claude pattern).
         tty=True,
         stdin=True,
@@ -245,7 +241,8 @@ def create_worker_pod(
             client.V1EnvVar(name="STATE_FILE", value=STATE_FILE),
             client.V1EnvVar(name="REPOSITORIES", value=repo_env),
             client.V1EnvVar(name="SKILLS", value=skills_env),
-            client.V1EnvVar(name="JAAR_URL", value=os.getenv("JAAR_URL", "")),
+            client.V1EnvVar(name="AGENT_REGISTRY_PROJECT", value=os.getenv("AGENT_REGISTRY_PROJECT", "")),
+            client.V1EnvVar(name="AGENT_REGISTRY_LOCATION", value=os.getenv("AGENT_REGISTRY_LOCATION", "")),
             client.V1EnvVar(name="JARVIS_MCP_URL", value=os.getenv("JARVIS_MCP_URL", "")),
             client.V1EnvVar(name="BACKEND_URL", value=f"http://jarvis-backend.{NAMESPACE}.svc:8000"),
             client.V1EnvVar(

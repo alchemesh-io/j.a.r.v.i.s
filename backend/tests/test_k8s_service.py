@@ -455,12 +455,27 @@ def test_create_worker_pod_unprivileged_without_skills(mock_client, mock_config)
 
 @patch("app.services.k8s.config")
 @patch("app.services.k8s.client")
-def test_create_worker_pod_privileged_with_skills(mock_client, mock_config):
+def test_create_worker_pod_unprivileged_with_skills(mock_client, mock_config):
+    # Skills are fetched from the GCP Agent Registry + GCS — no docker daemon
+    # involved, so skill-enabled pods stay unprivileged too (unlike the old
+    # JAAR/arctl/dockerd mechanism).
     _mocked_pod_api(mock_client, mock_config)
     k8s.create_worker_pod(
         "abc123", 42, "worker:latest", [], skills=[{"name": "s", "version": "1"}]
     )
-    mock_client.V1SecurityContext.assert_called_once_with(privileged=True)
+    mock_client.V1SecurityContext.assert_not_called()
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_passes_agent_registry_env(mock_client, mock_config):
+    _mocked_pod_api(mock_client, mock_config)
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [])
+    env_calls = mock_client.V1EnvVar.call_args_list
+    names = [c.kwargs.get("name") for c in env_calls]
+    assert "AGENT_REGISTRY_PROJECT" in names
+    assert "AGENT_REGISTRY_LOCATION" in names
+    assert "JAAR_URL" not in names
 
 
 @patch("app.services.k8s.config")

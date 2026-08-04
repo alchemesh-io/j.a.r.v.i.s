@@ -19,7 +19,8 @@ data:
   WORKER_MEMORY_REQUEST: {{ (.Values.worker.resources.requests).memory | default "256Mi" | quote }}
   WORKER_CPU_LIMIT: {{ (.Values.worker.resources.limits).cpu | default "1000m" | quote }}
   WORKER_MEMORY_LIMIT: {{ (.Values.worker.resources.limits).memory | default "1Gi" | quote }}
-  JAAR_URL: {{ .Values.backend.config.jaarUrl | default "http://jaar-agentregistry.jaar.svc:12121" | quote }}
+  AGENT_REGISTRY_PROJECT: {{ .Values.agentRegistry.project | default "" | quote }}
+  AGENT_REGISTRY_LOCATION: {{ .Values.agentRegistry.location | default "global" | quote }}
   JARVIS_MCP_URL: {{ .Values.backend.config.jarvisMcpUrl | default (printf "http://%s-mcp.%s.svc:8080/mcp" .Release.Name .Release.Namespace) | quote }}
   {{- if .Values.backend.config.jiraProjectUrl }}
   JIRA_PROJECT_URL: {{ .Values.backend.config.jiraProjectUrl | quote }}

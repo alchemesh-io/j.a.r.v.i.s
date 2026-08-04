@@ -14,7 +14,18 @@ spec:
     metadata:
       labels:
         app: {{ .Release.Name }}-mcp
+        # GKE auto-discovery: marks this workload as an agent for the GCP Agent Registry.
+        registry.gke.io/functional-type: "AGENT"
+      annotations:
+        # Points GKE auto-discovery at this deployment's live A2A Agent Card.
+        a2a-protocol.org/agent-card: {{ printf "https://%s/.well-known/agent-card.json" .Values.gateway.mcpHost | quote }}
+        # Workload Identity: lets the Agent Registry verify this workload's identity via SPIFFE.
+        iam.gke.io/spiffe-identity-type: "agent-identity"
     spec:
+      # Shares the jarvis-backend KSA (and its Workload Identity binding, see
+      # worker-serviceaccount.yaml) so the SPIFFE annotation above resolves to a
+      # real GCP identity.
+      serviceAccountName: {{ .Release.Name }}-backend
       containers:
         - name: mcp
           image: "{{ .Values.mcp.image.repository }}:{{ .Values.mcp.image.tag }}"
@@ -25,4 +36,8 @@ spec:
           env:
             - name: BACKEND_URL
               value: {{ .Values.mcp.backendUrl | default (printf "http://%s-backend:%d" .Release.Name (.Values.backend.service.port | int)) | quote }}
+            - name: AGENT_CARD_URL
+              value: {{ printf "https://%s/.well-known/agent-card.json" .Values.gateway.mcpHost | quote }}
+            - name: AGENT_CARD_MCP_URL
+              value: {{ printf "https://%s/mcp" .Values.gateway.mcpHost | quote }}
           resources: {{ toYaml .Values.mcp.resources | nindent 12 }}

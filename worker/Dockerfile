@@ -31,14 +31,11 @@ RUN addgroup -g 1000 node && \
     mkdir -p /home/node/jarvis /home/node/.claude && \
     chown -R node:node /home/node
 
-# Allow the node user to run any command as root without a password prompt.
-# sudo covers the stateful-mode chown fallback (in-container root is enough) and
-# dockerd for skill pulls — the latter additionally requires the pod to be
-# privileged, which the backend sets only when the worker references skills.
+# Allow the node user to run any command as root without a password prompt —
+# covers the stateful-mode chown fallback (in-container root is enough).
+# Skills are fetched from the GCP Agent Registry + GCS (see entrypoint.sh); dockerd
+# is never started, so worker pods run fully unprivileged regardless of skills.
 RUN echo "node ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/node-docker
-
-# Use slirp4netns as the rootlesskit networking backend for dockerd.
-ENV DOCKERD_ROOTLESS_ROOTLESSKIT_NET=slirp4netns
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -46,18 +43,6 @@ ENV PATH="/root/.local/bin:$PATH"
 
 # Install Claude Code (pinned version — npm package still available for Docker/Linux)
 RUN npm install -g @anthropic-ai/claude-code@2.1.104
-
-# Install arctl directly from GitHub releases into /usr/local/bin (readable by node user)
-ARG ARCTL_VERSION=v0.3.3
-RUN ARCH=$(uname -m) && \
-    case "$ARCH" in \
-      x86_64) ARCTL_ARCH=amd64 ;; \
-      aarch64|arm64) ARCTL_ARCH=arm64 ;; \
-      *) echo "unsupported arch: $ARCH" && exit 1 ;; \
-    esac && \
-    curl -fsSL "https://github.com/agentregistry-dev/agentregistry/releases/download/${ARCTL_VERSION}/arctl-linux-${ARCTL_ARCH}" \
-      -o /usr/local/bin/arctl \
-    && chmod 755 /usr/local/bin/arctl
 
 # Install gws (Google Workspace CLI) via npm
 RUN npm install -g @googleworkspace/cli@0.22.5
