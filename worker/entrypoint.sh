@@ -5,6 +5,15 @@ WORKER_MODE="${WORKER_MODE:-ephemeral}"
 WORKSPACE_DIR="$HOME/jarvis/task-$TASK_ID"
 echo "[worker] Starting worker ${WORKER_ID} for task ${TASK_ID} (mode=${WORKER_MODE})"
 
+# Pin agentregistry.googleapis.com to Google's restricted VIP. A pod-level
+# hostAliases equivalent is hard-denied by this cluster's deny-host-aliases
+# ValidatingAdmissionPolicy, so this has to happen inside the container instead
+# — /etc/hosts is a per-pod file the kubelet mounts writable regardless of any
+# container-level readOnlyRootFilesystem setting.
+if ! grep -q "agentregistry.googleapis.com" /etc/hosts 2>/dev/null; then
+    echo "199.36.153.8 agentregistry.googleapis.com" | sudo tee -a /etc/hosts >/dev/null
+fi
+
 # Step 0: Fix PVC ownership and ensure the home directory layout exists.
 # When the worker is stateful, the PVC mount overlays /home/node — and on most storage
 # classes (including minikube's hostPath) the volume root is owned root:root regardless
@@ -110,69 +119,56 @@ if [ -n "$REPOSITORIES" ]; then
 fi
 
 # Step 5: Fetch skills from the GCP Agent Registry (selective by name@version) into the
-# Claude Code skills dir. The registry's own API resolves which skill/revision to use
-# (list/get — plain JSON, no docker daemon needed), but the payload itself is fetched
-# directly from GCS rather than the registry's alt=media download endpoint: that path
-# is blocked by this project's VPC-SC perimeter for in-cluster callers, confirmed
-# empirically (403 "not available on Google's Restricted VIPs", at every location
-# tried) — direct storage.googleapis.com access through the same perimeter works fine
-# with the same Workload Identity. Skills are published with gcsSource pointing at a
-# JARVIS-owned bucket for exactly this reason (see scripts/publish-skill.sh and the
-# infra repo's agent_registry.tf). Skill-enabled pods run fully unprivileged — no
-# dockerd, no sudo needed for this step.
+# Claude Code skills dir, entirely through the `gcloud alpha agent-registry skills`
+# command group (list/describe/revisions describe/revisions download) — gcloud
+# already carries the pod's Workload Identity credentials, no hand-rolled REST/curl
+# needed. Skill-enabled pods run fully unprivileged — no dockerd, no sudo needed for
+# this step.
 SKILLS_CACHED=0
 SKILLS_PULLED=0
-AGENT_REGISTRY_HOST="${AGENT_REGISTRY_HOST:-agentregistry.googleapis.com}"
 
 fetch_skill() {
     local skill_name="$1" skill_version="$2" skill_dir="$3"
-    local root="https://${AGENT_REGISTRY_HOST}/v1alpha/projects/${AGENT_REGISTRY_PROJECT}/locations/${AGENT_REGISTRY_LOCATION}"
-    local token
-    token=$(gcloud auth print-access-token 2>/dev/null) || { echo "[worker] ERROR: failed to obtain an access token for the Agent Registry"; return 1; }
 
     # The registry may assign a different resource id than the requested displayName
     # (e.g. a "private-" prefix for unpublished project-owned skills), so resolve by
     # listing and matching displayName rather than guessing skills/{skill_name} directly.
-    local skill_path
-    skill_path=$(curl -sf -H "Authorization: Bearer ${token}" "${root}/skills" \
-        | python3 -c "
+    local skill_id
+    skill_id=$(gcloud alpha agent-registry skills list \
+        --project="$AGENT_REGISTRY_PROJECT" --location="$AGENT_REGISTRY_LOCATION" \
+        --format=json 2>/dev/null | python3 -c "
 import json, sys
 name = sys.argv[1]
 data = json.load(sys.stdin)
-for s in data.get('skills', []):
+for s in data:
     if s.get('displayName') == name and 'publisher' not in s:
-        print(s['name'])
+        print(s['name'].rsplit('/', 1)[-1])
         break
 " "$skill_name") || true
-    if [ -z "$skill_path" ]; then
+    if [ -z "$skill_id" ]; then
         echo "[worker] ERROR: could not find skill '$skill_name' in the Agent Registry"
         return 1
     fi
 
     local revision="$skill_version"
     if [ "$skill_version" = "latest" ] || [ -z "$skill_version" ]; then
-        revision=$(curl -sf -H "Authorization: Bearer ${token}" "https://${AGENT_REGISTRY_HOST}/v1alpha/${skill_path}" \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("defaultRevision","").rsplit("/",1)[-1])' 2>/dev/null) || true
+        local default_revision
+        default_revision=$(gcloud alpha agent-registry skills describe "$skill_id" \
+            --project="$AGENT_REGISTRY_PROJECT" --location="$AGENT_REGISTRY_LOCATION" \
+            --format='value(defaultRevision)' 2>/dev/null) || true
+        revision="${default_revision##*/}"
         if [ -z "$revision" ]; then
             echo "[worker] ERROR: could not resolve defaultRevision for skill $skill_name"
             return 1
         fi
     fi
 
-    # Read the revision's gcsSource — the registry validates/ingests it but the
-    # actual bytes are fetched directly from Cloud Storage, not the registry itself.
-    local gcs_uri
-    gcs_uri=$(curl -sf -H "Authorization: Bearer ${token}" "https://${AGENT_REGISTRY_HOST}/v1alpha/${skill_path}/revisions/${revision}" \
-        | python3 -c 'import json,sys; print(json.load(sys.stdin).get("gcsSource",{}).get("uri",""))' 2>/dev/null) || true
-    if [ -z "$gcs_uri" ]; then
-        echo "[worker] ERROR: revision $revision for skill $skill_name has no gcsSource"
-        return 1
-    fi
-
     local tmp_zip
     tmp_zip=$(mktemp)
-    if ! gcloud storage cp "$gcs_uri" "$tmp_zip" 2>/dev/null; then
-        echo "[worker] ERROR: failed to download skill $skill_name revision $revision from $gcs_uri"
+    if ! gcloud alpha agent-registry skills revisions download "$revision" \
+        --skill="$skill_id" --project="$AGENT_REGISTRY_PROJECT" --location="$AGENT_REGISTRY_LOCATION" \
+        --destination="$tmp_zip" --allow-overwrite 2>/dev/null; then
+        echo "[worker] ERROR: failed to download skill $skill_name revision $revision"
         rm -f "$tmp_zip"
         return 1
     fi
