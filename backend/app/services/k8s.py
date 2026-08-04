@@ -386,6 +386,19 @@ def create_worker_pod(
             init_containers=[status_container],
             volumes=pod_volumes,
             restart_policy="Never",
+            # Route the Agent Registry API through Google's restricted VIP instead of
+            # its public IP. The registry's own alt=media download path is blocked by
+            # this project's VPC-SC perimeter for in-cluster callers regardless of
+            # destination IP (see fetch_skill() in entrypoint.sh, which routes payload
+            # bytes through GCS instead) — but metadata calls (list/get skills) go
+            # through this same hostname, and the restricted VIP is how VPC-SC exempts
+            # traffic that stays inside the perimeter's allowed access path.
+            host_aliases=[
+                client.V1HostAlias(
+                    ip="199.36.153.8",
+                    hostnames=["agentregistry.googleapis.com"],
+                ),
+            ],
         ),
     )
     _api_v1.create_namespaced_pod(namespace=NAMESPACE, body=pod)
