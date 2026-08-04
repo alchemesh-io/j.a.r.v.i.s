@@ -605,4 +605,8 @@ def test_create_worker_pod_uses_dedicated_service_account(mock_client, mock_conf
     pod_spec_kwargs = mock_client.V1PodSpec.call_args.kwargs
     assert pod_spec_kwargs["service_account_name"] == k8s.WORKER_SERVICE_ACCOUNT
     assert pod_spec_kwargs["service_account_name"] != "jarvis-backend"
-    assert pod_spec_kwargs["automount_service_account_token"] is False
+    # NOT disabling automount: this cluster's "deny-automount-token-without-sa"
+    # ValidatingAdmissionPolicy rejects serviceAccountName-set + automount-disabled
+    # outright (confirmed against the real cluster). Safety instead comes from
+    # WORKER_SERVICE_ACCOUNT having zero RoleBindings.
+    assert "automount_service_account_token" not in pod_spec_kwargs

@@ -375,8 +375,15 @@ def create_worker_pod(
             },
         ),
         spec=client.V1PodSpec(
+            # NOT setting automount_service_account_token=False here: this cluster's
+            # "deny-automount-token-without-sa" ValidatingAdmissionPolicy rejects that
+            # combination outright (serviceAccountName set + automount disabled is
+            # treated as a likely misconfiguration and hard-denied at admission,
+            # confirmed against the real t2-d-sbx-arch cluster). The mounted token is
+            # still safe: WORKER_SERVICE_ACCOUNT carries zero RoleBindings, so it
+            # authenticates as an identity with no RBAC grants beyond the cluster's
+            # baseline for any authenticated user.
             service_account_name=WORKER_SERVICE_ACCOUNT,
-            automount_service_account_token=False,
             security_context=pod_security_context,
             containers=[worker_container],
             init_containers=[status_container],
