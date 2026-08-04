@@ -17,7 +17,7 @@ backend:
     # JIRA integration (optional)
     jiraProjectUrl: "https://sage-project.atlassian.net"
     jiraUserEmail: "guittonbouedronalexandre@gmail.com"
-    jiraJql: "(project = AG) OR (project IN (SAGE, JARVIS) AND assignee = 712020:4c783354-372e-4dbd-abb8-f3a2eb2cf58f)"
+    jiraJql: "project = DAD OR assignee = 614c82b1f1c174006844fe46"
     # Google Calendar integration (optional)
     googleAuthMode: "oauth2"          # "oauth2" or "service_account"
     googleRedirectUri: "http://localhost/api/v1/gcal/auth/callback"
