@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:////data/jarvis.db"
     app_title: str = "J.A.R.V.I.S"
     debug: bool = False
+    # Auto-provision the permanent "main brain" worker on startup. Kill switch
+    # for unwinding a bad bootstrap without hand-editing the DB, since the
+    # main worker is otherwise undeletable via the API.
+    main_worker_bootstrap: bool = True
 
     # JIRA integration
     jira_project_url: str = ""

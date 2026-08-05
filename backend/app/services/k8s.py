@@ -10,6 +10,11 @@ logger = logging.getLogger(__name__)
 NAMESPACE = "jarvis"
 WORKER_LABEL = "jarvis-worker"
 
+# Dedicated ServiceAccount for worker pods (helm/jarvis/templates/worker-pod-serviceaccount.yaml),
+# distinct from "jarvis-backend" and carrying no RoleBinding — worker pods must not inherit
+# the backend's pods/attach, pods/exec, and pod/service/PVC management permissions.
+WORKER_SERVICE_ACCOUNT = "jarvis-worker"
+
 # Path of the Claude state file shared between the worker container (hooks) and
 # the status sidecar via the /worker-state emptyDir.
 STATE_FILE = "/worker-state/claude-state"
@@ -133,7 +138,7 @@ def create_worker_pod(
 
     The pod runs two containers sharing a /worker-state emptyDir:
     - `worker`: Claude Code interactive under a PTY (tty/stdin) — the Attach target.
-      Privileged only when skills are requested (dockerd for `arctl skill pull`).
+      Never privileged — skills are fetched from the GCP Agent Registry + GCS.
     - `status`: the status server on port 8080, pushing hook-reported state to the backend.
 
     When stateful=True, the pod mounts the PVC `jarvis-worker-<id>-data` at /home/node
@@ -152,7 +157,6 @@ def create_worker_pod(
     skills_env = ",".join(
         f"{s['name']}@{s.get('version', 'latest')}" for s in (skills or [])
     )
-    has_skills = bool(skills)
 
     pod_name = f"jarvis-worker-{worker_id}"
     try:
@@ -223,11 +227,8 @@ def create_worker_pod(
         name="worker",
         image=worker_image,
         image_pull_policy=image_pull_policy,
-        # dockerd (skill pulls) is the only thing needing privilege; the stateful
-        # chown fallback only needs in-container root via sudo.
-        security_context=(
-            client.V1SecurityContext(privileged=True) if has_skills else None
-        ),
+        # Skills are fetched from the GCP Agent Registry + GCS (no docker daemon
+        # involved) — worker pods run fully unprivileged regardless of skills.
         # Interactive PTY for the Kubernetes Attach API (remote-claude pattern).
         tty=True,
         stdin=True,
@@ -240,7 +241,8 @@ def create_worker_pod(
             client.V1EnvVar(name="STATE_FILE", value=STATE_FILE),
             client.V1EnvVar(name="REPOSITORIES", value=repo_env),
             client.V1EnvVar(name="SKILLS", value=skills_env),
-            client.V1EnvVar(name="JAAR_URL", value=os.getenv("JAAR_URL", "")),
+            client.V1EnvVar(name="AGENT_REGISTRY_PROJECT", value=os.getenv("AGENT_REGISTRY_PROJECT", "")),
+            client.V1EnvVar(name="AGENT_REGISTRY_LOCATION", value=os.getenv("AGENT_REGISTRY_LOCATION", "")),
             client.V1EnvVar(name="JARVIS_MCP_URL", value=os.getenv("JARVIS_MCP_URL", "")),
             client.V1EnvVar(name="BACKEND_URL", value=f"http://jarvis-backend.{NAMESPACE}.svc:8000"),
             client.V1EnvVar(
@@ -269,6 +271,46 @@ def create_worker_pod(
                     secret_key_ref=client.V1SecretKeySelector(
                         name="jarvis-jaw-secret",
                         key="GITHUB_TOKEN",
+                        optional=True,
+                    )
+                ),
+            ),
+            client.V1EnvVar(
+                name="DD_API_KEY",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name="jarvis-jaw-secret",
+                        key="DD_API_KEY",
+                        optional=True,
+                    )
+                ),
+            ),
+            client.V1EnvVar(
+                name="DD_APP_KEY",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name="jarvis-jaw-secret",
+                        key="DD_APP_KEY",
+                        optional=True,
+                    )
+                ),
+            ),
+            client.V1EnvVar(
+                name="DD_SITE",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name="jarvis-jaw-secret",
+                        key="DD_SITE",
+                        optional=True,
+                    )
+                ),
+            ),
+            client.V1EnvVar(
+                name="TFE_TOKEN",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name="jarvis-jaw-secret",
+                        key="TFE_TOKEN",
                         optional=True,
                     )
                 ),
@@ -330,7 +372,15 @@ def create_worker_pod(
             },
         ),
         spec=client.V1PodSpec(
-            service_account_name="jarvis-backend",
+            # NOT setting automount_service_account_token=False here: this cluster's
+            # "deny-automount-token-without-sa" ValidatingAdmissionPolicy rejects that
+            # combination outright (serviceAccountName set + automount disabled is
+            # treated as a likely misconfiguration and hard-denied at admission,
+            # confirmed against the real t2-d-sbx-arch cluster). The mounted token is
+            # still safe: WORKER_SERVICE_ACCOUNT carries zero RoleBindings, so it
+            # authenticates as an identity with no RBAC grants beyond the cluster's
+            # baseline for any authenticated user.
+            service_account_name=WORKER_SERVICE_ACCOUNT,
             security_context=pod_security_context,
             containers=[worker_container],
             init_containers=[status_container],
@@ -516,8 +566,12 @@ def exec_worker_shell(worker_id: str):
     )
 
 
-def read_pod_logs(worker_id: str, tail_lines: int = 500) -> str | None:
-    """Return the recent log tail of the `worker` container, or None if unavailable."""
+def read_pod_logs(worker_id: str, tail_lines: int | None = 500) -> str | None:
+    """Return the log tail of the `worker` container, or None if unavailable.
+
+    tail_lines=None returns everything the kubelet still has on disk for this
+    container (bounded by containerLogMaxSize), not just a recent tail.
+    """
     if not _init_client():
         return None
     name = f"jarvis-worker-{worker_id}"

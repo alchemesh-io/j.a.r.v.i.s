@@ -6,7 +6,7 @@ set -e
 STATE_FILE="${STATE_FILE:-/worker-state/claude-state}"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 CLAUDE_JSON="$HOME/.claude.json"
-WORKSPACE="$HOME/jarvis"
+WORKSPACE="$HOME/jarvis/task-$TASK_ID"
 
 # --- State hook scripts ---
 
@@ -60,14 +60,20 @@ else
     echo "$SETTINGS" > "$SETTINGS_FILE"
 fi
 
-# --- Pre-trust workspace ---
+# --- Pre-trust workspace, pre-seed onboarding (skips the first-run theme wizard
+# and the Bypass Permissions mode confirmation — both otherwise block the
+# interactive PTY on a keypress) ---
 
 if [ ! -f "$CLAUDE_JSON" ]; then
     echo '{}' > "$CLAUDE_JSON"
 fi
 
-jq --arg ws "$WORKSPACE" '.projects[$ws].hasTrustDialogAccepted = true' "$CLAUDE_JSON" \
-    > /tmp/claude.json && mv /tmp/claude.json "$CLAUDE_JSON"
+jq --arg ws "$WORKSPACE" \
+    '.projects[$ws].hasTrustDialogAccepted = true
+     | .theme = "dark"
+     | .hasCompletedOnboarding = true
+     | .bypassPermissionsModeAccepted = true' \
+    "$CLAUDE_JSON" > /tmp/claude.json && mv /tmp/claude.json "$CLAUDE_JSON"
 
 # --- Configure JARVIS MCP (HTTP) via the Claude Code CLI ---
 

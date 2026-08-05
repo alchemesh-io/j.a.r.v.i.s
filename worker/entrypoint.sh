@@ -2,7 +2,27 @@
 set -e
 
 WORKER_MODE="${WORKER_MODE:-ephemeral}"
+WORKSPACE_DIR="$HOME/jarvis/task-$TASK_ID"
 echo "[worker] Starting worker ${WORKER_ID} for task ${TASK_ID} (mode=${WORKER_MODE})"
+
+# Pin agentregistry.googleapis.com to Google's restricted VIP. A pod-level
+# hostAliases equivalent is hard-denied by this cluster's deny-host-aliases
+# ValidatingAdmissionPolicy, so this has to happen inside the container instead
+# — /etc/hosts is a per-pod file the kubelet mounts writable regardless of any
+# container-level readOnlyRootFilesystem setting.
+if ! grep -q "agentregistry.googleapis.com" /etc/hosts 2>/dev/null; then
+    echo "199.36.153.8 agentregistry.googleapis.com" | sudo tee -a /etc/hosts >/dev/null
+fi
+
+# Register gh as git's credential helper so HTTPS clones (e.g. Claude Code's own
+# plugin marketplace fetches, which run non-interactively with no TTY to prompt
+# for credentials) can authenticate. gh reads GITHUB_TOKEN from the environment
+# automatically, no separate `gh auth login` needed. Re-run on every start —
+# it writes to ~/.gitconfig, which is ephemeral for ephemeral-mode workers and,
+# even for stateful workers, isn't guaranteed to survive every pod recreation.
+if [ -n "$GITHUB_TOKEN" ]; then
+    gh auth setup-git >/dev/null 2>&1 || echo "[worker] WARNING: gh auth setup-git failed"
+fi
 
 # Step 0: Fix PVC ownership and ensure the home directory layout exists.
 # When the worker is stateful, the PVC mount overlays /home/node — and on most storage
@@ -15,7 +35,7 @@ if [ "$WORKER_MODE" = "stateful" ] && [ "$(stat -c %u "$HOME" 2>/dev/null || ech
 fi
 
 mkdir -p \
-    "$HOME/jarvis" \
+    "$WORKSPACE_DIR" \
     "$HOME/.claude" \
     "$HOME/.claude/skills" \
     "$HOME/.claude/projects"
@@ -37,7 +57,25 @@ fi
 # settings.json when present, never touches ~/.claude/projects/.
 /opt/jarvis-worker/setup-claude.sh
 
-# Step 3: Clone repositories (with DNS retry — Istio sidecar may not be ready immediately)
+# Step 3: Write Terraform Enterprise credentials when TFE_TOKEN is present. Re-applied on
+# every start (fresh or resumed), same as the ConfigMap-sourced Claude config above —
+# mirrors how GOOGLE_WORKSPACE_CLI_CREDENTIALS is written to /etc/gws/credentials.json.
+# The Terraform CLI credentials file is keyed by host, not org.
+if [ -n "$TFE_TOKEN" ]; then
+    echo "[worker] Writing Terraform Enterprise credentials for tfe.doctolib.net..."
+    mkdir -p ~/.terraform.d
+    cat > ~/.terraform.d/credentials.tfrc.json <<EOF
+{
+  "credentials": {
+    "tfe.doctolib.net": {
+      "token": "$TFE_TOKEN"
+    }
+  }
+}
+EOF
+fi
+
+# Step 4: Clone repositories (with DNS retry — Istio sidecar may not be ready immediately)
 REPOS_CACHED=0
 REPOS_CLONED=0
 if [ -n "$REPOSITORIES" ]; then
@@ -57,7 +95,7 @@ if [ -n "$REPOSITORIES" ]; then
         git_url="${repo_spec%@*}"
         branch="${repo_spec#*@}"
         repo_name=$(basename "$git_url" .git)
-        target_dir="$HOME/jarvis/$repo_name"
+        target_dir="$WORKSPACE_DIR/$repo_name"
 
         if [ -d "$target_dir/.git" ]; then
             echo "[worker] Repo $repo_name already cloned at $target_dir, skipping"
@@ -90,69 +128,96 @@ if [ -n "$REPOSITORIES" ]; then
     done
 fi
 
-# Step 4: Pull skills from JAAR (selective by name@version) into Claude Code skills dir.
-# Rootless dockerd — uses slirp4netns for network isolation so the pod's DNS/iptables
-# stay clean. No sudo, no privileged: true on the pod.
+# Step 5: Fetch skills from the GCP Agent Registry (selective by name@version) into the
+# Claude Code skills dir, entirely through the `gcloud alpha agent-registry skills`
+# command group (list/describe/revisions describe/revisions download) — gcloud
+# already carries the pod's Workload Identity credentials, no hand-rolled REST/curl
+# needed. Skill-enabled pods run fully unprivileged — no dockerd, no sudo needed for
+# this step.
 SKILLS_CACHED=0
 SKILLS_PULLED=0
-if [ -n "$SKILLS" ] && [ -n "$JAAR_URL" ] && command -v arctl &> /dev/null; then
-    # Determine which skills are missing — avoids starting dockerd unnecessarily on resume.
-    PENDING_SKILLS=()
+
+fetch_skill() {
+    local skill_name="$1" skill_version="$2" skill_dir="$3"
+
+    # The registry may assign a different resource id than the requested displayName
+    # (e.g. a "private-" prefix for unpublished project-owned skills), so resolve by
+    # listing and matching displayName rather than guessing skills/{skill_name} directly.
+    local skill_id
+    skill_id=$(gcloud alpha agent-registry skills list \
+        --project="$AGENT_REGISTRY_PROJECT" --location="$AGENT_REGISTRY_LOCATION" \
+        --format=json 2>/dev/null | python3 -c "
+import json, sys
+name = sys.argv[1]
+data = json.load(sys.stdin)
+for s in data:
+    if s.get('displayName') == name and 'publisher' not in s:
+        print(s['name'].rsplit('/', 1)[-1])
+        break
+" "$skill_name") || true
+    if [ -z "$skill_id" ]; then
+        echo "[worker] ERROR: could not find skill '$skill_name' in the Agent Registry"
+        return 1
+    fi
+
+    local revision="$skill_version"
+    if [ "$skill_version" = "latest" ] || [ -z "$skill_version" ]; then
+        local default_revision
+        default_revision=$(gcloud alpha agent-registry skills describe "$skill_id" \
+            --project="$AGENT_REGISTRY_PROJECT" --location="$AGENT_REGISTRY_LOCATION" \
+            --format='value(defaultRevision)' 2>/dev/null) || true
+        revision="${default_revision##*/}"
+        if [ -z "$revision" ]; then
+            echo "[worker] ERROR: could not resolve defaultRevision for skill $skill_name"
+            return 1
+        fi
+    fi
+
+    # `revisions download` extracts the archive itself — given a ".zip"-suffixed
+    # destination it writes the unzipped payload to that same path with ".zip"
+    # stripped (confirmed empirically), so no separate unzip step is needed.
+    local tmp_zip tmp_extracted
+    tmp_zip="$(mktemp -u).zip"
+    tmp_extracted="${tmp_zip%.zip}"
+    rm -rf "$tmp_extracted"
+    if ! gcloud alpha agent-registry skills revisions download "$revision" \
+        --skill="$skill_id" --project="$AGENT_REGISTRY_PROJECT" --location="$AGENT_REGISTRY_LOCATION" \
+        --destination="$tmp_zip" --allow-overwrite 2>/dev/null; then
+        echo "[worker] ERROR: failed to download skill $skill_name revision $revision"
+        rm -rf "$tmp_extracted"
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$skill_dir")"
+    rm -rf "$skill_dir"
+    mv "$tmp_extracted" "$skill_dir"
+    return 0
+}
+
+if [ -n "$SKILLS" ] && [ -n "$AGENT_REGISTRY_PROJECT" ] && [ -n "$AGENT_REGISTRY_LOCATION" ]; then
     IFS=',' read -ra SKILL_REFS <<< "$SKILLS"
     for skill_ref in "${SKILL_REFS[@]}"; do
         skill_name="${skill_ref%@*}"
+        skill_version="${skill_ref#*@}"
         skill_dir="$HOME/.claude/skills/$skill_name"
+
         if [ -f "$skill_dir/SKILL.md" ]; then
             echo "[worker] Skill $skill_name already cached at $skill_dir, skipping"
             SKILLS_CACHED=$((SKILLS_CACHED + 1))
+            continue
+        fi
+
+        echo "[worker] Fetching skill $skill_name (version: $skill_version) from the Agent Registry to $skill_dir"
+        if fetch_skill "$skill_name" "$skill_version" "$skill_dir"; then
+            SKILLS_PULLED=$((SKILLS_PULLED + 1))
         else
-            PENDING_SKILLS+=("$skill_ref")
+            echo "[worker] WARNING: Failed to fetch skill $skill_name@$skill_version"
         fi
     done
-
-    if [ ${#PENDING_SKILLS[@]} -gt 0 ]; then
-        echo "[worker] Starting dockerd for skill pulls..."
-        sudo sh -c 'dockerd > /var/log/dockerd.log 2>&1 &'
-        sleep 1
-
-        # Wait for dockerd socket to be ready (up to 15s)
-        for i in $(seq 1 15); do
-            if sudo docker info >/dev/null 2>&1; then
-                echo "[worker] dockerd ready"
-                break
-            fi
-            sleep 1
-        done
-
-        # Authenticate with GHCR so arctl can pull private skill images.
-        if [ -n "$GITHUB_TOKEN" ]; then
-            GHCR_USER="${GHCR_USERNAME:-USERNAME}"
-            echo "[worker] Logging into ghcr.io as ${GHCR_USER}..."
-            echo "$GITHUB_TOKEN" | sudo docker login ghcr.io -u "${GHCR_USER}" --password-stdin 2>&1 || \
-                echo "[worker] WARNING: docker login failed — ensure GITHUB_TOKEN has read:packages scope"
-        fi
-
-        echo "[worker] Pulling ${#PENDING_SKILLS[@]} skills from JAAR..."
-        for skill_ref in "${PENDING_SKILLS[@]}"; do
-            skill_name="${skill_ref%@*}"
-            skill_version="${skill_ref#*@}"
-            skill_dir="$HOME/.claude/skills/$skill_name"
-            echo "[worker] Pulling skill $skill_name (version: $skill_version) to $skill_dir"
-            if sudo arctl skill pull "$skill_name" "$skill_dir" --version "$skill_version" --registry-url "$JAAR_URL" 2>&1; then
-                SKILLS_PULLED=$((SKILLS_PULLED + 1))
-            else
-                echo "[worker] WARNING: Failed to pull skill $skill_name@$skill_version"
-            fi
-            sudo chown -R node:node "$skill_dir" 2>/dev/null || true
-        done
-
-        # Stop dockerd — no longer needed after skills are pulled
-        sudo pkill -x dockerd 2>/dev/null || true
-    else
-        echo "[worker] All skills already cached, no skill pull required"
-    fi
-elif [ -z "$SKILLS" ]; then
-    echo "[worker] No skills configured (SKILLS env var empty), skipping skill pull"
+elif [ -n "$SKILLS" ]; then
+    echo "[worker] ERROR: SKILLS is set but AGENT_REGISTRY_PROJECT/AGENT_REGISTRY_LOCATION are not — cannot fetch skills"
+else
+    echo "[worker] No skills configured (SKILLS env var empty), skipping skill fetch"
 fi
 
 # Stateful summary log so resume vs fresh-start is visible at a glance.
@@ -160,24 +225,31 @@ if [ "$WORKER_MODE" = "stateful" ]; then
     echo "[worker] mode=stateful, PVC mounted at /home/node, ${REPOS_CACHED} repos cached, ${SKILLS_CACHED} skills cached"
 fi
 
-# Step 5: Launch Claude Code interactively as the container's main process so the
+# Step 6: Launch Claude Code interactively as the container's main process so the
 # Kubernetes Attach API reaches its PTY. The status server runs in a dedicated
 # sidecar container; the hooks report Claude's state through the shared
 # /worker-state emptyDir (see setup-claude.sh / STATE_FILE).
 export TERM="${TERM:-xterm-256color}"
 
-# Resume probe: if a previous session exists under ~/.claude/projects/ (stateful
-# restart), resume the most recent one; otherwise start fresh with the task
-# prompt as the first turn.
-LATEST_SESSION=$(ls -t "$HOME/.claude/projects"/*/*.jsonl 2>/dev/null | head -1)
-if [ -n "$LATEST_SESSION" ]; then
-    SESSION_ID=$(basename "$LATEST_SESSION" .jsonl)
-    echo "[worker] Resuming Claude Code session ${SESSION_ID}..."
-    exec claude --dangerously-skip-permissions --resume "$SESSION_ID"
+# Session id is derived deterministically from WORKER_ID (a uuid4().hex from the
+# backend) rather than left to Claude Code to assign, so it's stable across restarts
+# and addressable by the backend/frontend without discovery. Claude Code keys session
+# files by an encoded form of the project's absolute path (every / and . becomes -)
+# under ~/.claude/projects/<encoded>/<session-id>.jsonl — we check specifically for
+# THIS worker's session id scoped to THIS task's workspace, not "any session exists
+# anywhere": a worker upgrading from the old shared-$HOME layout (pre per-task-workspace)
+# has an old session keyed to the old cwd, which a global check would wrongly match.
+WORKSPACE_PROJECT_KEY=$(echo "$WORKSPACE_DIR" | sed 's/[\/.]/-/g')
+SESSION_UUID="${WORKER_ID:0:8}-${WORKER_ID:8:4}-${WORKER_ID:12:4}-${WORKER_ID:16:4}-${WORKER_ID:20:12}"
+EXISTING_SESSION="$HOME/.claude/projects/$WORKSPACE_PROJECT_KEY/$SESSION_UUID.jsonl"
+cd "$WORKSPACE_DIR"
+if [ -f "$EXISTING_SESSION" ]; then
+    echo "[worker] Resuming Claude Code session ${SESSION_UUID} in ${WORKSPACE_DIR}..."
+    exec claude --dangerously-skip-permissions --resume "$SESSION_UUID"
 elif [ -n "$TASK_PROMPT" ]; then
-    echo "[worker] Starting Claude Code with task prompt..."
-    exec claude --dangerously-skip-permissions "$TASK_PROMPT"
+    echo "[worker] Starting Claude Code session ${SESSION_UUID} in ${WORKSPACE_DIR} with task prompt..."
+    exec claude --dangerously-skip-permissions --session-id "$SESSION_UUID" "$TASK_PROMPT"
 else
-    echo "[worker] Starting Claude Code (no task prompt)..."
-    exec claude --dangerously-skip-permissions
+    echo "[worker] Starting Claude Code session ${SESSION_UUID} in ${WORKSPACE_DIR} (no task prompt)..."
+    exec claude --dangerously-skip-permissions --session-id "$SESSION_UUID"
 fi

@@ -42,7 +42,6 @@ Thumbs.db
 !.env.example
 secrets/backend-secret.yaml
 secrets/jaw-secret.yaml
-secrets/jaar-secret.yaml
 
 # Helm
 *.tgz

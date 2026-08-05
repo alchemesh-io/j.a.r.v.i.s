@@ -1,5 +1,6 @@
 import datetime
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.session import get_db
 from app.models import Daily, DailyTask, Task
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
-from app.services import k8s
+from app.services import k8s, main_brain
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -55,8 +56,16 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db)):
 def list_tasks(
     date: datetime.date | None = Query(None),
     scope: str = Query("all", pattern="^(daily|weekly|all)$"),
+    include_system: bool = Query(False, description="Include the permanent main-brain task"),
     db: Session = Depends(get_db),
 ):
+    # NULL-safe: `source_id != X` is NULL (i.e. filtered out) for every row
+    # whose source_id is NULL under SQL three-valued logic, which is most
+    # tasks — so NULL must be allowed through explicitly.
+    system_filter = sa.or_(
+        Task.source_id.is_(None), Task.source_id != main_brain.MAIN_BRAIN_SOURCE_ID
+    )
+
     if scope == "all" or date is None:
         stmt = select(Task).options(
             selectinload(Task.daily_entries).selectinload(DailyTask.daily),
@@ -65,6 +74,8 @@ def list_tasks(
             selectinload(Task.blockers),
             selectinload(Task.worker),
         )
+        if not include_system:
+            stmt = stmt.where(system_filter)
         tasks = db.scalars(stmt).all()
     else:
         if scope == "daily":
@@ -86,6 +97,8 @@ def list_tasks(
                 selectinload(Task.worker),
             )
         )
+        if not include_system:
+            stmt = stmt.where(system_filter)
         tasks = db.scalars(stmt).unique().all()
 
     return [_task_to_response(t) for t in tasks]
@@ -111,6 +124,8 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     from app.models.enums import WorkerMode
 
     task = _load_task(db, task_id)
+    if main_brain.is_main_task(task):
+        raise HTTPException(status_code=409, detail="The main brain task is permanent and cannot be deleted")
     if task.worker:
         k8s.delete_worker_resources(
             task.worker.id, delete_pvc=task.worker.mode == WorkerMode.stateful

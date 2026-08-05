@@ -46,3 +46,4 @@ class WorkerResponse(BaseModel):
     updated_at: datetime.datetime
     repositories: list[RepositoryResponse] = []
     skills: list[SkillRef] = []
+    is_main: bool = False

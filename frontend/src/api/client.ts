@@ -79,6 +79,7 @@ export interface Worker {
   updated_at: string;
   repositories: Repository[];
   skills: SkillRef[];
+  is_main: boolean;
 }
 
 export interface KeyFocus {
@@ -495,6 +496,11 @@ export function listWorkers(): Promise<Worker[]> {
 
 export function getWorker(id: string): Promise<Worker> {
   return request(`/workers/${id}`);
+}
+
+/** The permanent, PVC-backed "main brain" worker. */
+export function getMainWorker(): Promise<Worker> {
+  return request('/workers/main');
 }
 
 export function updateWorker(

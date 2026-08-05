@@ -13,10 +13,11 @@ backend:
     databaseUrl: "sqlite:////data/jarvis.db"
     appTitle: "J.A.R.V.I.S"
     debug: "false"
+    mainWorkerBootstrap: "true"
     # JIRA integration (optional)
     jiraProjectUrl: "https://sage-project.atlassian.net"
     jiraUserEmail: "guittonbouedronalexandre@gmail.com"
-    jiraJql: "(project = AG) OR (project IN (SAGE, JARVIS) AND assignee = 712020:4c783354-372e-4dbd-abb8-f3a2eb2cf58f)"
+    jiraJql: "(project = DAD OR assignee = 614c82b1f1c174006844fe46) AND statusCategory != Done order by created DESC"
     # Google Calendar integration (optional)
     googleAuthMode: "oauth2"          # "oauth2" or "service_account"
     googleRedirectUri: "http://localhost/api/v1/gcal/auth/callback"
@@ -79,6 +80,12 @@ gateway:
   namespace: istio-system
   host: main.jarvis.io
   mcpHost: mcp.jarvis.io
+
+# GCP Agent Registry (agentregistry.googleapis.com) — replaces JAAR. IAM/Fleet
+# Terraform for a real deployment lives in the infra repo's agent_registry.tf.
+agentRegistry:
+  project: ""
+  location: "global"
 
 persistence:
   storageClass: standard

@@ -455,12 +455,27 @@ def test_create_worker_pod_unprivileged_without_skills(mock_client, mock_config)
 
 @patch("app.services.k8s.config")
 @patch("app.services.k8s.client")
-def test_create_worker_pod_privileged_with_skills(mock_client, mock_config):
+def test_create_worker_pod_unprivileged_with_skills(mock_client, mock_config):
+    # Skills are fetched from the GCP Agent Registry + GCS — no docker daemon
+    # involved, so skill-enabled pods stay unprivileged too (unlike the old
+    # JAAR/arctl/dockerd mechanism).
     _mocked_pod_api(mock_client, mock_config)
     k8s.create_worker_pod(
         "abc123", 42, "worker:latest", [], skills=[{"name": "s", "version": "1"}]
     )
-    mock_client.V1SecurityContext.assert_called_once_with(privileged=True)
+    mock_client.V1SecurityContext.assert_not_called()
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_passes_agent_registry_env(mock_client, mock_config):
+    _mocked_pod_api(mock_client, mock_config)
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [])
+    env_calls = mock_client.V1EnvVar.call_args_list
+    names = [c.kwargs.get("name") for c in env_calls]
+    assert "AGENT_REGISTRY_PROJECT" in names
+    assert "AGENT_REGISTRY_LOCATION" in names
+    assert "JAAR_URL" not in names
 
 
 @patch("app.services.k8s.config")
@@ -574,3 +589,39 @@ def test_get_pod_phase_returns_none_on_404(mock_client, mock_config):
     phase, exit_code = k8s.get_pod_phase("abc123")
     assert phase is None
     assert exit_code is None
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_optional_secret_env_vars(mock_client, mock_config):
+    _mocked_pod_api(mock_client, mock_config)
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [])
+
+    selector_calls = mock_client.V1SecretKeySelector.call_args_list
+    for key in ("TFE_TOKEN", "DD_APP_KEY", "DD_SITE"):
+        matches = [c for c in selector_calls if c.kwargs.get("key") == key]
+        assert len(matches) == 1, f"expected exactly one V1SecretKeySelector for {key}"
+        assert matches[0].kwargs["name"] == "jarvis-jaw-secret"
+        assert matches[0].kwargs["optional"] is True
+
+    env_calls = mock_client.V1EnvVar.call_args_list
+    for name in ("TFE_TOKEN", "DD_APP_KEY", "DD_SITE"):
+        matches = [c for c in env_calls if c.kwargs.get("name") == name]
+        assert len(matches) == 1, f"expected exactly one V1EnvVar named {name}"
+        assert "value_from" in matches[0].kwargs
+
+
+@patch("app.services.k8s.config")
+@patch("app.services.k8s.client")
+def test_create_worker_pod_uses_dedicated_service_account(mock_client, mock_config):
+    _mocked_pod_api(mock_client, mock_config)
+    k8s.create_worker_pod("abc123", 42, "worker:latest", [])
+
+    pod_spec_kwargs = mock_client.V1PodSpec.call_args.kwargs
+    assert pod_spec_kwargs["service_account_name"] == k8s.WORKER_SERVICE_ACCOUNT
+    assert pod_spec_kwargs["service_account_name"] != "jarvis-backend"
+    # NOT disabling automount: this cluster's "deny-automount-token-without-sa"
+    # ValidatingAdmissionPolicy rejects serviceAccountName-set + automount-disabled
+    # outright (confirmed against the real cluster). Safety instead comes from
+    # WORKER_SERVICE_ACCOUNT having zero RoleBindings.
+    assert "automount_service_account_token" not in pod_spec_kwargs

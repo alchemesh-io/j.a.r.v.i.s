@@ -12,3 +12,9 @@ rules:
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["create", "get", "list", "delete"]
+  # Subresources for the terminal bridge (backend/app/services/terminal.py) —
+  # RBAC treats these as distinct resource types from bare "pods", so the rule
+  # above does not cover them.
+  - apiGroups: [""]
+    resources: ["pods/attach", "pods/exec"]
+    verbs: ["create", "get"]

@@ -18,10 +18,10 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Card, Input } from '@jarvis/jads';
-import { listTasks, type Task } from '../../api/client';
-import { fetchServerCount, fetchAgentCount, fetchSkillCount, fetchPromptCount } from '../../api/jaar';
+import { Card } from '@jarvis/jads';
+import { listTasks, listSkills, type Task } from '../../api/client';
 import BrainAnimation from './BrainAnimation';
+import MainBrainTerminal from './MainBrainTerminal';
 import './Dashboard.css';
 
 function formatDate(d: Date): string {
@@ -42,7 +42,7 @@ const RedirectIcon = () => (
 interface MetricBlockProps {
   id: string;
   title: string;
-  metrics: { label: string; count: number; color: string }[];
+  metrics: { label: string; count: number | null; color: string }[];
   compact: boolean;
   onNavigate?: () => void;
 }
@@ -72,7 +72,7 @@ function MetricBlock({ id, title, metrics, compact, onNavigate }: MetricBlockPro
           <div className="dashboard__metrics">
             {metrics.map((m) => (
               <div key={m.label} className="dashboard__metric">
-                <span className="dashboard__metric-count" style={{ color: m.color }}>{m.count}</span>
+                <span className="dashboard__metric-count" style={{ color: m.color }}>{m.count ?? '—'}</span>
                 {!compact && <span className="dashboard__metric-label" style={{ color: m.color }}>{m.label}</span>}
               </div>
             ))}
@@ -82,6 +82,8 @@ function MetricBlock({ id, title, metrics, compact, onNavigate }: MetricBlockPro
     </div>
   );
 }
+
+const agentRegistryConsoleUrl = import.meta.env.VITE_AGENT_REGISTRY_CONSOLE_URL as string | undefined;
 
 const STORAGE_KEY = 'jarvis-dashboard-layout';
 const DEFAULT_ORDER = ['workers', 'daily-tasks', 'weekly-tasks', 'agent-registry'];
@@ -125,6 +127,7 @@ export default function Dashboard() {
   const [brainHovered, setBrainHovered] = useState(false);
   const [isDraggingAny, setIsDraggingAny] = useState(false);
   const [konamiMode, setKonamiMode] = useState(false);
+  const [brainChatOpen, setBrainChatOpen] = useState(false);
 
   // Easter egg: Konami code ↑↑↓↓←→←→BA toggles heart mode
   useEffect(() => {
@@ -155,22 +158,11 @@ export default function Dashboard() {
     queryFn: () => listTasks({ date: today, scope: 'weekly' }),
   });
 
-  const { data: serverCount = 0 } = useQuery({
-    queryKey: ['jaar', 'servers'],
-    queryFn: fetchServerCount,
+  const { data: skills = [] } = useQuery({
+    queryKey: ['skills'],
+    queryFn: listSkills,
   });
-  const { data: agentCount = 0 } = useQuery({
-    queryKey: ['jaar', 'agents'],
-    queryFn: fetchAgentCount,
-  });
-  const { data: skillCount = 0 } = useQuery({
-    queryKey: ['jaar', 'skills'],
-    queryFn: fetchSkillCount,
-  });
-  const { data: promptCount = 0 } = useQuery({
-    queryKey: ['jaar', 'prompts'],
-    queryFn: fetchPromptCount,
-  });
+  const skillCount = new Set(skills.map((s) => s.name)).size;
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(blockOrder));
@@ -234,13 +226,15 @@ export default function Dashboard() {
       id: 'agent-registry',
       title: 'Agent Registry',
       metrics: [
-        { label: 'Servers', count: serverCount, color: '#3b82f6' },
-        { label: 'Agents', count: agentCount, color: '#f97316' },
+        { label: 'MCP Servers', count: null, color: '#3b82f6' },
+        { label: 'Agents', count: null, color: '#f97316' },
         { label: 'Skills', count: skillCount, color: '#22c55e' },
-        { label: 'Prompts', count: promptCount, color: '#a855f7' },
+        { label: 'Prompts', count: null, color: '#a855f7' },
       ],
       compact,
-      onNavigate: () => { window.open(`${window.location.protocol}//jaar.jarvis.io`, '_blank'); },
+      ...(agentRegistryConsoleUrl && {
+        onNavigate: () => { window.open(agentRegistryConsoleUrl, '_blank'); },
+      }),
     },
   };
 
@@ -265,6 +259,11 @@ export default function Dashboard() {
           className="dashboard__hud-brain"
           onMouseEnter={() => setBrainHovered(true)}
           onMouseLeave={() => setBrainHovered(false)}
+          onClick={() => setBrainChatOpen(true)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setBrainChatOpen(true); } }}
+          role="button"
+          tabIndex={0}
+          aria-label="Open main brain terminal"
         >
           <BrainAnimation konamiMode={konamiMode} />
         </div>
@@ -296,22 +295,7 @@ export default function Dashboard() {
         </DndContext>
       </div>
 
-      <div className="dashboard__chat">
-        <div className="dashboard__chat-field">
-          <span className="dashboard__chat-icon" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M14 2H2C1.4 2 1 2.4 1 3V10C1 10.6 1.4 11 2 11H6L8 14L10 11H14C14.6 11 15 10.6 15 10V3C15 2.4 14.6 2 14 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </span>
-          <Input
-            label=""
-            placeholder="Ask J.A.R.V.I.S anything..."
-            value=""
-            onChange={() => {}}
-            disabled
-          />
-        </div>
-      </div>
+      <MainBrainTerminal open={brainChatOpen} onClose={() => setBrainChatOpen(false)} />
     </div>
   );
 }

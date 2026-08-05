@@ -70,6 +70,7 @@ def test_create_worker_nonexistent_repo_returns_404(mock_k8s, client):
 @patch("app.routes.workers.k8s")
 def test_list_workers(mock_k8s, client):
     mock_k8s.is_available.return_value = False
+    mock_k8s.get_pod_phase.return_value = (None, None)
     t1 = _create_task(client, title="Task 1").json()
     t2 = _create_task(client, title="Task 2").json()
     client.post("/api/v1/workers", json={"task_id": t1["id"]})
@@ -125,6 +126,28 @@ def test_get_worker_no_pod_marks_stopped(mock_k8s, client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["state"] == "stopped"
+
+
+@patch("app.routes.workers.k8s")
+def test_list_workers_reflects_pod_deleted_out_of_band(mock_k8s, client):
+    # A worker whose pod was deleted directly (e.g. `kubectl delete`, not via
+    # the /stop endpoint) must show up as stopped in the list too — not just
+    # via the single-worker GET route — otherwise its effective_state stays
+    # frozen forever and the frontend's restart-button gating never fires.
+    mock_k8s.is_available.return_value = True
+    mock_k8s.get_pod_phase.return_value = ("Running", None)
+    mock_k8s.get_worker_pod_status.return_value = {"state": "working"}
+    task = _create_task(client).json()
+    worker = client.post(
+        "/api/v1/workers", json={"task_id": task["id"], "mode": "stateful"}
+    ).json()
+
+    mock_k8s.get_pod_phase.return_value = (None, None)
+    resp = client.get("/api/v1/workers")
+    assert resp.status_code == 200
+    data = next(w for w in resp.json() if w["id"] == worker["id"])
+    assert data["state"] == "stopped"
+    assert data["effective_state"] == "stopped"
     assert data["pod_status"] == "missing"
 
 
