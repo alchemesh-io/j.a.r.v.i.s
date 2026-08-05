@@ -46,9 +46,9 @@ jobs:
           arctl mcp build ${{ matrix.server.path }} --image ${IMAGE}:${{ steps.meta.outputs.version }} --push
           arctl mcp build ${{ matrix.server.path }} --image ${IMAGE}:latest --push
 
-  # Skills are no longer published via CI: the Agent Registry Skills API + GCS
-  # publish flow (scripts/publish-skill.sh) requires a GCP-authenticated
-  # identity, and this project's TFE execution identity lacks
+  # Skills are not published via CI: the Agent Registry Skills API publish
+  # flow (scripts/publish-skill.sh) requires a GCP-authenticated identity,
+  # and this project's TFE execution identity lacks
   # iam.workloadIdentityPools.create — treated as an intentional guardrail on
   # trust-boundary IAM resources rather than something to route around.
   # Publishing stays a manual, human-run step: `make sync-artifacts-skills`.

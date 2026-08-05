@@ -364,7 +364,6 @@ dev-backend:
 ## Override: make sync-artifacts AGENT_REGISTRY_PROJECT=my-project
 AGENT_REGISTRY_PROJECT ?= d-platform-raytflf9
 AGENT_REGISTRY_LOCATION ?= global
-AGENT_REGISTRY_SKILLS_BUCKET ?= $(AGENT_REGISTRY_PROJECT)-jarvis-skills
 
 ## Sync all artifacts to the Agent Registry (skills only — MCP server registration
 ## is automatic via GKE auto-discovery, see helm/jarvis/templates/mcp-deployment.yaml)
@@ -384,7 +383,7 @@ sync-artifacts-skills:
 	@command -v gcloud >/dev/null || { echo "ERROR: gcloud not found"; exit 1; }
 	@echo "==> Syncing skills to the Agent Registry (project: $(AGENT_REGISTRY_PROJECT), location: $(AGENT_REGISTRY_LOCATION))..."
 	@for dir in artifacts/skills/*/; do \
-		./scripts/publish-skill.sh "$$dir" "$(AGENT_REGISTRY_PROJECT)" "$(AGENT_REGISTRY_LOCATION)" "$(AGENT_REGISTRY_SKILLS_BUCKET)" || exit 1; \
+		./scripts/publish-skill.sh "$$dir" "$(AGENT_REGISTRY_PROJECT)" "$(AGENT_REGISTRY_LOCATION)" || exit 1; \
 	done
 	@echo "==> Done."
 
