@@ -199,33 +199,19 @@ def create_worker(body: WorkerCreate, db: Session = Depends(get_db)):
     return _worker_to_response(worker)
 
 
-@router.get("", response_model=list[WorkerResponse])
-def list_workers(db: Session = Depends(get_db)):
-    workers = db.scalars(
-        select(Worker).options(selectinload(Worker.repositories), selectinload(Worker.task))
-    ).all()
-    return [_worker_to_response(w) for w in workers]
+def _resolve_worker_response(worker: Worker, db: Session) -> WorkerResponse:
+    """Poll the pod's live phase and reconcile DB state before responding.
 
-
-@router.get("/main", response_model=WorkerResponse, summary="The permanent main-brain worker")
-def get_main_worker_route(db: Session = Depends(get_db)):
-    # Declared before /{worker_id} — FastAPI matches routes in declaration
-    # order, so this must come first or "main" gets swallowed as a worker id.
-    worker = main_brain.get_main_worker(db)
-    if not worker:
-        raise HTTPException(status_code=404, detail="Main worker not provisioned")
-    return get_worker(worker.id, db)
-
-
-@router.get("/{worker_id}", response_model=WorkerResponse)
-def get_worker(worker_id: str, db: Session = Depends(get_db)):
-    worker = _load_worker(db, worker_id)
-
+    Shared by list and single-worker reads so the grid's `effective_state`
+    (and therefore stop/restart button gating, which is driven by it) never
+    goes stale — a pod deleted out-of-band (e.g. `kubectl delete`) must show
+    up as stopped, not frozen at whatever DB state it last had.
+    """
     # Archived is fully terminal — never re-probe.
     if worker.state == WorkerState.archived:
         return _worker_to_response(worker)
 
-    phase, exit_code = k8s.get_pod_phase(worker_id)
+    phase, exit_code = k8s.get_pod_phase(worker.id)
 
     if phase is None:
         # No pod exists. For stateful workers the PVC is still around — the worker is stopped.
@@ -248,7 +234,7 @@ def get_worker(worker_id: str, db: Session = Depends(get_db)):
         return _worker_to_response(worker, effective_state=WorkerState.done, pod_status="succeeded")
 
     # Pod is Pending or Running — try the in-pod status server for finer-grained state.
-    pod_status_data = k8s.get_worker_pod_status(worker_id)
+    pod_status_data = k8s.get_worker_pod_status(worker.id)
     if pod_status_data:
         live_state_str = pod_status_data.get("state")
         try:
@@ -259,6 +245,30 @@ def get_worker(worker_id: str, db: Session = Depends(get_db)):
 
     # Pod is up but status server hasn't started reporting yet (initial boot).
     return _worker_to_response(worker, pod_status=phase.lower())
+
+
+@router.get("", response_model=list[WorkerResponse])
+def list_workers(db: Session = Depends(get_db)):
+    workers = db.scalars(
+        select(Worker).options(selectinload(Worker.repositories), selectinload(Worker.task))
+    ).all()
+    return [_resolve_worker_response(w, db) for w in workers]
+
+
+@router.get("/main", response_model=WorkerResponse, summary="The permanent main-brain worker")
+def get_main_worker_route(db: Session = Depends(get_db)):
+    # Declared before /{worker_id} — FastAPI matches routes in declaration
+    # order, so this must come first or "main" gets swallowed as a worker id.
+    worker = main_brain.get_main_worker(db)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Main worker not provisioned")
+    return get_worker(worker.id, db)
+
+
+@router.get("/{worker_id}", response_model=WorkerResponse)
+def get_worker(worker_id: str, db: Session = Depends(get_db)):
+    worker = _load_worker(db, worker_id)
+    return _resolve_worker_response(worker, db)
 
 
 @router.get("/{worker_id}/vscode-uri")
