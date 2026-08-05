@@ -8,6 +8,17 @@
 
 J.A.R.V.I.S (Just A Rather Very Intelligent System) is a multi-agent personal assistant platform targeting a production Kubernetes deployment. This repository contains a Python/FastAPI backend with task management API, a React/Vite frontend with dashboard and task board UIs, a J.A.D.S design system, an MCP server for agent integration, a Helm chart, and a Makefile-driven local dev cluster.
 
+## Planned Repository Migration (DAD-33)
+
+This repo (`alchemesh-io/j.a.r.v.i.s`) is slated to move into Doctolib's own GitHub org, under `doctolib/daip-design-architecture` (a `jarvis/` folder there) — see [DAD-33](https://doctolib.atlassian.net/browse/DAD-33) for the authoritative, up-to-date plan. Summary, so this doesn't go stale as the ticket evolves:
+
+- **Move**: fresh copy into `daip-design-architecture/jarvis/` — git history is not preserved. `daip-design-architecture` is a documentation-only repo today (no application code), so this is a first for it.
+- **Images**: move off `ghcr.io/alchemesh-io/*` and the sandbox-specific `europe-west4-docker.pkg.dev/d-platform-raytflf9/sbx-architecture/*` Artifact Registry, onto Doctolib's own registry pipeline (`doctolib/docker-registries` config + a CI workflow modeled on `doctolib/panda-team`'s `build-code-locations.yml`/`push-docker-image.yml`, which push to ECR with central GCP replication via `replicate_to_gcp`).
+- **Infra repo repoint**: once images are replicated, `unified-healthcare-data-platform-infra`'s `argocd/jarvis/values.yaml` digests get updated, and the per-digest `require-allowed-doctolib-repositories` whitelist entries in `cel-policies-values.yaml` likely become unnecessary (replicated images should already be in that policy's built-in allowlist).
+- **Secrets**: `secrets/backend-secret.yaml`/`jaw-secret.yaml` stay as local gitignored files for now (not pushed to GitHub) — migrating these to Vault is tracked separately as [DAD-35](https://doctolib.atlassian.net/browse/DAD-35), explicitly out of scope for this migration.
+
+Until this lands, every path/URL elsewhere in this file (repo clone instructions, image registries, etc.) reflects the **current**, pre-migration state.
+
 ## Repository Structure
 
 ```
