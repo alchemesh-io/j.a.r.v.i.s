@@ -26,6 +26,9 @@ class KeyFocus(Base):
     tasks: Mapped[list["Task"]] = relationship(
         "Task", secondary="task_key_focus", back_populates="key_focuses"
     )
+    opportunities: Mapped[list["Opportunity"]] = relationship(
+        "Opportunity", secondary="opportunity_key_focus", back_populates="key_focuses"
+    )
     blockers: Mapped[list["Blocker"]] = relationship(
         "Blocker", back_populates="key_focus", cascade="all, delete-orphan"
     )

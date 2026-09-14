@@ -18,6 +18,7 @@ from app.routes import (
     gcal,
     jira,
     key_focuses,
+    opportunities,
     repositories,
     skills,
     task_blockers,
@@ -82,6 +83,7 @@ app.include_router(daily_tasks.router, prefix="/api/v1")
 app.include_router(jira.router, prefix="/api/v1")
 app.include_router(gcal.router, prefix="/api/v1")
 app.include_router(key_focuses.router, prefix="/api/v1")
+app.include_router(opportunities.router, prefix="/api/v1")
 app.include_router(blockers.router, prefix="/api/v1")
 app.include_router(task_blockers.router, prefix="/api/v1")
 app.include_router(task_key_focuses.router, prefix="/api/v1")
