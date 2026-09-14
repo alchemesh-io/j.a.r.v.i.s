@@ -8,6 +8,7 @@ import Reports from './pages/Reports/Reports';
 import Workers from './pages/Workers/Workers';
 import WorkerTerminal from './pages/Workers/WorkerTerminal';
 import Repositories from './pages/Repositories/Repositories';
+import GraphView from './pages/GraphView/GraphView';
 import ParticlesBackground from './components/ParticlesBackground';
 import { MiniHeart } from './components/MiniHeart';
 import './App.css';
@@ -86,6 +87,7 @@ export default function App() {
             <nav aria-label="Main navigation">
               <Link to="/">Dashboard</Link>
               <Link to="/tasks">Tasks</Link>
+              <Link to="/graph">Graph</Link>
               <Link to="/workers">Workers</Link>
             </nav>
           </header>
@@ -96,6 +98,7 @@ export default function App() {
               <Route path="/tasks" element={<><BoardNav /><TaskBoard /></>} />
               <Route path="/key-focuses" element={<><BoardNav /><KeyFocusBoard /></>} />
               <Route path="/reports" element={<><BoardNav /><Reports /></>} />
+              <Route path="/graph" element={<GraphView />} />
               <Route path="/workers" element={<><WorkerNav /><Workers /></>} />
             <Route path="/workers/:id/terminal" element={<WorkerTerminal />} />
               <Route path="/repositories" element={<><WorkerNav /><Repositories /></>} />

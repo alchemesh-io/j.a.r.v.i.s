@@ -94,6 +94,15 @@ export interface KeyFocus {
   blocker_count: number;
 }
 
+export interface Opportunity {
+  id: number;
+  title: string;
+  description: string | null;
+  key_focus_ids: number[];
+  key_focus_count: number;
+  task_count: number;
+}
+
 export interface Blocker {
   id: number;
   title: string;
@@ -408,6 +417,49 @@ export function removeKeyFocusFromTask(taskId: number, keyFocusId: number): Prom
 
 export function listTaskKeyFocuses(taskId: number): Promise<KeyFocus[]> {
   return request(`/tasks/${taskId}/key-focuses`);
+}
+
+// --- Opportunity API ---
+
+export function createOpportunity(body: { title: string; description?: string }): Promise<Opportunity> {
+  return request('/opportunities', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function listOpportunities(): Promise<Opportunity[]> {
+  return request('/opportunities');
+}
+
+export function getOpportunity(id: number): Promise<Opportunity> {
+  return request(`/opportunities/${id}`);
+}
+
+export function updateOpportunity(
+  id: number,
+  body: Partial<Pick<Opportunity, 'title' | 'description'>>,
+): Promise<Opportunity> {
+  return request(`/opportunities/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+export function deleteOpportunity(id: number): Promise<void> {
+  return request(`/opportunities/${id}`, { method: 'DELETE' });
+}
+
+export function addKeyFocusToOpportunity(
+  opportunityId: number,
+  keyFocusId: number,
+): Promise<{ opportunity_id: number; key_focus_id: number }> {
+  return request(`/opportunities/${opportunityId}/key-focuses`, {
+    method: 'POST',
+    body: JSON.stringify({ key_focus_id: keyFocusId }),
+  });
+}
+
+export function removeKeyFocusFromOpportunity(opportunityId: number, keyFocusId: number): Promise<void> {
+  return request(`/opportunities/${opportunityId}/key-focuses/${keyFocusId}`, { method: 'DELETE' });
+}
+
+export function listOpportunityKeyFocuses(opportunityId: number): Promise<KeyFocus[]> {
+  return request(`/opportunities/${opportunityId}/key-focuses`);
 }
 
 // --- Blocker API ---
