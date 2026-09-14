@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -52,7 +53,6 @@ import {
   restartWorker,
   listRepositories,
   listSkills,
-  getWorkerVscodeUri,
   type Task,
   type TaskType,
   type JiraTicket,
@@ -348,6 +348,7 @@ function SortableTaskCard({
 
 export default function TaskBoard() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [prefs] = useState(loadPrefs);
 
   const [selectedDate, setSelectedDate] = useState(() => new Date(prefs.selectedDate + 'T00:00:00'));
@@ -550,8 +551,12 @@ export default function TaskBoard() {
   });
 
   const { data: weeklyKeyFocuses = [] } = useQuery({
-    queryKey: ['key-focuses-weekly', dateStr],
-    queryFn: () => listKeyFocuses({ date: dateStr, scope: 'weekly', frequency: 'weekly' }),
+    queryKey: ['key-focuses-weekly'],
+    // Unscoped by the board's viewed date: a weekly focus created for a
+    // different week than the one currently displayed must still be
+    // selectable when attaching it to a task (mirrors the quarterly query
+    // below, which is already broad across the whole quarter).
+    queryFn: () => listKeyFocuses({ scope: 'all', frequency: 'weekly' }),
   });
 
   const { data: quarterlyKeyFocuses = [] } = useQuery({
@@ -1759,9 +1764,7 @@ export default function TaskBoard() {
                   onNotes={() => setNotePanelTask(task)}
                   onBlockers={() => setBlockerPanelTask(task)}
                   onPlayClick={!task.worker ? () => setWorkerCreateTask(task) : undefined}
-                  onWorkerClick={task.worker ? () => {
-                    getWorkerVscodeUri(task.worker!.id).then(({ uri }) => { window.location.href = uri; });
-                  } : undefined}
+                  onWorkerClick={task.worker ? () => navigate(`/workers/${task.worker!.id}/terminal`) : undefined}
                   onWorkerDelete={task.worker ? () => { if (confirm('Delete this worker and its Kubernetes resources?')) deleteWorkerMutation.mutate(task.worker!.id); } : undefined}
                   onWorkerStop={task.worker ? () => stopWorkerMutation.mutate(task.worker!.id) : undefined}
                   onWorkerRestart={task.worker ? () => restartWorkerMutation.mutate(task.worker!.id) : undefined}
