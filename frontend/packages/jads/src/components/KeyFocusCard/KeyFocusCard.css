@@ -1,0 +1,95 @@
+.jads-key-focus-card {
+  background: var(--jads-color-surface-elevated, #1a1f35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s, opacity 0.2s;
+}
+
+.jads-key-focus-card:hover { border-color: rgba(0, 212, 255, 0.2); }
+.jads-key-focus-card--succeed { opacity: 0.7; border-left: 3px solid #22c55e; }
+.jads-key-focus-card--failed { border-left: 3px solid #ef4444; }
+.jads-key-focus-card--in_progress { border-left: 3px solid var(--jads-color-accent-cyan, #00d4ff); }
+
+.jads-key-focus-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.jads-key-focus-card__kind-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 3px;
+  color: #fff;
+}
+
+.jads-key-focus-card__status { font-size: 1rem; }
+.jads-key-focus-card__status--in_progress { color: var(--jads-color-accent-cyan, #00d4ff); animation: jads-key-focus-card-pulse 2s infinite; }
+.jads-key-focus-card__status--succeed { color: #22c55e; }
+.jads-key-focus-card__status--failed { color: #ef4444; }
+
+@keyframes jads-key-focus-card-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.jads-key-focus-card__title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--jads-color-text-primary, #e2e8f0);
+  margin: 0;
+}
+
+.jads-key-focus-card__description {
+  font-size: 0.8rem;
+  color: var(--jads-color-text-muted, #64748b);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.jads-key-focus-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.7rem;
+}
+
+.jads-key-focus-card__freq-badge {
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--jads-color-text-muted, #64748b);
+}
+
+.jads-key-focus-card__period {
+  color: var(--jads-color-accent-cyan, #00d4ff);
+  font-weight: 500;
+}
+
+.jads-key-focus-card__task-count {
+  color: var(--jads-color-text-muted, #64748b);
+}
+
+.jads-key-focus-card__actions {
+  display: flex;
+  gap: 4px;
+}
+
+.jads-key-focus-card__blockers-btn {
+  position: relative;
+}
+
+.jads-key-focus-card__blocker-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #ef4444;
+  min-width: 14px;
+  text-align: center;
+}

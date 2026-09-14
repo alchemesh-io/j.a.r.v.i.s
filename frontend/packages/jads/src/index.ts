@@ -25,3 +25,14 @@ export type { WorkerModeBadgeProps, WorkerMode as WorkerModeBadgeMode } from './
 
 export { Calendar } from './components/Calendar/Calendar';
 export type { CalendarProps } from './components/Calendar/Calendar';
+
+export { KeyFocusCard } from './components/KeyFocusCard/KeyFocusCard';
+export type {
+  KeyFocusCardProps,
+  KeyFocusKind,
+  KeyFocusStatus,
+  KeyFocusFrequency,
+} from './components/KeyFocusCard/KeyFocusCard';
+
+export { OpportunityCard } from './components/OpportunityCard/OpportunityCard';
+export type { OpportunityCardProps } from './components/OpportunityCard/OpportunityCard';

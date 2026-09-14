@@ -1,0 +1,51 @@
+.jads-opportunity-card {
+  background: var(--jads-color-surface-elevated, #1a1f35);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  border-left: 3px solid #a855f7;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s;
+}
+
+.jads-opportunity-card:hover { border-color: rgba(168, 85, 247, 0.5); }
+
+.jads-opportunity-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jads-opportunity-card__icon {
+  display: inline-flex;
+  color: #a855f7;
+}
+
+.jads-opportunity-card__title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--jads-color-text-primary, #e2e8f0);
+  margin: 0;
+}
+
+.jads-opportunity-card__description {
+  font-size: 0.8rem;
+  color: var(--jads-color-text-muted, #64748b);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.jads-opportunity-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.7rem;
+  color: var(--jads-color-text-muted, #64748b);
+}
+
+.jads-opportunity-card__actions {
+  display: flex;
+  gap: 4px;
+}

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Calendar, Select, Button, Input } from '@jarvis/jads';
+import { Calendar, Select, Button, Input, KeyFocusCard } from '@jarvis/jads';
 import {
   listKeyFocuses,
   createKeyFocus,
@@ -96,14 +96,6 @@ const FREQUENCY_FILTER_OPTIONS: { value: FrequencyFilter; label: string }[] = [
   { value: 'quarterly', label: 'Quarterly' },
   { value: 'all', label: 'All' },
 ];
-
-const KIND_COLORS: Record<KeyFocusKind, string> = {
-  delivery: '#3b82f6',
-  learning: '#22c55e',
-  support: '#a855f7',
-  operational: '#f97316',
-  side_quest: '#06b6d4',
-};
 
 const STORAGE_KEY = 'jarvis-keyfocusboard';
 
@@ -379,54 +371,24 @@ export default function KeyFocusBoard() {
           </div>
         )}
         {keyFocuses.map((kf) => (
-          <article
+          <KeyFocusCard
             key={kf.id}
-            className={`kf-card kf-card--${kf.status}`}
-          >
-            <div className="kf-card__header">
-              <span className="kf-card__kind-badge" style={{ backgroundColor: KIND_COLORS[kf.kind] }}>
-                {kf.kind.replace('_', ' ')}
-              </span>
-              <span className={`kf-card__status kf-card__status--${kf.status}`}>
-                {kf.status === 'in_progress' && '●'}
-                {kf.status === 'succeed' && '✓'}
-                {kf.status === 'failed' && '✕'}
-              </span>
-            </div>
-            <h4 className="kf-card__title">{kf.title}</h4>
-            {kf.description && (
-              <p className="kf-card__description">{kf.description.length > 100 ? kf.description.slice(0, 100) + '...' : kf.description}</p>
-            )}
-            <div className="kf-card__meta">
-              <span className="kf-card__freq-badge">{kf.frequency}</span>
-              {weeklyMap.has(kf.weekly_id) && (
-                <span className="kf-card__period">
-                  {kf.frequency === 'quarterly'
-                    ? formatQuarterLabel(weeklyMap.get(kf.weekly_id)!)
-                    : formatWeekLabel(weeklyMap.get(kf.weekly_id)!)}
-                </span>
-              )}
-              <span className="kf-card__task-count">{kf.task_count} task{kf.task_count !== 1 ? 's' : ''}</span>
-            </div>
-            <div className="kf-card__actions">
-              <button type="button" className="kf-card__action-btn" onClick={() => openEditForm(kf)} aria-label="Edit">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5L13.5 4.5L5 13H3V11L11.5 2.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-              <button type="button" className="kf-card__action-btn" onClick={() => setDeletingKF(kf)} aria-label="Delete">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4H13M6 4V3H10V4M5 4V13H11V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-              <button
-                type="button"
-                className="kf-card__action-btn"
-                onClick={() => setBlockerPanelKF(blockerPanelKF?.id === kf.id ? null : kf)}
-                aria-label="Blockers"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3"/><path d="M8 5V9M8 11V11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                {kf.blocker_count > 0 && <span className="kf-card__blocker-badge">{kf.blocker_count}</span>}
-              </button>
-            </div>
-
-          </article>
+            title={kf.title}
+            description={kf.description}
+            kind={kf.kind}
+            status={kf.status}
+            frequency={kf.frequency}
+            periodLabel={weeklyMap.has(kf.weekly_id)
+              ? (kf.frequency === 'quarterly'
+                ? formatQuarterLabel(weeklyMap.get(kf.weekly_id)!)
+                : formatWeekLabel(weeklyMap.get(kf.weekly_id)!))
+              : undefined}
+            taskCount={kf.task_count}
+            blockerCount={kf.blocker_count}
+            onEdit={() => openEditForm(kf)}
+            onDelete={() => setDeletingKF(kf)}
+            onBlockers={() => setBlockerPanelKF(blockerPanelKF?.id === kf.id ? null : kf)}
+          />
         ))}
       </div>
 
