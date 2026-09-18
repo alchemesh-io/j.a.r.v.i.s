@@ -404,6 +404,82 @@ async def test_list_key_focus_blockers(mock_backend, client):
     assert result[0]["key_focus_id"] == 1
 
 
+# --- Scheduled Tasks ---
+
+
+@pytest.mark.asyncio
+async def test_create_scheduled_task(mock_backend, client):
+    mock_backend.post("/api/v1/scheduled-tasks").respond(
+        201,
+        json={
+            "id": 1,
+            "title": "Nightly sync",
+            "task_type": "implementation",
+            "note_content": None,
+            "cron_expression": "0 20 * * *",
+            "status": "active",
+            "worker_type": "claude_code",
+            "worker_mode": "ephemeral",
+            "worker_session_mode": "auto",
+            "worker_cpu_request": None,
+            "worker_memory_request": None,
+            "worker_cpu_limit": None,
+            "worker_memory_limit": None,
+            "skills": [],
+            "repositories": [],
+            "last_run_at": None,
+            "next_run_at": "2026-09-19T20:00:00",
+            "created_at": "2026-09-18T12:00:00",
+            "updated_at": "2026-09-18T12:00:00",
+        },
+    )
+    result = await client.create_scheduled_task(
+        title="Nightly sync", task_type="implementation", cron_expression="0 20 * * *"
+    )
+    assert result["id"] == 1
+    assert result["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_list_scheduled_tasks(mock_backend, client):
+    mock_backend.get("/api/v1/scheduled-tasks").respond(200, json=[])
+    result = await client.list_scheduled_tasks()
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_scheduled_task(mock_backend, client):
+    mock_backend.get("/api/v1/scheduled-tasks/1").respond(
+        200, json={"id": 1, "title": "Nightly sync"}
+    )
+    result = await client.get_scheduled_task(1)
+    assert result["id"] == 1
+
+
+@pytest.mark.asyncio
+async def test_update_scheduled_task(mock_backend, client):
+    mock_backend.patch("/api/v1/scheduled-tasks/1").respond(
+        200, json={"id": 1, "title": "Renamed"}
+    )
+    result = await client.update_scheduled_task(1, title="Renamed")
+    assert result["title"] == "Renamed"
+
+
+@pytest.mark.asyncio
+async def test_delete_scheduled_task(mock_backend, client):
+    mock_backend.delete("/api/v1/scheduled-tasks/1").respond(204)
+    await client.delete_scheduled_task(1)
+
+
+@pytest.mark.asyncio
+async def test_run_scheduled_task_now(mock_backend, client):
+    mock_backend.post("/api/v1/scheduled-tasks/1/run").respond(
+        200, json={"task_id": 5, "worker_id": "abc123"}
+    )
+    result = await client.run_scheduled_task_now(1)
+    assert result["task_id"] == 5
+
+
 # --- Error handling ---
 
 

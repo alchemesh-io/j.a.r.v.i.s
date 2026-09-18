@@ -78,4 +78,10 @@ def delete_repository(repository_id: int, db: Session = Depends(get_db)):
             detail="Repository is in use by an active worker and cannot be deleted",
         )
 
+    if repo.scheduled_tasks:
+        raise HTTPException(
+            status_code=409,
+            detail="Repository is in use by a scheduled task and cannot be deleted",
+        )
+
     db.delete(repo)

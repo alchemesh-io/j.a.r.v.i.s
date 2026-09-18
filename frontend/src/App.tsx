@@ -8,6 +8,7 @@ import Reports from './pages/Reports/Reports';
 import Workers from './pages/Workers/Workers';
 import WorkerTerminal from './pages/Workers/WorkerTerminal';
 import Repositories from './pages/Repositories/Repositories';
+import ScheduledTasks from './pages/ScheduledTasks/ScheduledTasks';
 import ParticlesBackground from './components/ParticlesBackground';
 import { MiniHeart } from './components/MiniHeart';
 import './App.css';
@@ -30,6 +31,7 @@ const BOARD_TABS = [
 const WORKER_TABS = [
   { path: '/workers', label: 'Workers' },
   { path: '/repositories', label: 'Repositories' },
+  { path: '/scheduled-tasks', label: 'Scheduled Tasks' },
 ];
 
 function InvalidateOnRouteChange() {
@@ -99,6 +101,7 @@ export default function App() {
               <Route path="/workers" element={<><WorkerNav /><Workers /></>} />
             <Route path="/workers/:id/terminal" element={<WorkerTerminal />} />
               <Route path="/repositories" element={<><WorkerNav /><Repositories /></>} />
+              <Route path="/scheduled-tasks" element={<><WorkerNav /><ScheduledTasks /></>} />
             </Routes>
           </main>
 

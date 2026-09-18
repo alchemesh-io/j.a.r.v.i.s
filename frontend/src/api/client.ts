@@ -31,6 +31,8 @@ export type WorkerState =
   | 'error';
 export type WorkerType = 'claude_code';
 export type WorkerMode = 'ephemeral' | 'stateful';
+export type WorkerSessionMode = 'auto' | 'plan' | 'manual' | 'edit';
+export type ScheduledTaskStatus = 'active' | 'paused';
 
 export interface TaskKeyFocusSummary {
   id: number;
@@ -550,6 +552,71 @@ export function getRepository(id: number): Promise<Repository> {
 
 export function deleteRepository(id: number): Promise<void> {
   return request(`/repositories/${id}`, { method: 'DELETE' });
+}
+
+// --- Scheduled Task API ---
+
+export interface ScheduledTask {
+  id: number;
+  title: string;
+  task_type: TaskType;
+  note_content: string | null;
+  cron_expression: string;
+  status: ScheduledTaskStatus;
+  worker_type: WorkerType;
+  worker_mode: WorkerMode;
+  worker_session_mode: WorkerSessionMode;
+  worker_cpu_request: string | null;
+  worker_memory_request: string | null;
+  worker_cpu_limit: string | null;
+  worker_memory_limit: string | null;
+  skills: SkillRef[];
+  repositories: Repository[];
+  last_run_at: string | null;
+  next_run_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduledTaskInput {
+  title: string;
+  task_type: TaskType;
+  cron_expression: string;
+  note_content?: string | null;
+  status?: ScheduledTaskStatus;
+  repository_ids?: number[];
+  skills?: { name: string; version: string }[];
+  worker_type?: WorkerType;
+  worker_mode?: WorkerMode;
+  worker_session_mode?: WorkerSessionMode;
+  worker_cpu_request?: string | null;
+  worker_memory_request?: string | null;
+  worker_cpu_limit?: string | null;
+  worker_memory_limit?: string | null;
+}
+
+export function createScheduledTask(body: ScheduledTaskInput): Promise<ScheduledTask> {
+  return request('/scheduled-tasks', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function listScheduledTasks(): Promise<ScheduledTask[]> {
+  return request('/scheduled-tasks');
+}
+
+export function getScheduledTask(id: number): Promise<ScheduledTask> {
+  return request(`/scheduled-tasks/${id}`);
+}
+
+export function updateScheduledTask(id: number, body: Partial<ScheduledTaskInput>): Promise<ScheduledTask> {
+  return request(`/scheduled-tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+export function deleteScheduledTask(id: number): Promise<void> {
+  return request(`/scheduled-tasks/${id}`, { method: 'DELETE' });
+}
+
+export function runScheduledTaskNow(id: number): Promise<{ task_id: number; worker_id: string }> {
+  return request(`/scheduled-tasks/${id}/run`, { method: 'POST' });
 }
 
 // --- Helpers ---

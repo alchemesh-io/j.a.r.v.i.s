@@ -58,3 +58,22 @@ class WorkerType(str, Enum):
 class WorkerMode(str, Enum):
     ephemeral = "ephemeral"
     stateful = "stateful"
+
+
+class WorkerSessionMode(str, Enum):
+    """Claude Code permission mode a scheduled task's worker starts in.
+
+    Maps to Claude Code's own `--permission-mode` values, except `auto` which
+    keeps using `--dangerously-skip-permissions` — that flag and
+    `--permission-mode` are mutually exclusive on the CLI.
+    """
+
+    auto = "auto"
+    plan = "plan"
+    manual = "manual"
+    edit = "edit"
+
+
+class ScheduledTaskStatus(str, Enum):
+    active = "active"
+    paused = "paused"

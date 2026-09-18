@@ -19,6 +19,7 @@ from app.routes import (
     jira,
     key_focuses,
     repositories,
+    scheduled_tasks,
     skills,
     task_blockers,
     task_key_focuses,
@@ -27,13 +28,14 @@ from app.routes import (
     weeklies,
     workers,
 )
+from app.services.scheduler import run_scheduler_loop
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import app.models  # noqa: F401 — register all models on the metadata
+    from app import models  # noqa: F401 — register all models on the metadata; `import app.models` would rebind the `app` parameter to the package
 
     alembic_cfg = Config("alembic.ini")
     # A fresh database has no alembic_version. The historical migrations were
@@ -65,8 +67,14 @@ async def lifespan(app: FastAPI):
         finally:
             db.close()
 
+    stop_event = asyncio.Event()
+    app.state.scheduler_stop_event = stop_event
+    app.state.scheduler_task = asyncio.create_task(run_scheduler_loop(stop_event))
+
     yield
 
+    stop_event.set()
+    await app.state.scheduler_task
 
 app = FastAPI(
     title="J.A.R.V.I.S",
@@ -86,6 +94,7 @@ app.include_router(blockers.router, prefix="/api/v1")
 app.include_router(task_blockers.router, prefix="/api/v1")
 app.include_router(task_key_focuses.router, prefix="/api/v1")
 app.include_router(repositories.router, prefix="/api/v1")
+app.include_router(scheduled_tasks.router, prefix="/api/v1")
 app.include_router(skills.router, prefix="/api/v1")
 app.include_router(workers.router, prefix="/api/v1")
 

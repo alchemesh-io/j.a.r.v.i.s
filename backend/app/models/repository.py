@@ -18,3 +18,6 @@ class Repository(Base):
     workers: Mapped[list["Worker"]] = relationship(
         "Worker", secondary="worker_repository", back_populates="repositories"
     )
+    scheduled_tasks: Mapped[list["ScheduledTask"]] = relationship(
+        "ScheduledTask", secondary="scheduled_task_repository", back_populates="repositories"
+    )

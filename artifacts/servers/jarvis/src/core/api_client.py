@@ -301,3 +301,70 @@ class BackendClient:
 
     async def delete_repository(self, repository_id: int) -> None:
         await self._request("DELETE", f"/api/v1/repositories/{repository_id}")
+
+    # --- Scheduled Tasks ---
+
+    async def create_scheduled_task(
+        self,
+        title: str,
+        task_type: str,
+        cron_expression: str,
+        note_content: Optional[str] = None,
+        status: str = "active",
+        repository_ids: Optional[list[int]] = None,
+        skills: Optional[list[dict]] = None,
+        worker_type: str = "claude_code",
+        worker_mode: str = "ephemeral",
+        worker_session_mode: str = "auto",
+        worker_cpu_request: Optional[str] = None,
+        worker_memory_request: Optional[str] = None,
+        worker_cpu_limit: Optional[str] = None,
+        worker_memory_limit: Optional[str] = None,
+    ) -> dict:
+        body: dict[str, Any] = {
+            "title": title,
+            "task_type": task_type,
+            "cron_expression": cron_expression,
+            "status": status,
+            "worker_type": worker_type,
+            "worker_mode": worker_mode,
+            "worker_session_mode": worker_session_mode,
+        }
+        if note_content is not None:
+            body["note_content"] = note_content
+        if repository_ids:
+            body["repository_ids"] = repository_ids
+        if skills:
+            body["skills"] = skills
+        if worker_cpu_request is not None:
+            body["worker_cpu_request"] = worker_cpu_request
+        if worker_memory_request is not None:
+            body["worker_memory_request"] = worker_memory_request
+        if worker_cpu_limit is not None:
+            body["worker_cpu_limit"] = worker_cpu_limit
+        if worker_memory_limit is not None:
+            body["worker_memory_limit"] = worker_memory_limit
+        return await self._request("POST", "/api/v1/scheduled-tasks", json=body)
+
+    async def get_scheduled_task(self, scheduled_task_id: int) -> dict:
+        return await self._request(
+            "GET", f"/api/v1/scheduled-tasks/{scheduled_task_id}"
+        )
+
+    async def list_scheduled_tasks(self) -> list[dict]:
+        return await self._request("GET", "/api/v1/scheduled-tasks")
+
+    async def update_scheduled_task(self, scheduled_task_id: int, **fields) -> dict:
+        return await self._request(
+            "PATCH", f"/api/v1/scheduled-tasks/{scheduled_task_id}", json=fields
+        )
+
+    async def delete_scheduled_task(self, scheduled_task_id: int) -> None:
+        await self._request(
+            "DELETE", f"/api/v1/scheduled-tasks/{scheduled_task_id}"
+        )
+
+    async def run_scheduled_task_now(self, scheduled_task_id: int) -> dict:
+        return await self._request(
+            "POST", f"/api/v1/scheduled-tasks/{scheduled_task_id}/run"
+        )

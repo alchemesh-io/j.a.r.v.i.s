@@ -3,8 +3,10 @@ from app.models.enums import (
     KeyFocusFrequency,
     KeyFocusKind,
     KeyFocusStatus,
+    ScheduledTaskStatus,
     TaskStatus,
     TaskType,
+    WorkerSessionMode,
     WorkerState,
     WorkerType,
 )
@@ -19,14 +21,18 @@ from app.models.blocker import Blocker
 from app.models.repository import Repository
 from app.models.worker_repository import worker_repository
 from app.models.worker import Worker
+from app.models.scheduled_task_repository import scheduled_task_repository
+from app.models.scheduled_task import ScheduledTask
 
 __all__ = [
     "BlockerStatus",
     "KeyFocusFrequency",
     "KeyFocusKind",
     "KeyFocusStatus",
+    "ScheduledTaskStatus",
     "TaskStatus",
     "TaskType",
+    "WorkerSessionMode",
     "WorkerState",
     "WorkerType",
     "Weekly",
@@ -40,4 +46,6 @@ __all__ = [
     "Repository",
     "worker_repository",
     "Worker",
+    "scheduled_task_repository",
+    "ScheduledTask",
 ]
